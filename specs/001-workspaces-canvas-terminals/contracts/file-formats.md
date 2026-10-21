@@ -100,6 +100,7 @@ Rules:
 ## Terminal history file
 
 - Rows of the terminal's scrollback followed by the visible screen at save time, oldest first,
-  one row per line, with SGR color sequences preserved. At most `historyMaxRows` rows.
+  one row per line, with SGR color sequences preserved. At most `historyMaxRows` rows and 8 MB;
+  the oldest rows are dropped first. Readers stop at 8 MB.
 - On restore, the app feeds the file into the new terminal, then prints a dim separator line
   (`── restored history · <time> ──`) before starting the shell.

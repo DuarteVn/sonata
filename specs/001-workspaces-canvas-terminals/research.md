@@ -46,6 +46,9 @@ positions and font sizes.
 CSS `scale()` the text is blurry and mouse selection is offset. Rendering at native size avoids
 both problems.
 
+**Reference check (2026-10-21)**: the reference app has a helper that freezes terminal views
+during zoom, which matches this approach.
+
 **Alternatives considered**: xterm.js inside scaled nodes (blurry text, wrong selection);
 interactive terminals only at exactly 100% zoom (too restrictive).
 
@@ -88,7 +91,7 @@ costly.
 (fallback: home folder plus a warning, if the folder no longer exists). If the node has a launch
 command, write `<command>\r` to the PTY right after spawn; the TTY buffers it until the shell
 reads input. Environment additions: `TERM=xterm-256color`, `COLORTERM=truecolor`,
-`TERM_PROGRAM=Sonata`, `SONATA_TERMINAL_ID=<node id>`.
+`TERM_PROGRAM=Sonata`, `TERM_PROGRAM_VERSION=<app version>`, `SONATA_TERMINAL_ID=<node id>`.
 
 **Rationale**: A login shell loads the user's `PATH` (GUI apps launched from Finder have a minimal
 environment). Typing the command keeps it in shell history, and the user returns to a shell when
@@ -124,7 +127,9 @@ id. Idle otherwise.
 - Dirty tracking: each workspace has a revision counter; the autosave task (tokio interval,
   default 30 s) saves workspaces whose revision differs from the last saved one.
 - Terminal history: on save and on quit, `core` writes each terminal's scrollback and screen as
-  formatted text (capped at 10,000 rows) to `terminals/<nodeId>.history`. On restart, the history
+  formatted text (capped at 10,000 rows and 8 MB, oldest rows dropped first) to
+  `terminals/<nodeId>.history`. Reading also stops at 8 MB, so a damaged or huge file cannot stall
+  workspace opening. On restart, the history
   is fed into the new terminal's model before the shell starts, followed by a separator line.
 
 **Alternatives considered**: SQLite (not human-readable, violates constitution IV); the
@@ -187,3 +192,16 @@ state updates.
 **Decision**: `tracing` + `tracing-appender` daily file at `~/.sonata/logs/sonata.log`, kept 7
 days. Log load failures, migrations, save errors, and PTY spawn errors. Never log terminal
 content.
+
+## R14. No automatic unloading of terminals
+
+**Decision**: In 001, a loaded workspace keeps its terminal processes running until the user
+closes them, deletes the workspace, or quits (FR-013). There is no idle or memory-based unloading.
+
+**Rationale**: Running agents in parallel across projects is the main use case; silently stopping
+a process loses its in-memory session.
+
+**Alternatives considered**: the reference app has unloaded and dormant states for terminals and
+workspaces (seen in its strings, behavior not decompiled). A manual "Unload workspace" action
+(stop processes, keep layout and history) is a candidate for a later feature if memory becomes a
+problem.
