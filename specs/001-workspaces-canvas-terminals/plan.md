@@ -99,6 +99,7 @@ crates/core/
 │   ├── terminal/             # manager.rs, pty.rs, screen.rs (ScreenModel + vt100),
 │   │                         # history.rs, busy.rs, preview.rs
 │   ├── notes/                # store.rs, watcher.rs (notify + conflict copies)
+│   ├── app.rs                # App facade: bootstrap, quit check, quit
 │   ├── autosave.rs           # dirty revisions + interval task
 │   └── crash_guard.rs
 └── tests/                    # persistence.rs, workspaces.rs, terminals.rs, notes.rs,
