@@ -10,6 +10,22 @@
 slice of Sonata). Multiple workspaces with no artificial limit, each an infinite 2D canvas holding
 terminal nodes and Markdown note nodes, with durable local persistence."
 
+## Clarifications
+
+### Session 2026-10-21
+
+- Q: Should quitting the app ask for confirmation when agents are running? → A: Only when at least
+  one terminal in any workspace runs a program other than its idle shell; the dialog shows how many
+  and in which workspaces.
+- Q: Over a terminal, does a two-finger scroll or mouse wheel scroll the terminal or pan the canvas?
+  → A: It scrolls the focused terminal's history; over an unfocused terminal, a note, or empty space
+  it pans the canvas. Pinch always zooms the canvas.
+- Q: What happens when a note's .md file is edited outside the app while the app is open? → A: The
+  app watches note files and reloads external changes; if the note also has unsaved in-app edits,
+  the in-app text is kept and the external version is saved as a conflict copy, with a warning.
+- Q: Terminal history may contain secrets; how is it stored? → A: Saved by default in files readable
+  only by the user; each terminal can turn history saving off and can clear its saved history.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Run terminals on a canvas in one workspace (Priority: P1)
@@ -169,6 +185,8 @@ once, and every terminal still shows correct, complete output when brought into 
   intact.
 - A workspace file has a newer format version than this app supports: it is shown as a load
   failure ("created by a newer version") and is never overwritten.
+- A note's `.md` file is deleted outside the app: the note keeps its last known text, shows a
+  warning, and the file is written again at the next save.
 - Two workspaces point to the same folder: allowed. Names stay unique.
 - Terminal output is very large: saved history is capped (see Assumptions), and the oldest lines
   are dropped first.
@@ -202,6 +220,12 @@ once, and every terminal still shows correct, complete output when brought into 
   zoom bounds.
 - **FR-008**: Users MUST be able to add, select, move, resize, delete, and bring to front terminal
   and note nodes.
+- **FR-008a**: Scroll gestures (two-finger trackpad scroll, mouse wheel) over the focused terminal
+  MUST scroll that terminal's history. Over an unfocused terminal, a note, or empty canvas they MUST
+  pan the canvas. Pinch MUST zoom the canvas around the pointer. Middle-button drag MUST pan the
+  canvas anywhere; Space + drag MUST pan it when no terminal or note has keyboard focus, so that
+  typing a space never moves the canvas. A click on a terminal focuses it; a click on empty canvas
+  removes focus.
 - **FR-009**: The app MUST save, per workspace, every node's position, size, and stacking order,
   and the camera position and zoom.
 
@@ -220,6 +244,9 @@ once, and every terminal still shows correct, complete output when brought into 
   MUST become fully interactive with their current screen when they become legible.
 - **FR-015**: The app MUST save each terminal's output history to disk, capped in size, and show
   it as read-only history when the workspace opens after a restart.
+- **FR-015a**: Saved terminal history and all other files in `~/.sonata/` MUST be readable and
+  writable only by the user who owns them. Each terminal MUST offer a "save history" option, on by
+  default, and a "clear saved history" action that deletes its history file.
 - **FR-016**: After a restart, when a workspace opens, each terminal MUST start a fresh shell
   below its saved history and, if it has a launch command, MUST run that command again. The
   program starts a new session; its earlier in-memory state is not restored.
@@ -227,6 +254,9 @@ once, and every terminal still shows correct, complete output when brought into 
   offer a restart.
 - **FR-018**: Closing a terminal that runs a program other than its idle shell MUST require
   confirmation.
+- **FR-018a**: Quitting the app MUST require confirmation when at least one terminal in any
+  workspace runs a program other than its idle shell. The dialog MUST show how many such terminals
+  run and in which workspaces. With only idle shells, the app quits without asking.
 
 **Notes**
 
@@ -234,6 +264,10 @@ once, and every terminal still shows correct, complete output when brought into 
   and see the rendered result when not editing.
 - **FR-020**: Each note's text MUST be stored as a separate plain `.md` file inside that
   workspace's data folder.
+- **FR-020a**: The app MUST detect changes made to a note's `.md` file outside the app while the
+  app runs. If the note has no unsaved in-app edits, the app MUST show the external text within
+  2 seconds. If it has unsaved in-app edits, the app MUST keep the in-app text, save the external
+  text next to it as `<note name> (conflict).md`, and show a warning on the note. No text is lost.
 
 **Persistence and recovery**
 
@@ -262,7 +296,8 @@ once, and every terminal still shows correct, complete output when brought into 
 - **Node**: an item on a workspace's canvas. Has an id, position, size, stacking order, creation
   and modification times, and exactly one kind of content: terminal or note.
 - **Terminal (node content)**: name, optional launch command, optional working folder, run state
-  (starting, running, exited with code, stopped), and a reference to its saved output history.
+  (starting, running, exited with code, stopped), a save-history flag, and a reference to its saved
+  output history.
 - **Note (node content)**: a reference to its `.md` file.
 - **App state**: active workspace, recent workspaces, sidebar order, clean-shutdown marker, and
   early-crash counter.
