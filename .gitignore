@@ -1,0 +1,22 @@
+# Reverse-engineering reference: private, never commit (constitution principle I)
+maestri-arquitetura.md
+
+# Rust
+/target/
+**/target/
+
+# Node / frontend
+node_modules/
+dist/
+ui/dist/
+
+# Tauri
+src-tauri/gen/
+
+# macOS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+*.swp
