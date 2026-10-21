@@ -20,3 +20,6 @@ src-tauri/gen/
 .vscode/
 .idea/
 *.swp
+
+# Private behavior notes from the reference app (never commit)
+reference/
