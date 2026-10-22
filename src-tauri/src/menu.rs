@@ -1,11 +1,14 @@
 //! App menu. Replaces the default "Close Window" (Cmd+W) with "Close Item", which closes the
-//! selected terminal or note instead of the window. Cmd+Q stays Quit.
+//! selected terminal or note instead of the window. Cmd+Q stays Quit. View → Toggle Sidebar
+//! (Ctrl+Cmd+S) hides or shows the workspace list.
 
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Emitter, Runtime};
 
 pub const CLOSE_ITEM_ID: &str = "close-item";
 pub const CLOSE_ITEM_EVENT: &str = "app://close-selected";
+pub const TOGGLE_SIDEBAR_ID: &str = "toggle-sidebar";
+pub const TOGGLE_SIDEBAR_EVENT: &str = "app://toggle-sidebar";
 
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let sep = || PredefinedMenuItem::separator(app);
@@ -52,6 +55,18 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &PredefinedMenuItem::select_all(app, None)?,
         ],
     )?;
+    let view = Submenu::with_items(
+        app,
+        "View",
+        true,
+        &[&MenuItem::with_id(
+            app,
+            TOGGLE_SIDEBAR_ID,
+            "Toggle Sidebar",
+            true,
+            Some("Cmd+Ctrl+S"),
+        )?],
+    )?;
     let window = Submenu::with_items(
         app,
         "Window",
@@ -63,11 +78,17 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &PredefinedMenuItem::fullscreen(app, None)?,
         ],
     )?;
-    Menu::with_items(app, &[&app_menu, &file, &edit, &window])
+    Menu::with_items(app, &[&app_menu, &file, &edit, &view, &window])
 }
 
 pub fn on_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
-    if id == CLOSE_ITEM_ID {
-        let _ = app.emit(CLOSE_ITEM_EVENT, ());
+    match id {
+        CLOSE_ITEM_ID => {
+            let _ = app.emit(CLOSE_ITEM_EVENT, ());
+        }
+        TOGGLE_SIDEBAR_ID => {
+            let _ = app.emit(TOGGLE_SIDEBAR_EVENT, ());
+        }
+        _ => {}
     }
 }

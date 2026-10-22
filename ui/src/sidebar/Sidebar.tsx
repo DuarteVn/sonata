@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { PanelLeftClose, Plus } from "lucide-react";
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { isAppError, type WorkspaceSummary } from "../ipc/types";
@@ -8,7 +8,7 @@ import { WorkspaceItem } from "./WorkspaceItem";
 
 const DRAG_THRESHOLD_PX = 4;
 
-export function Sidebar({ onCreate }: { onCreate: () => void }) {
+export function Sidebar({ onCreate, onHide }: { onCreate: () => void; onHide: () => void }) {
   const workspaces = useWorkspaces((s) => s.workspaces);
   const activeId = useWorkspaces((s) => s.activeId);
   const loadFailures = useWorkspaces((s) => s.loadFailures);
@@ -64,9 +64,14 @@ export function Sidebar({ onCreate }: { onCreate: () => void }) {
     <nav className="sidebar" aria-label="Workspaces">
       <header className="sidebar-header">
         <span>Workspaces</span>
-        <button type="button" className="icon-button" aria-label="New workspace" onClick={onCreate}>
-          <Plus size={16} />
-        </button>
+        <span className="sidebar-actions">
+          <button type="button" className="icon-button" aria-label="New workspace" onClick={onCreate}>
+            <Plus size={16} />
+          </button>
+          <button type="button" className="icon-button" aria-label="Hide sidebar" title="Hide sidebar (⌃⌘S)" onClick={onHide}>
+            <PanelLeftClose size={16} />
+          </button>
+        </span>
       </header>
       <ul className="ws-list" ref={listRef}>
         {workspaces.map((w) => (

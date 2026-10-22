@@ -19,6 +19,7 @@ export type EventMap = {
   "persistence://warning": { message: string };
   "app://quit-requested": null;
   "app://close-selected": null;
+  "app://toggle-sidebar": null;
   "messaging://ask": AskEvent;
   "browser://state": import("./types").BrowserState;
   "messaging://notify": NotifyEvent;

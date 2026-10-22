@@ -41,6 +41,7 @@ const summary: WorkspaceSummary = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
   useWorkspaces.setState(useWorkspaces.getInitialState(), true);
   resetInitForTests();
   ipc.appBootstrap.mockResolvedValue(emptyBoot);
@@ -92,5 +93,16 @@ describe("sidebar and create dialog", () => {
     const item = await screen.findByRole("button", { name: "Demo" });
     expect(item.querySelector("[data-icon='rocket']")).not.toBeNull();
     expect(item.querySelector("[data-color='#3B82F6']")).not.toBeNull();
+  });
+
+  it("hides and shows the sidebar, remembering the choice", async () => {
+    const { unmount } = render(<App />);
+    await userEvent.click(await screen.findByRole("button", { name: "Hide sidebar" }));
+    expect(screen.queryByRole("navigation", { name: "Workspaces" })).toBeNull();
+    unmount();
+
+    render(<App />);
+    await userEvent.click(await screen.findByRole("button", { name: "Show sidebar" }));
+    expect(screen.getByRole("navigation", { name: "Workspaces" })).toBeInTheDocument();
   });
 });

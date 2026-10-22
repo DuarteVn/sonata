@@ -190,6 +190,9 @@ export function Canvas() {
     const canvasObserver = new MutationObserver(schedule);
     canvasObserver.observe(container, { childList: true });
     window.addEventListener("resize", schedule);
+    // The canvas also moves and resizes without a window resize (sidebar hidden or shown).
+    const resizeObserver = new ResizeObserver(schedule);
+    resizeObserver.observe(container);
     schedule();
     return () => {
       clearTimeout(timer);
@@ -197,6 +200,7 @@ export function Canvas() {
       bodyObserver.disconnect();
       canvasObserver.disconnect();
       window.removeEventListener("resize", schedule);
+      resizeObserver.disconnect();
       void ipc.browserLayout([...shown].map((nodeId) => ({ nodeId, rect: null }))).catch(() => {});
     };
   }, []);
