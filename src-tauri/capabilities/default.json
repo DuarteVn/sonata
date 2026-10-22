@@ -1,7 +1,40 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Main window: core events plus the folder picker.",
-  "windows": ["main"],
-  "permissions": ["core:default", "dialog:allow-open"]
+  "description": "Main window: exactly the commands in contracts/ipc.md, core events, and the folder picker.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "dialog:allow-open",
+    "allow-app-bootstrap",
+    "allow-app-quit-check",
+    "allow-app-quit",
+    "allow-app-reveal-path",
+    "allow-workspace-create",
+    "allow-workspace-open",
+    "allow-workspace-rename",
+    "allow-workspace-set-pinned",
+    "allow-workspace-reorder",
+    "allow-workspace-delete",
+    "allow-node-create-terminal",
+    "allow-node-update-frame",
+    "allow-node-bring-to-front",
+    "allow-node-delete",
+    "allow-workspace-set-camera",
+    "allow-node-create-note",
+    "allow-note-read",
+    "allow-note-write",
+    "allow-terminal-attach",
+    "allow-terminal-detach",
+    "allow-terminal-write",
+    "allow-terminal-resize",
+    "allow-terminal-rename",
+    "allow-terminal-set-launch-command",
+    "allow-terminal-restart",
+    "allow-terminal-set-save-history",
+    "allow-terminal-clear-history",
+    "allow-terminal-preview-subscribe"
+  ]
 }

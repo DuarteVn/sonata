@@ -11,6 +11,7 @@ pub struct Quitting(pub AtomicBool);
 
 #[tauri::command]
 pub fn app_bootstrap(app: State<'_, Arc<App>>) -> Bootstrap {
+    tracing::info!("frontend bootstrapped");
     app.bootstrap()
 }
 

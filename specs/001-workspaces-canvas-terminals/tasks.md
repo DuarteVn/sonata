@@ -225,10 +225,10 @@ immediate echo, complete output when brought into view.
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T087 [P] Expand `README.md`: build-from-source install, data folder layout (`contracts/file-formats.md`), security notice (shells run unsandboxed with user permissions)
-- [ ] T088 [P] Audit `src-tauri/capabilities/default.json` so it grants exactly the commands in `contracts/ipc.md` plus `dialog:allow-open`
-- [ ] T089 [P] Add a test in `crates/core/tests/logging.rs` asserting that terminal output written during a session never appears in `logs/`
-- [ ] T090 Run `scripts/check.sh` and fix every fmt, clippy, type, and test failure
+- [X] T087 [P] Expand `README.md`: build-from-source install, data folder layout (`contracts/file-formats.md`), security notice (shells run unsandboxed with user permissions)
+- [X] T088 [P] Audit `src-tauri/capabilities/default.json` so it grants exactly the commands in `contracts/ipc.md` plus `dialog:allow-open`
+- [X] T089 [P] Add a test in `crates/core/tests/logging.rs` asserting that terminal output written during a session never appears in `logs/`
+- [X] T090 Run `scripts/check.sh` and fix every fmt, clippy, type, and test failure
 - [ ] T091 Run every manual scenario in `specs/001-workspaces-canvas-terminals/quickstart.md` in `npm run tauri dev` and record pass/fail in `specs/001-workspaces-canvas-terminals/quickstart-results.md`
 
 ---

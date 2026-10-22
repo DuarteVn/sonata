@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-node-update-frame"
+description = "Enables the node_update_frame command without any pre-configured scope."
+commands.allow = ["node_update_frame"]
+
+[[permission]]
+identifier = "deny-node-update-frame"
+description = "Denies the node_update_frame command without any pre-configured scope."
+commands.deny = ["node_update_frame"]
