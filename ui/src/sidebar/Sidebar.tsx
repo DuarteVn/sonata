@@ -1,5 +1,6 @@
 import { PanelLeftClose, Plus } from "lucide-react";
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { startDrag as startPointerDrag } from "../canvas/useDrag";
 import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { isAppError, type WorkspaceSummary } from "../ipc/types";
 import { useWorkspaces } from "../state/workspaces";
@@ -7,8 +8,23 @@ import { LoadFailureItem } from "./LoadFailureItem";
 import { WorkspaceItem } from "./WorkspaceItem";
 
 const DRAG_THRESHOLD_PX = 4;
+export const SIDEBAR_DEFAULT_WIDTH = 232;
+const SIDEBAR_MIN_WIDTH = 180;
+const SIDEBAR_MAX_WIDTH = 480;
+const SIDEBAR_KEY_STEP = 16;
 
-export function Sidebar({ onCreate, onHide }: { onCreate: () => void; onHide: () => void }) {
+export function clampSidebarWidth(width: number): number {
+  return Math.round(Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width)));
+}
+
+type Props = {
+  onCreate: () => void;
+  onHide: () => void;
+  width: number;
+  onResize: (width: number) => void;
+};
+
+export function Sidebar({ onCreate, onHide, width, onResize }: Props) {
   const workspaces = useWorkspaces((s) => s.workspaces);
   const activeId = useWorkspaces((s) => s.activeId);
   const loadFailures = useWorkspaces((s) => s.loadFailures);
@@ -61,7 +77,7 @@ export function Sidebar({ onCreate, onHide }: { onCreate: () => void; onHide: ()
   }
 
   return (
-    <nav className="sidebar" aria-label="Workspaces">
+    <nav className="sidebar" aria-label="Workspaces" style={{ width }}>
       <header className="sidebar-header">
         <span>Workspaces</span>
         <span className="sidebar-actions">
@@ -96,6 +112,28 @@ export function Sidebar({ onCreate, onHide }: { onCreate: () => void; onHide: ()
           <LoadFailureItem key={f.path} failure={f} />
         ))}
       </ul>
+      <div
+        className="sidebar-resize"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize sidebar"
+        aria-valuenow={width}
+        aria-valuemin={SIDEBAR_MIN_WIDTH}
+        aria-valuemax={SIDEBAR_MAX_WIDTH}
+        tabIndex={0}
+        title="Drag to resize · double-click to reset"
+        onPointerDown={(e) => {
+          if (e.button !== 0) return;
+          e.preventDefault();
+          const start = width;
+          startPointerDrag(e, (dx) => onResize(clampSidebarWidth(start + dx)), () => {});
+        }}
+        onDoubleClick={() => onResize(SIDEBAR_DEFAULT_WIDTH)}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowLeft") onResize(clampSidebarWidth(width - SIDEBAR_KEY_STEP));
+          else if (e.key === "ArrowRight") onResize(clampSidebarWidth(width + SIDEBAR_KEY_STEP));
+        }}
+      />
       {deleting && (
         <ConfirmDialog
           title={`Delete "${deleting.name}"?`}
