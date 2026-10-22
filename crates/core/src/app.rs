@@ -1,5 +1,6 @@
 //! The facade the desktop shell talks to. Owns workspaces, preferences, and the event sink.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -7,13 +8,15 @@ use chrono::Utc;
 use serde::Serialize;
 use uuid::Uuid;
 
+use crate::crash_guard;
 use crate::error::{AppError, AppResult, ErrorCode};
 use crate::events::{CoreEvent, EventSink};
 use crate::model::node::{Frame, Node, NodeContent, TERMINAL_NAME_MAX_CHARS, TerminalContent};
 use crate::model::preferences::Preferences;
 use crate::model::workspace::{Camera, Workspace};
-use crate::paths::DataRoot;
+use crate::paths::{self, DataRoot};
 use crate::persistence::store::{LoadFailure, Store};
+use crate::terminal::history;
 use crate::terminal::manager::{SpawnSpec, TerminalManager};
 use crate::workspace::manager::{CreateWorkspace, SaveReport, WorkspaceManager, WorkspaceSummary};
 
@@ -112,6 +115,9 @@ pub struct App {
     options: AppOptions,
     events: Arc<dyn EventSink>,
     startup_warnings: Mutex<Vec<String>>,
+    crash_guard_tripped: bool,
+    /// Output sequence number of each terminal at its last history save.
+    history_saved_seq: Mutex<HashMap<Uuid, u64>>,
 }
 
 impl App {
@@ -124,11 +130,33 @@ impl App {
         events: Arc<dyn EventSink>,
         options: AppOptions,
     ) -> std::io::Result<Arc<Self>> {
+        let mut warnings = Vec::new();
+        match paths::enforce_private_tree(root.path()) {
+            Ok(0) => {}
+            Ok(n) => warnings.push(format!(
+                "Fixed permissions on {n} item(s) in {} so only you can read them.",
+                root.path().display()
+            )),
+            Err(e) => warnings.push(format!("Could not check permissions of Sonata's data: {e}")),
+        }
         let store = Store::new(root);
         let prefs = store.load_preferences();
         let mut manager = WorkspaceManager::load(store)?;
-        let mut warnings = manager.take_warnings();
+        warnings.extend(manager.take_warnings());
         warnings.extend(prefs.warning);
+
+        let tripped = crash_guard::on_launch(manager.app_state_mut());
+        if let Err(e) = manager.save_app_state() {
+            warnings.push(format!("Could not save app state: {e}"));
+        }
+        if tripped {
+            tracing::warn!("crash-loop guard tripped; not restoring the active workspace");
+            warnings.push(
+                "Sonata crashed twice right after starting, so it did not reopen your last \
+                 workspace. Open it from the sidebar when you are ready."
+                    .into(),
+            );
+        }
         Ok(Arc::new(Self {
             workspaces: Mutex::new(manager),
             terminals: TerminalManager::new(events.clone()),
@@ -136,6 +164,8 @@ impl App {
             options,
             events,
             startup_warnings: Mutex::new(warnings),
+            crash_guard_tripped: tripped,
+            history_saved_seq: Mutex::default(),
         }))
     }
 
@@ -156,13 +186,13 @@ impl App {
         let active = m
             .app_state()
             .active_workspace_id
-            .filter(|id| m.workspace(*id).is_some());
+            .filter(|id| m.workspace(*id).is_some() && !self.crash_guard_tripped);
         let workspaces = self.decorate(m.summaries(), &m);
         Bootstrap {
             workspaces,
             load_failures: m.failures().to_vec(),
             active_workspace_id: active,
-            crash_guard_tripped: false,
+            crash_guard_tripped: self.crash_guard_tripped,
             recent_workspace_ids: m.app_state().recent_workspace_ids.clone(),
             preferences: self.preferences,
             warnings: std::mem::take(
@@ -221,9 +251,13 @@ impl App {
     }
 
     fn start_terminal(&self, ws: &Workspace, node: &Node) {
-        let Some(spec) = self.spawn_spec(ws, node) else {
+        let Some(mut spec) = self.spawn_spec(ws, node) else {
             return;
         };
+        if node.terminal().is_some_and(|t| t.save_history) {
+            let path = self.history_path(ws.id, node.id);
+            spec.restored_history = history::load(&path, history::MAX_BYTES as u64);
+        }
         if let Err(err) = self.terminals.start(spec) {
             tracing::error!(node = %node.id, error = %err, "terminal failed to start");
             self.emit(CoreEvent::PersistenceWarning(format!(
@@ -393,14 +427,122 @@ impl App {
         self.terminals.stop_all();
     }
 
+    /// Autosave pass: changed workspaces plus terminal histories with new output.
     pub fn save_dirty(&self) -> SaveReport {
-        let report = self.workspaces().save_dirty();
+        let mut report = self.workspaces().save_dirty();
+        report
+            .errors
+            .extend(self.save_histories().into_iter().map(|e| (None, e)));
         for (_, err) in &report.errors {
             self.emit(CoreEvent::PersistenceWarning(format!(
                 "Could not save: {err}"
             )));
         }
         report
+    }
+
+    /// Opens Finder at a path inside the data folder. Paths elsewhere are refused.
+    pub fn reveal_in_finder(&self, path: &std::path::Path) -> AppResult<()> {
+        let root = self.workspaces().store().root().path().to_path_buf();
+        paths::reject_parent_components(path).map_err(|e| AppError::internal(e.to_string()))?;
+        if !path.starts_with(&root) {
+            return Err(AppError::internal(
+                "Only files in Sonata's data folder can be revealed.",
+            ));
+        }
+        std::process::Command::new("/usr/bin/open")
+            .arg("-R")
+            .arg(path)
+            .spawn()?;
+        Ok(())
+    }
+
+    /// Records that the app outlived the early-crash window (research R9).
+    pub fn mark_outlived_launch_window(&self) {
+        let mut m = self.workspaces();
+        crash_guard::on_outlived_launch_window(m.app_state_mut());
+        if let Err(e) = m.save_app_state() {
+            tracing::warn!(error = %e, "could not save app state");
+        }
+    }
+
+    fn history_path(&self, ws: Uuid, node: Uuid) -> PathBuf {
+        self.workspaces()
+            .store()
+            .root()
+            .terminals_dir(ws)
+            .join(format!("{node}.history"))
+    }
+
+    /// Writes history for terminals whose output changed since the last save.
+    fn save_histories(&self) -> Vec<String> {
+        let targets: Vec<(Uuid, Uuid)> = {
+            let m = self.workspaces();
+            m.ids()
+                .into_iter()
+                .filter_map(|id| m.workspace(id))
+                .flat_map(|ws| {
+                    ws.nodes
+                        .iter()
+                        .filter(|n| n.terminal().is_some_and(|t| t.save_history))
+                        .map(move |n| (ws.id, n.id))
+                })
+                .collect()
+        };
+        let max_rows = self.preferences.history_max_rows as usize;
+        let mut errors = Vec::new();
+        for (ws, node) in targets {
+            let Some(seq) = self.terminals.output_seq(node) else {
+                continue;
+            };
+            if self.saved_seq().get(&node) == Some(&seq) {
+                continue;
+            }
+            let Some(rows) = self.terminals.history_rows(node, max_rows) else {
+                continue;
+            };
+            let path = self.history_path(ws, node);
+            match history::save(&path, &rows, max_rows, history::MAX_BYTES) {
+                Ok(()) => {
+                    self.saved_seq().insert(node, seq);
+                }
+                Err(e) => errors.push(format!("terminal history {}: {e}", path.display())),
+            }
+        }
+        errors
+    }
+
+    fn saved_seq(&self) -> MutexGuard<'_, HashMap<Uuid, u64>> {
+        self.history_saved_seq
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub fn set_save_history(&self, node: Uuid, enabled: bool) -> AppResult<()> {
+        let ws = self.workspace_of_node(node)?;
+        self.update_node(ws, node, |w, id| {
+            let t = w
+                .node_mut(id)
+                .and_then(Node::terminal_mut)
+                .ok_or_else(|| AppError::node_not_found(id))?;
+            t.save_history = enabled;
+            Ok(())
+        })?;
+        if !enabled {
+            history::delete(&self.history_path(ws, node))?;
+            self.saved_seq().remove(&node);
+        }
+        Ok(())
+    }
+
+    /// Deletes the saved history file. It is written again only after new output.
+    pub fn clear_history(&self, node: Uuid) -> AppResult<()> {
+        let ws = self.workspace_of_node(node)?;
+        history::delete(&self.history_path(ws, node))?;
+        if let Some(seq) = self.terminals.output_seq(node) {
+            self.saved_seq().insert(node, seq);
+        }
+        Ok(())
     }
 
     /// Sidebar summaries with live data (busy terminal counts) filled in.
@@ -478,6 +620,28 @@ impl App {
         Ok(())
     }
 
+    /// History files of terminals that have history saving turned off.
+    fn history_files_to_clean(&self) -> Vec<(Uuid, PathBuf)> {
+        let m = self.workspaces();
+        let root = m.store().root().clone();
+        m.ids()
+            .into_iter()
+            .filter_map(|id| m.workspace(id))
+            .flat_map(|ws| {
+                let root = root.clone();
+                ws.nodes
+                    .iter()
+                    .filter(|n| n.terminal().is_some_and(|t| !t.save_history))
+                    .map(move |n| {
+                        (
+                            n.id,
+                            root.terminals_dir(ws.id).join(format!("{}.history", n.id)),
+                        )
+                    })
+            })
+            .collect()
+    }
+
     /// Workspaces with terminals running something other than an idle shell (FR-018a).
     pub fn quit_check(&self) -> Vec<BusyWorkspace> {
         let m = self.workspaces();
@@ -498,6 +662,9 @@ impl App {
     /// Saves everything, marks a clean shutdown, and stops all terminals.
     pub fn quit(&self) {
         self.save_dirty();
+        for (_, path) in self.history_files_to_clean() {
+            let _ = history::delete(&path);
+        }
         {
             let mut m = self.workspaces();
             m.app_state_mut().clean_shutdown = true;

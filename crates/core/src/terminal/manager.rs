@@ -63,6 +63,8 @@ struct Terminal {
     /// Bumped on restart and stop so threads of an older process stop touching state.
     generation: u64,
     warning: Option<String>,
+    /// Incremented on every chunk of output; lets callers skip saving unchanged history.
+    output_seq: u64,
 }
 
 impl Terminal {
@@ -149,6 +151,7 @@ impl TerminalManager {
             pending: Vec::new(),
             generation: 0,
             warning: None,
+            output_seq: 0,
         }));
         lock(&self.terminals).insert(id, terminal.clone());
         self.launch(id, &terminal)
@@ -310,6 +313,10 @@ impl TerminalManager {
         })
     }
 
+    pub fn output_seq(&self, id: Uuid) -> Option<u64> {
+        self.get(id).ok().map(|t| lock(&t).output_seq)
+    }
+
     pub fn history_rows(&self, id: Uuid, max_rows: usize) -> Option<Vec<String>> {
         self.get(id)
             .ok()
@@ -372,6 +379,7 @@ fn spawn_reader(
                     break;
                 }
                 t.screen.process(&buf[..n]);
+                t.output_seq += 1;
                 if t.sink.is_some() {
                     t.pending.extend_from_slice(&buf[..n]);
                     if t.pending.len() >= MAX_CHUNK {

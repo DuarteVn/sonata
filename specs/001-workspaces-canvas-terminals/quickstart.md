@@ -59,7 +59,9 @@ All commands must pass before merge (constitution, Quality Gates).
    separator, a fresh shell, and launch commands re-run (FR-015, FR-016).
 5. Corrupt one `workspace.json` (`echo '{' > …`). Restart. **Expect**: other workspaces load; the
    broken one shows as a load failure with path; the file is unchanged (FR-025, SC-006).
-6. Set `"consecutiveEarlyCrashes": 2` and `"cleanShutdown": false` in `app-state.json`. Start.
+6. Quit Sonata, then set `"consecutiveEarlyCrashes": 1`, `"cleanShutdown": false`, and
+   `"outlivedLaunchWindow": false` in `app-state.json` (one early crash already counted, plus the
+   one this edit simulates). Start.
    **Expect**: no workspace auto-opened, message explains why (FR-027).
 7. `ls -l` under `$SONATA_HOME`. **Expect**: folders `drwx------`, files `-rw-------` (FR-015a).
 

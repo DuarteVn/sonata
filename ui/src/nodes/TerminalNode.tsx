@@ -6,6 +6,7 @@ import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { ipc } from "../ipc/commands";
 import { isAppError, type CanvasNode, type TerminalContent } from "../ipc/types";
 import { TITLE_HEIGHT } from "../terminal/LiveTerminalLayer";
+import { TerminalMenu } from "./TerminalMenu";
 import { useCanvas } from "../state/canvas";
 import { useWorkspaces } from "../state/workspaces";
 
@@ -116,6 +117,8 @@ export function TerminalNode({ node }: Props) {
             </button>
           </span>
         )}
+        <span className="node-spacer" />
+        <TerminalMenu node={node} />
         <button type="button" className="icon-button node-close" aria-label="Close terminal" onClick={() => void close(false)}>
           <X size={14} />
         </button>

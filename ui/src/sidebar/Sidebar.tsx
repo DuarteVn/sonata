@@ -3,6 +3,7 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
 import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { isAppError, type WorkspaceSummary } from "../ipc/types";
 import { useWorkspaces } from "../state/workspaces";
+import { LoadFailureItem } from "./LoadFailureItem";
 import { WorkspaceItem } from "./WorkspaceItem";
 
 const DRAG_THRESHOLD_PX = 4;
@@ -10,6 +11,7 @@ const DRAG_THRESHOLD_PX = 4;
 export function Sidebar({ onCreate }: { onCreate: () => void }) {
   const workspaces = useWorkspaces((s) => s.workspaces);
   const activeId = useWorkspaces((s) => s.activeId);
+  const loadFailures = useWorkspaces((s) => s.loadFailures);
   const { open, rename, setPinned, reorder, remove, addWarning } = useWorkspaces.getState();
   const [deleting, setDeleting] = useState<WorkspaceSummary | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -84,6 +86,9 @@ export function Sidebar({ onCreate }: { onCreate: () => void }) {
             onDelete={() => setDeleting(w)}
             onDragStart={(e) => startDrag(e, w.id)}
           />
+        ))}
+        {loadFailures.map((f) => (
+          <LoadFailureItem key={f.path} failure={f} />
         ))}
       </ul>
       {deleting && (

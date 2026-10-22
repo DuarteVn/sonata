@@ -36,3 +36,12 @@ pub fn app_quit(
     handle.exit(0);
     Vec::new()
 }
+
+/// Shows a file of Sonata's data folder in Finder (used for load failures).
+#[tauri::command]
+pub fn app_reveal_path(
+    app: State<'_, Arc<App>>,
+    path: std::path::PathBuf,
+) -> Result<(), sonata_core::AppError> {
+    app.reveal_in_finder(&path)
+}

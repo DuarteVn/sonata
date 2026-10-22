@@ -151,24 +151,24 @@ restart: layouts back (≤ one autosave interval lost) and each terminal shows p
 
 ### Tests for User Story 3 (write first, must fail)
 
-- [ ] T058 [P] [US3] Load-failure tests in `crates/core/tests/load_failures.rs`: each reason `InvalidJson`, `WrongType`, `NewerVersion{found, supported}`, `MigrationFailed{step}`, `DecodeFailed{detail}`, `IdMismatch` (folder name ≠ payload id) produces a `LoadFailure` with path; other workspaces still load; the failed file stays byte-identical after autosave ticks and quit
-- [ ] T059 [P] [US3] Crash-guard tests in `crates/core/tests/crash_guard.rs` per research R9: unclean shutdown inside the 30 s window increments `consecutiveEarlyCrashes`; clean shutdown or `outlivedLaunchWindow` resets it to 0; at ≥ 2 the active workspace is not restored and `crashGuardTripped` is true
-- [ ] T060 [P] [US3] Crash-kill test in `crates/core/tests/crash_kill.rs` with helper binary `crates/core/examples/save_loop.rs` (saves workspaces in a tight loop): spawn, `SIGKILL` at random times 100 times, then assert every `workspace.json` decodes (SC-005)
-- [ ] T061 [P] [US3] History tests in `crates/core/tests/history.rs`: history saved on autosave and quit, capped at `historyMaxRows` and 8 MB (oldest rows dropped); reading a larger file stops at 8 MB; `saveHistory = false` writes no file and deletes an existing one; clear deletes the file; on restart the history is fed before a `── restored history · <time> ──` separator and a fresh shell; a terminal with a launch command runs it again (FR-016)
-- [ ] T062 [P] [US3] Permission tests in `crates/core/tests/permissions.rs`: all created folders `0700` and files `0600`; at startup, looser modes are fixed and a `persistence://warning` event is emitted
-- [ ] T063 [P] [US3] App-state tests in `crates/core/tests/app_state.rs`: an invalid `app-state.json` or `preferences.json` is renamed to `<name>.invalid-<timestamp>` and replaced by defaults with a warning; active workspace restored at launch; recent list "max 10"
-- [ ] T064 [P] [US3] UI tests in `ui/tests/recovery.test.tsx`: load failure item shows reason and path; crash-guard banner text; persistence warning banner; terminal menu shows "Save history" toggle and "Clear saved history"
+- [X] T058 [P] [US3] Load-failure tests in `crates/core/tests/load_failures.rs`: each reason `InvalidJson`, `WrongType`, `NewerVersion{found, supported}`, `MigrationFailed{step}`, `DecodeFailed{detail}`, `IdMismatch` (folder name ≠ payload id) produces a `LoadFailure` with path; other workspaces still load; the failed file stays byte-identical after autosave ticks and quit
+- [X] T059 [P] [US3] Crash-guard tests in `crates/core/tests/crash_guard.rs` per research R9: unclean shutdown inside the 30 s window increments `consecutiveEarlyCrashes`; clean shutdown or `outlivedLaunchWindow` resets it to 0; at ≥ 2 the active workspace is not restored and `crashGuardTripped` is true
+- [X] T060 [P] [US3] Crash-kill test in `crates/core/tests/crash_kill.rs` with a child process that is the test binary itself re-run with `SONATA_SAVE_LOOP` set (saves workspaces in a tight loop): spawn, `SIGKILL` at random times 100 times, then assert every `workspace.json` decodes (SC-005)
+- [X] T061 [P] [US3] History tests in `crates/core/tests/history.rs`: history saved on autosave and quit, capped at `historyMaxRows` and 8 MB (oldest rows dropped); reading a larger file stops at 8 MB; `saveHistory = false` writes no file and deletes an existing one; clear deletes the file; on restart the history is fed before a `── restored history · <time> ──` separator and a fresh shell; a terminal with a launch command runs it again (FR-016)
+- [X] T062 [P] [US3] Permission tests in `crates/core/tests/permissions.rs`: all created folders `0700` and files `0600`; at startup, looser modes are fixed and a `persistence://warning` event is emitted
+- [X] T063 [P] [US3] App-state tests in `crates/core/tests/app_state.rs`: an invalid `app-state.json` or `preferences.json` is renamed to `<name>.invalid-<timestamp>` and replaced by defaults with a warning; active workspace restored at launch; recent list "max 10"
+- [X] T064 [P] [US3] UI tests in `ui/tests/recovery.test.tsx`: load failure item shows reason and path; crash-guard banner text; persistence warning banner; terminal menu shows "Save history" toggle and "Clear saved history"
 
 ### Implementation for User Story 3
 
-- [ ] T065 [US3] Return `LoadFailure{folderName, path, reason}` from discovery in `crates/core/src/persistence/store.rs` and mark failed folders read-only in `crates/core/src/workspace/manager.rs` so nothing writes them
-- [ ] T066 [US3] Implement crash guard in `crates/core/src/crash_guard.rs` and wire it in `src-tauri/src/main.rs` (check at startup before restore, 30 s timer sets `outlivedLaunchWindow`)
-- [ ] T067 [US3] Implement history save/restore in `crates/core/src/terminal/history.rs` and call it from `TerminalManager` (save on autosave and quit; restore before spawning on workspace open)
-- [ ] T068 [US3] Add the startup permission sweep with warning events to `crates/core/src/paths.rs`
-- [ ] T069 [US3] Handle invalid `app-state.json`/`preferences.json` (rename to `.invalid-<timestamp>`, defaults, warning) in `crates/core/src/persistence/store.rs`
-- [ ] T070 [US3] On save failure keep data in memory, emit `persistence://warning`, and retry on the next tick, in `crates/core/src/autosave.rs`
-- [ ] T071 [US3] Implement commands `terminal_set_save_history` and `terminal_clear_history` in `src-tauri/src/commands/terminal.rs`; register in capabilities
-- [ ] T072 [US3] Implement `ui/src/sidebar/LoadFailureItem.tsx` (reason, path, Reveal in Finder), crash-guard and persistence-warning banners in `ui/src/App.tsx`, and the terminal menu entries in `ui/src/nodes/TerminalNode.tsx`
+- [X] T065 [US3] Return `LoadFailure{folderName, path, reason}` from discovery in `crates/core/src/persistence/store.rs` and mark failed folders read-only in `crates/core/src/workspace/manager.rs` so nothing writes them
+- [X] T066 [US3] Implement crash guard in `crates/core/src/crash_guard.rs` and wire it in `src-tauri/src/main.rs` (check at startup before restore, 30 s timer sets `outlivedLaunchWindow`)
+- [X] T067 [US3] Implement history save/restore in `crates/core/src/terminal/history.rs` and call it from `TerminalManager` (save on autosave and quit; restore before spawning on workspace open)
+- [X] T068 [US3] Add the startup permission sweep with warning events to `crates/core/src/paths.rs`
+- [X] T069 [US3] Handle invalid `app-state.json`/`preferences.json` (rename to `.invalid-<timestamp>`, defaults, warning) in `crates/core/src/persistence/store.rs`
+- [X] T070 [US3] On save failure keep data in memory, emit `persistence://warning`, and retry on the next tick, in `crates/core/src/autosave.rs`
+- [X] T071 [US3] Implement commands `terminal_set_save_history` and `terminal_clear_history` in `src-tauri/src/commands/terminal.rs`; register in capabilities
+- [X] T072 [US3] Implement `ui/src/sidebar/LoadFailureItem.tsx` (reason, path, Reveal in Finder), crash-guard and persistence-warning banners in `ui/src/App.tsx`, and the terminal menu entries in `ui/src/nodes/TerminalNode.tsx`
 
 **Checkpoint**: US1–US3 pass. P1 scope complete.
 

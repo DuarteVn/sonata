@@ -139,3 +139,35 @@ impl DataRoot {
         Ok(())
     }
 }
+
+/// Forces `0700` on folders and `0600` on files under `root`. Returns how many entries were
+/// fixed (FR-015a). Symbolic links are left alone.
+pub fn enforce_private_tree(root: &Path) -> io::Result<usize> {
+    let mut fixed = 0;
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        for entry in fs::read_dir(&dir)? {
+            let entry = entry?;
+            let kind = entry.file_type()?;
+            if kind.is_symlink() {
+                continue;
+            }
+            let path = entry.path();
+            let wanted = if kind.is_dir() { DIR_MODE } else { FILE_MODE };
+            let current = entry.metadata()?.permissions().mode() & 0o777;
+            if current != wanted {
+                set_mode(&path, wanted)?;
+                fixed += 1;
+            }
+            if kind.is_dir() {
+                stack.push(path);
+            }
+        }
+    }
+    let current = fs::metadata(root)?.permissions().mode() & 0o777;
+    if current != DIR_MODE {
+        set_mode(root, DIR_MODE)?;
+        fixed += 1;
+    }
+    Ok(fixed)
+}

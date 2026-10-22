@@ -30,6 +30,7 @@ pub fn run() {
             let core = App::start(root, sink)?;
             spawn_autosave(core.clone());
             spawn_summary_monitor(core.clone());
+            spawn_launch_window_timer(core.clone());
             tauri_app.manage(core);
             Ok(())
         })
@@ -46,6 +47,7 @@ pub fn run() {
             commands::app::app_bootstrap,
             commands::app::app_quit_check,
             commands::app::app_quit,
+            commands::app::app_reveal_path,
             commands::workspace::workspace_create,
             commands::workspace::workspace_open,
             commands::workspace::workspace_rename,
@@ -64,6 +66,8 @@ pub fn run() {
             commands::terminal::terminal_rename,
             commands::terminal::terminal_set_launch_command,
             commands::terminal::terminal_restart,
+            commands::terminal::terminal_set_save_history,
+            commands::terminal::terminal_clear_history,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Sonata");
@@ -112,4 +116,15 @@ fn spawn_summary_monitor(core: Arc<App>) {
             }
         })
         .expect("spawn summary monitor");
+}
+
+/// Marks the launch as healthy once it outlives the early-crash window (FR-027).
+fn spawn_launch_window_timer(core: Arc<App>) {
+    std::thread::Builder::new()
+        .name("sonata-launch-window".into())
+        .spawn(move || {
+            std::thread::sleep(sonata_core::crash_guard::EARLY_CRASH_WINDOW);
+            core.mark_outlived_launch_window();
+        })
+        .expect("spawn launch window timer");
 }

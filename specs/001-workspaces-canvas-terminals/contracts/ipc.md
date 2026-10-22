@@ -85,6 +85,7 @@ type WorkspaceView = WorkspaceSummary & { camera: Camera; nodes: NodeView[] };
 
 | Command | Input | Output |
 |---|---|---|
+| `app_reveal_path` | `{path}` | — (Finder; only paths inside the data folder) |
 | `app_quit_check` | — | `{busy: {workspaceId, workspaceName, count}[]}` (FR-018a) |
 | `app_quit` | `{confirmed}` | `BusyWorkspace[]`: without `confirmed`, returns the busy list and does not quit; otherwise saves all, writes `cleanShutdown`, stops terminals, exits |
 

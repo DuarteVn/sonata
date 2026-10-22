@@ -23,6 +23,7 @@ export const ipc = {
   workspaceDelete: (id: string) => invoke<void>("workspace_delete", { id, confirmed: true }),
   appQuitCheck: () => invoke<BusyWorkspace[]>("app_quit_check"),
   appQuit: (confirmed: boolean) => invoke<BusyWorkspace[]>("app_quit", { confirmed }),
+  appRevealPath: (path: string) => invoke<void>("app_reveal_path", { path }),
   workspaceSetCamera: (id: string, camera: Camera) => invoke<Camera>("workspace_set_camera", { id, ...camera }),
 
   nodeCreateTerminal: (
@@ -47,6 +48,9 @@ export const ipc = {
   terminalSetLaunchCommand: (nodeId: string, launchCommand: string | null) =>
     invoke<void>("terminal_set_launch_command", { nodeId, launchCommand }),
   terminalRestart: (nodeId: string) => invoke<void>("terminal_restart", { nodeId }),
+  terminalSetSaveHistory: (nodeId: string, enabled: boolean) =>
+    invoke<void>("terminal_set_save_history", { nodeId, enabled }),
+  terminalClearHistory: (nodeId: string) => invoke<void>("terminal_clear_history", { nodeId }),
 };
 
 export type Ipc = typeof ipc;

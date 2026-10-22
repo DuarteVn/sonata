@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Banners } from "./Banners";
 import { Canvas } from "./canvas/Canvas";
 import { QuitDialog } from "./dialogs/QuitDialog";
 import { ipc } from "./ipc/commands";
@@ -39,6 +40,7 @@ export function App() {
     <div className="app">
       <Sidebar onCreate={() => setCreating(true)} />
       <main className="main">
+        <Banners />
         {ready && workspaces.length === 0 && (
           <div className="empty-state">
             <p>No workspaces yet. A workspace is a canvas for one project folder.</p>

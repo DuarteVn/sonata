@@ -78,3 +78,17 @@ pub fn terminal_set_launch_command(
 pub fn terminal_restart(app: State<'_, Arc<App>>, node_id: Uuid) -> Result<(), AppError> {
     app.restart_terminal(node_id)
 }
+
+#[tauri::command]
+pub fn terminal_set_save_history(
+    app: State<'_, Arc<App>>,
+    node_id: Uuid,
+    enabled: bool,
+) -> Result<(), AppError> {
+    app.set_save_history(node_id, enabled)
+}
+
+#[tauri::command]
+pub fn terminal_clear_history(app: State<'_, Arc<App>>, node_id: Uuid) -> Result<(), AppError> {
+    app.clear_history(node_id)
+}
