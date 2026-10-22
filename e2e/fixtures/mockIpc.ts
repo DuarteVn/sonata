@@ -236,6 +236,26 @@ export function installMockIpc() {
       }
       case "note_insert_image":
         return { markdown: "![](../files/mock.png)" };
+      case "node_create_browser": {
+        const ws = find(args.workspaceId);
+        if (!ws) throw { code: "WorkspaceNotFound", message: "No workspace." };
+        const now = new Date().toISOString();
+        const node: CanvasNode = {
+          id: id(),
+          frame: args.frame as CanvasNode["frame"],
+          z: Math.max(0, ...ws.nodes.map((n) => n.z)) + 1,
+          createdAt: now,
+          modifiedAt: now,
+          content: { browser: { url: "about:blank" } },
+        };
+        ws.nodes.push(node);
+        return node;
+      }
+      case "browser_navigate":
+        return String(args.input).startsWith("localhost") ? `http://${args.input}` : `https://${args.input}`;
+      case "browser_action":
+      case "browser_layout":
+        return null;
       case "exchange_log":
         return [];
       case "terminal_rename":

@@ -856,7 +856,7 @@ fn browser(ctx: &Ctx<'_>, rest: &[&str]) -> Reply {
                 Err(e) => Reply::err(EXIT_ERROR, e),
             }
         }
-        ("eval", [js @ ..]) if !js.is_empty() => match host.eval(node.id, &js.join(" ")) {
+        ("eval", js) if !js.is_empty() => match host.eval(node.id, &js.join(" ")) {
             Ok(v) => Reply::ok(super::cap_text(v, super::MAX_RESULT_BYTES)),
             Err(e) => Reply::err(EXIT_ERROR, e),
         },

@@ -1,7 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { TerminalDialog } from "../dialogs/TerminalDialog";
-import { isAppError, isTerminal } from "../ipc/types";
+import { ipc } from "../ipc/commands";
+import { isAppError, isBrowser, isTerminal } from "../ipc/types";
+import { BROWSER_CHROME_HEIGHT, BrowserNode } from "../nodes/BrowserNode";
 import { linkDragBus } from "../nodes/LinkHandle";
 import { NoteNode } from "../nodes/NoteNode";
 import { TerminalNode } from "../nodes/TerminalNode";
@@ -13,11 +15,15 @@ import { routeKey } from "./keyboard";
 import { LinkLayer, type LinkDrag } from "./LinkLayer";
 import { NodeToolbar } from "./NodeToolbar";
 import { ToolBar } from "./ToolBar";
-import { pan, screenToCanvas, zoomAt, type ScreenRect } from "./viewport";
+import { planBrowsers } from "./browserLayout";
+import { frameToScreen, pan, screenToCanvas, zoomAt, type ScreenRect } from "./viewport";
 import { startDrag } from "./useDrag";
 
 const GESTURE_END_MS = 150;
 const NOTE_SIZE = { width: 260, height: 200 };
+const BROWSER_SIZE = { width: 1024, height: 720 };
+/** Interface elements that a live browser page must never cover (004 FR-007). */
+const COVERS = ".modal-backdrop, .menu.floating, .message-log, .node-toolbar, .tool-bar, .tool-hint, .banners, .linking-hint, .tb-palette";
 
 function hasTextFocus() {
   const el = document.activeElement;
@@ -122,6 +128,7 @@ export function Canvas() {
       if (action === "tool:select") s.setTool("select");
       else if (action === "tool:terminal") s.setTool("terminal");
       else if (action === "tool:note") s.setTool("note");
+      else if (action === "tool:browser") s.setTool("browser");
       else if (action === "delete") s.deleteSelection().catch(report);
       else if (action === "cancelLink") s.cancelLinking();
       else {
@@ -140,6 +147,59 @@ export function Canvas() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewport]);
+
+  // Places live browser pages over their nodes; everything else shows cards (004 research R7).
+  useEffect(() => {
+    const container = ref.current!;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let shown = new Set<string>();
+    const run = () => {
+      const s = useCanvas.getState();
+      const box = container.getBoundingClientRect();
+      const pages = s.nodes.filter(isBrowser).map((n) => ({
+        id: n.id,
+        rect: frameToScreen(s.camera, {
+          x: n.frame.x,
+          y: n.frame.y + BROWSER_CHROME_HEIGHT,
+          width: n.frame.width,
+          height: n.frame.height - BROWSER_CHROME_HEIGHT,
+        }),
+      }));
+      const covers = [...document.querySelectorAll(COVERS)].map((el) => {
+        const r = el.getBoundingClientRect();
+        return { left: r.left - box.left, top: r.top - box.top, width: r.width, height: r.height };
+      });
+      const selectedId = s.selection?.kind === "node" ? s.selection.id : null;
+      const plan = planBrowsers({ pages, viewport: { left: 0, top: 0, width: box.width, height: box.height }, zoom: s.camera.zoom, gesturing: s.gesturing, covers, selectedId });
+      const items = plan.map((p) => ({
+        nodeId: p.id,
+        rect: p.rect && { x: p.rect.left + box.left, y: p.rect.top + box.top, width: p.rect.width, height: p.rect.height },
+      }));
+      const ids = new Set(items.map((i) => i.nodeId));
+      for (const gone of shown) if (!ids.has(gone)) items.push({ nodeId: gone, rect: null });
+      shown = ids;
+      void ipc.browserLayout(items).catch(() => {});
+    };
+    const schedule = () => {
+      clearTimeout(timer);
+      timer = setTimeout(run, 50);
+    };
+    const unsubscribe = useCanvas.subscribe(schedule);
+    const bodyObserver = new MutationObserver(schedule);
+    bodyObserver.observe(document.body, { childList: true });
+    const canvasObserver = new MutationObserver(schedule);
+    canvasObserver.observe(container, { childList: true });
+    window.addEventListener("resize", schedule);
+    schedule();
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+      bodyObserver.disconnect();
+      canvasObserver.disconnect();
+      window.removeEventListener("resize", schedule);
+      void ipc.browserLayout([...shown].map((nodeId) => ({ nodeId, rect: null }))).catch(() => {});
+    };
+  }, []);
 
   const layerTransform = `translate(${-camera.x * camera.zoom}px, ${-camera.y * camera.zoom}px) scale(${camera.zoom})`;
   const grid = 24 * camera.zoom;
@@ -178,6 +238,9 @@ export function Canvas() {
           const at = screenToCanvas(s.camera, { x: e.clientX - r.left, y: e.clientY - r.top });
           if (s.tool === "terminal") {
             s.openTerminalDialog({ kind: "create", at });
+          } else if (s.tool === "browser") {
+            s.addBrowser({ x: at.x, y: at.y, ...BROWSER_SIZE }).catch(report);
+            s.setTool("select");
           } else if (s.tool === "note") {
             s.addNote({ x: at.x, y: at.y, ...NOTE_SIZE })
               .then((n) => s.select({ kind: "node", id: n.id }))
@@ -193,7 +256,15 @@ export function Canvas() {
       >
         <div className="canvas-layer" style={{ transform: layerTransform }}>
           <LinkLayer drag={linkDrag} />
-          {nodes.map((n) => (isTerminal(n) ? <TerminalNode key={n.id} node={n} /> : <NoteNode key={n.id} node={n} />))}
+          {nodes.map((n) =>
+            isTerminal(n) ? (
+              <TerminalNode key={n.id} node={n} />
+            ) : isBrowser(n) ? (
+              <BrowserNode key={n.id} node={n} />
+            ) : (
+              <NoteNode key={n.id} node={n} />
+            ),
+          )}
         </div>
         <LiveTerminalLayer viewport={viewport} />
         <NodeToolbar viewport={viewport} />

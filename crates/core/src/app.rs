@@ -550,6 +550,9 @@ impl App {
         }
         self.broker.cancel_from(self, node);
         self.terminals.stop(node);
+        if let Some(host) = self.browser_host() {
+            host.close(node);
+        }
         let _ = std::fs::remove_dir_all(self.run_dir(node));
         if is_note {
             self.note_store().delete(ws, node)?;
@@ -1095,6 +1098,20 @@ impl App {
             .unwrap_or_else(|e| e.into_inner())
             .remove(&id);
         self.note_store().forget_workspace(id);
+        let browsers: Vec<Uuid> = self
+            .workspaces()
+            .workspace(id)
+            .map(|w| {
+                w.nodes
+                    .iter()
+                    .filter(|n| n.browser().is_some())
+                    .map(|n| n.id)
+                    .collect()
+            })
+            .unwrap_or_default();
+        if let Some(host) = self.browser_host() {
+            host.forget_workspace(id, &browsers);
+        }
         self.workspaces().delete(id)?;
         self.notify_workspaces_changed();
         Ok(())

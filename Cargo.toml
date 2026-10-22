@@ -19,7 +19,7 @@ pretty_assertions = "1"
 rand = "0.9"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tauri = { version = "2.12", features = ["protocol-asset"] }
+tauri = { version = "2.12", features = ["protocol-asset", "unstable", "devtools"] }
 tauri-build = { version = "2.7", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"

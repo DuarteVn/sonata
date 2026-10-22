@@ -1,6 +1,7 @@
 //! Tauri commands. Each one forwards to `sonata_core::App`; no business rules live here.
 
 pub mod app;
+pub mod browser;
 pub mod link;
 pub mod node;
 pub mod note;

@@ -20,6 +20,7 @@ export type EventMap = {
   "app://quit-requested": null;
   "app://close-selected": null;
   "messaging://ask": AskEvent;
+  "browser://state": import("./types").BrowserState;
   "messaging://notify": NotifyEvent;
   "workspace://nodes-changed": NodesChangedEvent;
 };

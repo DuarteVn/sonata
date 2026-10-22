@@ -24,6 +24,10 @@
     "allow-node-bring-to-front",
     "allow-node-delete",
     "allow-workspace-set-camera",
+    "allow-node-create-browser",
+    "allow-browser-navigate",
+    "allow-browser-action",
+    "allow-browser-layout",
     "allow-node-create-note",
     "allow-note-read",
     "allow-note-write",
@@ -47,5 +51,8 @@
     "allow-terminal-preview-subscribe",
     "allow-terminal-update-settings",
     "allow-exchange-log"
+  ],
+  "webviews": [
+    "main"
   ]
 }

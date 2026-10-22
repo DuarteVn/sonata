@@ -77,6 +77,10 @@ pub trait BrowserHost: Send + Sync {
     fn screenshot(&self, node: Uuid, out: &Path) -> Result<(), String>;
     /// Runs JavaScript and returns its result as JSON text.
     fn eval(&self, node: Uuid, js: &str) -> Result<String, String>;
+    /// The node was deleted: free its page.
+    fn close(&self, _node: Uuid) {}
+    /// The workspace was deleted: close its pages and delete its browsing data (FR-010).
+    fn forget_workspace(&self, _ws: Uuid, _nodes: &[Uuid]) {}
 }
 
 pub fn short_id(id: Uuid) -> String {

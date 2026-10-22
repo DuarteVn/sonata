@@ -190,6 +190,12 @@ impl TerminalManager {
             wrap_agents: spec.wrap_agents,
         })?;
         let pid = spawned.pid;
+        let launch = spec
+            .launch_command
+            .as_deref()
+            .map(str::trim)
+            .filter(|c| !c.is_empty())
+            .map(|c| pty::wrap_launch_command(c, spec.wrap_agents));
         {
             let mut t = lock(terminal);
             t.shell_pid = pid;
@@ -202,6 +208,9 @@ impl TerminalManager {
             t.warning = spawned.warning.clone();
         }
         spawn_reader(Arc::downgrade(terminal), generation, spawned.reader);
+        if let Some(command) = launch {
+            spawn_launcher(Arc::downgrade(terminal), generation, command);
+        }
         spawn_waiter(
             Arc::downgrade(terminal),
             generation,
@@ -493,6 +502,38 @@ fn spawn_reader(
         })
         .expect("spawn reader thread");
 }
+
+/// Types the launch command once the shell is ready: it printed something and then stayed quiet
+/// for a moment (at most [`LAUNCH_WAIT`]).
+fn spawn_launcher(terminal: Weak<Mutex<Terminal>>, generation: u64, command: String) {
+    std::thread::Builder::new()
+        .name("sonata-launch".into())
+        .spawn(move || {
+            let start = std::time::Instant::now();
+            loop {
+                std::thread::sleep(Duration::from_millis(50));
+                let Some(terminal) = terminal.upgrade() else {
+                    return;
+                };
+                let mut t = lock(&terminal);
+                if t.generation != generation {
+                    return;
+                }
+                let ready = t.output_seq > 0 && t.last_output.elapsed() >= LAUNCH_QUIET;
+                if ready || start.elapsed() >= LAUNCH_WAIT {
+                    if let Some(w) = t.writer.as_mut() {
+                        let _ = w.write_all(format!("{command}\r").as_bytes());
+                        let _ = w.flush();
+                    }
+                    return;
+                }
+            }
+        })
+        .expect("spawn launcher thread");
+}
+
+const LAUNCH_QUIET: Duration = Duration::from_millis(300);
+const LAUNCH_WAIT: Duration = Duration::from_secs(10);
 
 fn spawn_waiter(
     terminal: Weak<Mutex<Terminal>>,

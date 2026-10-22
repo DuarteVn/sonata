@@ -1,5 +1,6 @@
 //! Sonata desktop shell: wires `sonata_core::App` into Tauri.
 
+mod browser;
 mod commands;
 mod events;
 mod menu;
@@ -47,7 +48,16 @@ pub fn run() {
                 cli_dir: cli_dir(tauri_app.handle()),
                 socket: true,
             };
+            let data_root = root.path().to_path_buf();
             let core = App::start_with(root, sink, options)?;
+            let browsers = browser::Browsers::new(
+                tauri_app.handle().clone(),
+                Arc::downgrade(&core),
+                &data_root,
+            );
+            core.set_browser_host(Arc::new(browser::Host(browsers.clone())));
+            spawn_card_refresh(browsers.clone());
+            tauri_app.manage(browsers);
             spawn_autosave(core.clone());
             spawn_summary_monitor(core.clone());
             spawn_launch_window_timer(core.clone());
@@ -79,6 +89,10 @@ pub fn run() {
             commands::node::node_bring_to_front,
             commands::node::node_delete,
             commands::node::workspace_set_camera,
+            commands::browser::node_create_browser,
+            commands::browser::browser_navigate,
+            commands::browser::browser_action,
+            commands::browser::browser_layout,
             commands::note::node_create_note,
             commands::note::note_read,
             commands::note::note_write,
@@ -173,4 +187,17 @@ fn cli_dir(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
     dev.join("sonata")
         .is_file()
         .then(|| dev.canonicalize().unwrap_or(dev))
+}
+
+/// Refreshes the card images of live pages every few seconds (004 FR-008).
+fn spawn_card_refresh(browsers: Arc<browser::Browsers>) {
+    std::thread::Builder::new()
+        .name("sonata-browser-cards".into())
+        .spawn(move || {
+            loop {
+                std::thread::sleep(Duration::from_secs(5));
+                browsers.refresh_live_cards();
+            }
+        })
+        .expect("spawn card refresh");
 }

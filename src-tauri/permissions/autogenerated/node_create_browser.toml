@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-node-create-browser"
+description = "Enables the node_create_browser command without any pre-configured scope."
+commands.allow = ["node_create_browser"]
+
+[[permission]]
+identifier = "deny-node-create-browser"
+description = "Denies the node_create_browser command without any pre-configured scope."
+commands.deny = ["node_create_browser"]

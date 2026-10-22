@@ -62,6 +62,13 @@ export const ipc = {
   terminalRestart: (nodeId: string, confirmed = false) => invoke<void>("terminal_restart", { nodeId, confirmed }),
   terminalUpdateSettings: (nodeId: string, settings: TerminalSettings) =>
     invoke<SettingsUpdate>("terminal_update_settings", { nodeId, settings }),
+  nodeCreateBrowser: (workspaceId: string, frame: Frame, url?: string) =>
+    invoke<CanvasNode>("node_create_browser", { workspaceId, frame, url }),
+  browserNavigate: (nodeId: string, input: string) => invoke<string>("browser_navigate", { nodeId, input }),
+  browserAction: (nodeId: string, action: "back" | "forward" | "reload" | "stop" | "inspect" | "external") =>
+    invoke<void>("browser_action", { nodeId, action }),
+  browserLayout: (items: { nodeId: string; rect: { x: number; y: number; width: number; height: number } | null }[]) =>
+    invoke<void>("browser_layout", { items }),
   exchangeLog: (nodeId: string) => invoke<ExchangeEntry[]>("exchange_log", { nodeId }),
   presetsDetect: () => invoke<PresetStatus[]>("presets_detect"),
   rolesList: () => invoke<Role[]>("roles_list"),

@@ -15,6 +15,7 @@ export type ErrorCode =
   | "RoleNameTaken"
   | "ImageTooLarge"
   | "ImageUnsupported"
+  | "InvalidAddress"
   | "Io"
   | "Internal";
 
@@ -81,7 +82,20 @@ export type TerminalContent = {
 export type NoteColor = "yellow" | "blue" | "green" | "pink" | "purple" | "gray";
 export type NoteStyle = { color: NoteColor; textSize: number };
 
-export type NodeContent = { terminal: TerminalContent } | { note: Partial<NoteStyle> };
+export type BrowserContent = { url: string; title?: string };
+export type NodeContent = { terminal: TerminalContent } | { note: Partial<NoteStyle> } | { browser: BrowserContent };
+
+/** `browser://state` from the shell (feature 004). */
+export type BrowserState = {
+  nodeId: string;
+  url: string;
+  title: string;
+  loading: boolean;
+  error?: string;
+  image?: string;
+  imageVersion: number;
+  live: boolean;
+};
 
 export type Link = { id: string; a: string; b: string; createdAt: string };
 
@@ -163,6 +177,10 @@ export function isTerminal(node: CanvasNode): node is CanvasNode & { content: { 
 
 export function isNote(node: CanvasNode): node is CanvasNode & { content: { note: Partial<NoteStyle> } } {
   return "note" in node.content;
+}
+
+export function isBrowser(node: CanvasNode): node is CanvasNode & { content: { browser: BrowserContent } } {
+  return "browser" in node.content;
 }
 
 export function noteStyle(node: CanvasNode): NoteStyle {
