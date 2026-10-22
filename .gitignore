@@ -23,3 +23,10 @@ src-tauri/gen/
 
 # Private behavior notes from the reference app (never commit)
 reference/
+
+# Test and build output
+coverage/
+playwright-report/
+test-results/
+*.log
+.env*

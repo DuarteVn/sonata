@@ -1,0 +1,28 @@
+[package]
+name = "sonata-core"
+description = "Sonata core: model, persistence, terminals, notes. No Tauri dependency."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+chrono.workspace = true
+libc.workspace = true
+notify.workspace = true
+notify-debouncer-full.workspace = true
+portable-pty.workspace = true
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-appender.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+vt100.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+tempfile.workspace = true

@@ -10,7 +10,7 @@ Every command returns `Result<T, AppError>`:
 ```ts
 type AppError = {
   code:
-    | "NameEmpty" | "NameTaken" | "DirectoryMissing" | "NotADirectory"
+    | "NameEmpty" | "NameTooLong" | "NameTaken" | "DirectoryMissing" | "NotADirectory"
     | "WorkspaceNotFound" | "NodeNotFound" | "WorkspaceNotLoaded"
     | "TerminalBusy" | "Io" | "Internal";
   message: string;       // English, user-facing
