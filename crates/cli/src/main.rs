@@ -24,15 +24,33 @@ Everyone:
   sonata note read <note>
   sonata note write <note> \"<text>\" [--append] (or --stdin)
   sonata notify \"<message>\"                    macOS notification for the user
+  sonata browser open|read|click|fill|press|screenshot|back|forward|reload <browser> …
 
 Orchestrator only:
   sonata recruit <claude|codex|opencode|gemini|shell|\"<command>\"> [--name N] [--role R | --role-text T] [--folder F]
   sonata dismiss <name>
+  sonata note new \"<title>\" [\"<text>\"]       create a note linked to you
+  sonata browser new [<url>]                  open a browser linked to you
   sonata link <a> <b>
   sonata unlink <a> <b>
 
 Options: --timeout 10m (ask), --json (any command).
 Exit codes: 0 ok, 1 error, 2 usage, 3 not allowed, 4 not found, 5 timed out, 6 Sonata not reachable.";
+
+/// Prints the help lines for one command (or everything for unknown ones).
+fn print_help_for(command: &str) {
+    let lines: Vec<&str> = HELP
+        .lines()
+        .filter(|l| l.trim_start().starts_with(&format!("sonata {command}")))
+        .collect();
+    if lines.is_empty() {
+        println!("{HELP}");
+    } else {
+        for l in lines {
+            println!("{}", l.trim_start());
+        }
+    }
+}
 
 fn main() -> ExitCode {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
@@ -44,6 +62,11 @@ fn main() -> ExitCode {
         Some("run") => return run::main(args.split_off(1)),
         Some("_hook") => return hook::main(args.split_off(1)),
         _ => {}
+    }
+    // `--help` never runs a command: `sonata recruit --help` must not recruit anything.
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        print_help_for(&args[0]);
+        return ExitCode::SUCCESS;
     }
     let json = args.iter().any(|a| a == "--json");
     args.retain(|a| a != "--json");

@@ -26,11 +26,13 @@ between them live side by side, organized into as many workspaces as you need.
   terminal: `sonata list`, `sonata ask <name> "<message>"` (waits for the answer),
   `sonata ask --all`, `sonata check <name>`, `sonata reply`, `sonata note read|write`, and
   `sonata notify`. A terminal marked **Orchestrator** can also `sonata recruit`, `sonata dismiss`,
-  `sonata link`, and `sonata unlink`. Run `sonata help` inside a terminal.
+  `sonata link`, `sonata unlink`, `sonata note new`, and `sonata browser new`. Run `sonata help`
+  inside a terminal.
 - Claude Code and Codex started from the presets run as `sonata run claude|codex`: they get
   Sonata instructions (and the terminal's role) for that session only, plus an end-of-turn
   signal so answers return as soon as the agent finishes. Your global agent settings are never
-  changed. Typing plain `claude` in a shell works as usual, without Sonata awareness.
+  changed. In zsh terminals, typing `claude` or `codex` by hand does the same (your own
+  `.zshrc` still loads; Sonata only adds two shell functions inside its terminals).
 - Browser nodes (tool `B`): real web pages on the canvas, with back/forward/reload, address bar,
   developer tools, and "open in default browser". Pages are live at a readable zoom and show a
   card with the last image otherwise. Browsers in the same workspace share logins. Linked agents

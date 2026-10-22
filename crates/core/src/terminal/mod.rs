@@ -5,3 +5,4 @@ pub mod manager;
 pub mod preview;
 pub mod pty;
 pub mod screen;
+pub mod zsh;

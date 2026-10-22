@@ -40,6 +40,7 @@ pub struct SpawnSpec {
     /// identity (`SONATA_TOKEN`) is added by the manager.
     pub session_env: Vec<(String, String)>,
     pub wrap_agents: bool,
+    pub zsh_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -188,6 +189,7 @@ impl TerminalManager {
             cols,
             env: &env,
             wrap_agents: spec.wrap_agents,
+            zsh_dir: spec.zsh_dir.as_deref(),
         })?;
         let pid = spawned.pid;
         let launch = spec
