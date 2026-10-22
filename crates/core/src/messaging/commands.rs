@@ -13,7 +13,7 @@ use super::{
     Request,
 };
 use crate::App;
-use crate::model::node::Node;
+use crate::model::node::{BrowserContent, Node, NodeContent};
 use crate::terminal::manager::RunStatus;
 
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10 * 60);
@@ -47,6 +47,7 @@ pub fn handle(app: &App, req: &Request, progress: &mut dyn FnMut(&str)) -> Reply
         ["reply", rest @ ..] => reply(&ctx, rest, stdin),
         ["note", "read", note] => note_read(&ctx, note),
         ["note", "write", rest @ ..] => note_write(&ctx, rest, stdin),
+        ["browser", rest @ ..] => browser(&ctx, rest),
         ["notify", rest @ ..] if !rest.is_empty() || stdin.is_some() => {
             notify(&ctx, &stdin.unwrap_or_else(|| rest.join(" ")))
         }
@@ -116,36 +117,79 @@ fn linked_names(ctx: &Ctx<'_>) -> String {
 }
 
 fn display_name(ctx: &Ctx<'_>, n: &Node) -> String {
-    match n.terminal() {
-        Some(t) => t.name.clone(),
-        None => note_title(&ctx.app.note_read(n.id).map(|v| v.text).unwrap_or_default()),
+    match &n.content {
+        NodeContent::Terminal(t) => t.name.clone(),
+        NodeContent::Browser(b) => browser_title(b),
+        NodeContent::Note(_) => {
+            note_title(&ctx.app.note_read(n.id).map(|v| v.text).unwrap_or_default())
+        }
     }
 }
 
-fn resolve(ctx: &Ctx<'_>, name: &str, want_terminal: bool) -> Result<Node, Reply> {
+/// A browser is named by its page title, else its host.
+pub fn browser_title(b: &BrowserContent) -> String {
+    let title = b.title.as_deref().map(str::trim).filter(|t| !t.is_empty());
+    let fallback = || {
+        let rest = b.url.split_once("://").map(|(_, r)| r).unwrap_or(&b.url);
+        rest.split('/').next().unwrap_or("browser").to_string()
+    };
+    title
+        .map(|t| t.chars().take(60).collect())
+        .unwrap_or_else(fallback)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kind {
+    Terminal,
+    Note,
+    Browser,
+}
+
+fn kind_of(n: &Node) -> Kind {
+    match n.content {
+        NodeContent::Terminal(_) => Kind::Terminal,
+        NodeContent::Note(_) => Kind::Note,
+        NodeContent::Browser(_) => Kind::Browser,
+    }
+}
+
+/// Short id printed by `sonata list` for notes (`n-xxxx`) and browsers (`b-xxxx`).
+fn item_id(n: &Node) -> Option<String> {
+    match kind_of(n) {
+        Kind::Note => Some(short_id(n.id)),
+        Kind::Browser => Some(crate::browser::short_id(n.id)),
+        Kind::Terminal => None,
+    }
+}
+
+fn resolve(ctx: &Ctx<'_>, name: &str, kind: Kind) -> Result<Node, Reply> {
     let wanted = name.trim().to_lowercase();
     let matches: Vec<Node> = linked(ctx)
         .into_iter()
-        .filter(|n| n.terminal().is_some() == want_terminal)
+        .filter(|n| kind_of(n) == kind)
         .filter(|n| {
             display_name(ctx, n).to_lowercase() == wanted
-                || (!want_terminal && short_id(n.id) == wanted)
+                || item_id(n).is_some_and(|id| id == wanted)
         })
         .collect();
-    let kind = if want_terminal { "terminal" } else { "note" };
+    let label = match kind {
+        Kind::Terminal => "terminal",
+        Kind::Note => "note",
+        Kind::Browser => "browser",
+    };
     match matches.len() {
         1 => Ok(matches.into_iter().next().expect("one")),
         0 => Err(Reply::err(
             EXIT_DENIED,
             format!(
-                "No linked {kind} named \"{name}\". You are linked to: {}.",
+                "No linked {label} named \"{name}\". You are linked to: {}.",
                 linked_names(ctx)
             ),
         )),
         _ => Err(Reply::err(
             EXIT_USAGE,
             format!(
-                "\"{name}\" matches several linked items; rename them on the canvas to tell them apart."
+                "\"{name}\" matches several linked items; use the short id from `sonata list` or rename them on the canvas."
             ),
         )),
     }
@@ -229,8 +273,16 @@ fn list(ctx: &Ctx<'_>) -> Reply {
                 }
                 None => {
                     let title = display_name(ctx, n);
-                    text.push_str(&format!("  note      {:<16} ({})\n", title, short_id(n.id)));
-                    data.push(json!({"kind": "note", "name": title, "id": short_id(n.id)}));
+                    let id = item_id(n).unwrap_or_default();
+                    if let Some(b) = n.browser() {
+                        text.push_str(&format!("  browser   {:<16} ({id})  {}\n", title, b.url));
+                        data.push(
+                            json!({"kind": "browser", "name": title, "id": id, "url": b.url}),
+                        );
+                    } else {
+                        text.push_str(&format!("  note      {:<16} ({id})\n", title));
+                        data.push(json!({"kind": "note", "name": title, "id": id}));
+                    }
                 }
             }
         }
@@ -339,7 +391,7 @@ fn ask(
         let [name] = targets.as_slice() else {
             return Reply::err(EXIT_USAGE, "--keys needs exactly one terminal.");
         };
-        let node = match resolve(ctx, name, true) {
+        let node = match resolve(ctx, name, Kind::Terminal) {
             Ok(n) => n,
             Err(r) => return r,
         };
@@ -366,7 +418,7 @@ fn ask(
     let nodes: Vec<Node> = if all {
         let ts: Vec<Node> = linked(ctx)
             .into_iter()
-            .filter(|n| n.terminal().is_some())
+            .filter(|n| kind_of(n) == Kind::Terminal)
             .collect();
         if ts.is_empty() {
             return Reply::err(EXIT_DENIED, "You are not linked to any terminal.");
@@ -375,7 +427,7 @@ fn ask(
     } else {
         let mut v = Vec::new();
         for t in &targets {
-            match resolve(ctx, t, true) {
+            match resolve(ctx, t, Kind::Terminal) {
                 Ok(n) => v.push(n),
                 Err(r) => return r,
             }
@@ -502,7 +554,7 @@ fn ask(
 }
 
 fn check(ctx: &Ctx<'_>, name: &str) -> Reply {
-    let node = match resolve(ctx, name, true) {
+    let node = match resolve(ctx, name, Kind::Terminal) {
         Ok(n) => n,
         Err(r) => return r,
     };
@@ -525,7 +577,7 @@ fn reply(ctx: &Ctx<'_>, rest: &[&str], stdin: Option<String>) -> Reply {
 }
 
 fn note_read(ctx: &Ctx<'_>, name: &str) -> Reply {
-    let node = match resolve(ctx, name, false) {
+    let node = match resolve(ctx, name, Kind::Note) {
         Ok(n) => n,
         Err(r) => return r,
     };
@@ -548,7 +600,7 @@ fn note_write(ctx: &Ctx<'_>, rest: &[&str], stdin: Option<String>) -> Reply {
     if text.len() > MAX_MESSAGE_BYTES {
         return Reply::err(EXIT_USAGE, "Note text can be at most 100 KB per write.");
     }
-    let node = match resolve(ctx, name, false) {
+    let node = match resolve(ctx, name, Kind::Note) {
         Ok(n) => n,
         Err(r) => return r,
     };
@@ -621,7 +673,7 @@ fn recruit(ctx: &Ctx<'_>, rest: &[&str]) -> Reply {
 }
 
 fn dismiss(ctx: &Ctx<'_>, name: &str) -> Reply {
-    let node = match resolve(ctx, name, true) {
+    let node = match resolve(ctx, name, Kind::Terminal) {
         Ok(n) => n,
         Err(r) => return r,
     };
@@ -650,7 +702,10 @@ fn link(ctx: &Ctx<'_>, a: &str, b: &str, create: bool) -> Reply {
             .unwrap_or_default();
         let hits: Vec<Uuid> = nodes
             .iter()
-            .filter(|n| display_name(ctx, n).to_lowercase() == wanted || short_id(n.id) == wanted)
+            .filter(|n| {
+                display_name(ctx, n).to_lowercase() == wanted
+                    || item_id(n).is_some_and(|id| id == wanted)
+            })
             .map(|n| n.id)
             .collect();
         match hits.as_slice() {
@@ -713,4 +768,100 @@ fn session(ctx: &Ctx<'_>, agent: &str, hook: &str) -> Reply {
         })),
         Err(e) => Reply::err(EXIT_ERROR, e.message),
     }
+}
+
+// ---- Browser nodes (feature 004) ----
+
+fn browser(ctx: &Ctx<'_>, rest: &[&str]) -> Reply {
+    use crate::browser::{CLICK_TIMEOUT, LOAD_TIMEOUT, MAX_LOAD_TIMEOUT, PageInfo};
+    let usage = "Usage: sonata browser <open|read|click|fill|press|screenshot|back|forward|reload|eval> <browser> …";
+    let (sub, name, args) = match rest {
+        [sub, name, args @ ..] => (*sub, *name, args),
+        _ => return Reply::err(EXIT_USAGE, usage),
+    };
+    let mut timeout = None;
+    let mut out = None;
+    let mut positional: Vec<&str> = Vec::new();
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match *a {
+            "--timeout" => match it.next().and_then(|v| parse_duration(v)) {
+                Some(d) if d >= Duration::from_secs(1) && d <= MAX_LOAD_TIMEOUT => {
+                    timeout = Some(d)
+                }
+                _ => return Reply::err(EXIT_USAGE, "--timeout takes 1s to 5m."),
+            },
+            "--out" => out = it.next().copied(),
+            other => positional.push(other),
+        }
+    }
+    let node = match resolve(ctx, name, Kind::Browser) {
+        Ok(n) => n,
+        Err(r) => return r,
+    };
+    if sub == "eval" && orchestrator(ctx).is_some() {
+        return Reply::err(
+            EXIT_DENIED,
+            "Only the Orchestrator can run JavaScript in a browser.",
+        );
+    }
+    let Some(host) = ctx.app.browser_host() else {
+        return Reply::err(
+            EXIT_ERROR,
+            "Browsers are not available right now (the Sonata window is not ready).",
+        );
+    };
+    let load = timeout.unwrap_or(LOAD_TIMEOUT);
+    let page = |r: Result<PageInfo, String>| match r {
+        Ok(p) => Reply::ok(format!("{}\n{}", p.title, p.url))
+            .with_data(json!({"url": p.url, "title": p.title})),
+        Err(e) => Reply::err(EXIT_ERROR, e),
+    };
+    let done = |r: Result<(), String>, msg: &str| match r {
+        Ok(()) => Reply::ok(msg),
+        Err(e) => Reply::err(EXIT_ERROR, e),
+    };
+    let marker = ctx.app.mark_browser_control(ctx.me, node.id);
+    let reply = match (sub, positional.as_slice()) {
+        ("open", [url]) => match crate::browser::normalize_url(url) {
+            Ok(u) => page(host.open(node.id, &u, load)),
+            Err(e) => Reply::err(EXIT_USAGE, e.message),
+        },
+        ("read", []) => match host.read(node.id) {
+            Ok(text) => Reply::ok(super::cap_text(text, super::MAX_MESSAGE_BYTES)),
+            Err(e) => Reply::err(EXIT_ERROR, e),
+        },
+        ("click", [target]) => page(host.click(node.id, target, timeout.unwrap_or(CLICK_TIMEOUT))),
+        ("fill", [target, text @ ..]) if !text.is_empty() => {
+            done(host.fill(node.id, target, &text.join(" ")), "Filled.")
+        }
+        ("press", [key]) => done(host.press(node.id, key), "Pressed."),
+        ("back", []) => page(host.back(node.id, load)),
+        ("forward", []) => page(host.forward(node.id, load)),
+        ("reload", []) => page(host.reload(node.id, load)),
+        ("screenshot", []) => {
+            let path = match out {
+                Some(o) => {
+                    let p = PathBuf::from(o);
+                    if p.is_absolute() {
+                        p
+                    } else {
+                        PathBuf::from(&ctx.cwd).join(p)
+                    }
+                }
+                None => ctx.app.screenshot_path(),
+            };
+            match host.screenshot(node.id, &path) {
+                Ok(()) => Reply::ok(path.display().to_string()).with_data(json!({"path": path})),
+                Err(e) => Reply::err(EXIT_ERROR, e),
+            }
+        }
+        ("eval", js) if !js.is_empty() => match host.eval(node.id, &js.join(" ")) {
+            Ok(v) => Reply::ok(super::cap_text(v, super::MAX_RESULT_BYTES)),
+            Err(e) => Reply::err(EXIT_ERROR, e),
+        },
+        _ => Reply::err(EXIT_USAGE, usage),
+    };
+    ctx.app.end_browser_control(marker);
+    reply
 }

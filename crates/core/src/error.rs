@@ -18,6 +18,7 @@ pub enum ErrorCode {
     RoleNameTaken,
     ImageTooLarge,
     ImageUnsupported,
+    InvalidAddress,
     Io,
     Internal,
 }

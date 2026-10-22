@@ -250,6 +250,7 @@ pub struct App {
     server: Mutex<Option<crate::messaging::server::Server>>,
     socket_path: Option<PathBuf>,
     data_root: DataRoot,
+    browser_host: Mutex<Option<Arc<dyn crate::browser::BrowserHost>>>,
 }
 
 impl App {
@@ -317,6 +318,7 @@ impl App {
             server: Mutex::new(None),
             socket_path,
             data_root,
+            browser_host: Mutex::new(None),
         }))
         .inspect(|app| {
             app.spawn_preview_loop();
@@ -548,6 +550,9 @@ impl App {
         }
         self.broker.cancel_from(self, node);
         self.terminals.stop(node);
+        if let Some(host) = self.browser_host() {
+            host.close(node);
+        }
         let _ = std::fs::remove_dir_all(self.run_dir(node));
         if is_note {
             self.note_store().delete(ws, node)?;
@@ -1093,6 +1098,20 @@ impl App {
             .unwrap_or_else(|e| e.into_inner())
             .remove(&id);
         self.note_store().forget_workspace(id);
+        let browsers: Vec<Uuid> = self
+            .workspaces()
+            .workspace(id)
+            .map(|w| {
+                w.nodes
+                    .iter()
+                    .filter(|n| n.browser().is_some())
+                    .map(|n| n.id)
+                    .collect()
+            })
+            .unwrap_or_default();
+        if let Some(host) = self.browser_host() {
+            host.forget_workspace(id, &browsers);
+        }
         self.workspaces().delete(id)?;
         self.notify_workspaces_changed();
         Ok(())
@@ -1142,6 +1161,7 @@ impl App {
         self.broker.shutdown(self);
         self.server.lock().unwrap_or_else(|e| e.into_inner()).take();
         let _ = std::fs::remove_dir_all(self.data_root.path().join("run").join("sessions"));
+        let _ = std::fs::remove_dir_all(self.data_root.path().join("run").join("shots"));
         self.save_dirty();
         for (_, path) in self.history_files_to_clean() {
             let _ = history::delete(&path);
@@ -1201,15 +1221,14 @@ impl App {
     pub fn node_name(&self, id: Uuid) -> Option<String> {
         let ws = self.workspace_of_node(id).ok()?;
         let m = self.workspaces();
-        let n = m.workspace(ws)?.node(id)?;
-        Some(match n.terminal() {
-            Some(t) => t.name.clone(),
-            None => {
-                drop(m);
-                crate::messaging::commands::note_title(
-                    &self.note_read(id).map(|v| v.text).unwrap_or_default(),
-                )
-            }
+        let n = m.workspace(ws)?.node(id)?.clone();
+        drop(m);
+        Some(match &n.content {
+            NodeContent::Terminal(t) => t.name.clone(),
+            NodeContent::Browser(b) => crate::messaging::commands::browser_title(b),
+            NodeContent::Note(_) => crate::messaging::commands::note_title(
+                &self.note_read(id).map(|v| v.text).unwrap_or_default(),
+            ),
         })
     }
 
@@ -1526,6 +1545,94 @@ impl App {
         self.delete_node(ws, node, true)?;
         self.notify_nodes_changed(ws);
         Ok(())
+    }
+
+    // ---- Browser nodes (feature 004) ----
+
+    /// Registers the shell's page driver once the window exists.
+    pub fn set_browser_host(&self, host: Arc<dyn crate::browser::BrowserHost>) {
+        *self.browser_host.lock().unwrap_or_else(|e| e.into_inner()) = Some(host);
+    }
+
+    pub fn browser_host(&self) -> Option<Arc<dyn crate::browser::BrowserHost>> {
+        self.browser_host
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    pub fn create_browser(&self, ws_id: Uuid, frame: Frame, url: Option<&str>) -> AppResult<Node> {
+        self.require_loaded(ws_id)?;
+        let url = match url {
+            Some(u) if !u.trim().is_empty() => crate::browser::normalize_url(u)?,
+            _ => "about:blank".to_string(),
+        };
+        let now = Utc::now();
+        self.workspaces().update(ws_id, |ws| {
+            let mut node = Node {
+                id: Uuid::new_v4(),
+                frame,
+                z: ws.max_z() + 1,
+                created_at: now,
+                modified_at: now,
+                content: NodeContent::Browser(crate::model::node::BrowserContent {
+                    url,
+                    title: None,
+                }),
+            };
+            node.frame = node.frame.clamped(node.min_size());
+            ws.nodes.push(node.clone());
+            Ok(node)
+        })
+    }
+
+    /// The shell reports a finished page load; saved so the node reopens it (FR-005).
+    pub fn update_browser_page(&self, node: Uuid, url: &str, title: Option<&str>) -> AppResult<()> {
+        let ws = self.workspace_of_node(node)?;
+        let unchanged = self
+            .workspaces()
+            .workspace(ws)
+            .and_then(|w| w.node(node))
+            .and_then(|n| n.browser())
+            .is_some_and(|b| b.url == url && b.title.as_deref() == title);
+        if unchanged {
+            return Ok(());
+        }
+        self.update_node(ws, node, |w, id| {
+            if let Some(b) = w.node_mut(id).and_then(Node::browser_mut) {
+                b.url = url.to_string();
+                b.title = title.map(str::to_string).filter(|t| !t.is_empty());
+            }
+            Ok(())
+        })
+    }
+
+    /// Where agent screenshots go when no `--out` is given (private, removed on quit).
+    pub fn screenshot_path(&self) -> PathBuf {
+        let dir = self.data_root.path().join("run").join("shots");
+        let _ = paths::ensure_private_dir(&dir);
+        dir.join(format!("{}.png", Uuid::new_v4()))
+    }
+
+    /// Shows "controlled by" on the browser and a busy link while an agent drives it (FR-019).
+    pub fn mark_browser_control(&self, from: Uuid, browser: Uuid) -> (Uuid, Uuid, Uuid) {
+        let id = Uuid::new_v4();
+        self.emit(CoreEvent::AskState(crate::events::AskEvent {
+            ask_id: id,
+            from,
+            to: browser,
+            state: crate::messaging::broker::AskState::Waiting,
+        }));
+        (id, from, browser)
+    }
+
+    pub fn end_browser_control(&self, (id, from, browser): (Uuid, Uuid, Uuid)) {
+        self.emit(CoreEvent::AskState(crate::events::AskEvent {
+            ask_id: id,
+            from,
+            to: browser,
+            state: crate::messaging::broker::AskState::Answered,
+        }));
     }
 
     pub fn exchange_log(&self, node: Uuid) -> Vec<crate::messaging::broker::LogEntry> {

@@ -23,3 +23,11 @@ tauri-plugin-single-instance.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 uuid.workspace = true
+
+# Browser nodes: page snapshots and per-workspace data stores (feature 004, research R2/R6).
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6"
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSData", "NSDictionary", "NSError", "NSUUID", "NSString"] }
+objc2-app-kit = { version = "0.3", features = ["NSImage", "NSImageRep", "NSBitmapImageRep", "NSGraphics"] }
+objc2-web-kit = { version = "0.3", features = ["WKWebView", "WKSnapshotConfiguration", "WKWebsiteDataStore", "block2", "objc2-app-kit"] }

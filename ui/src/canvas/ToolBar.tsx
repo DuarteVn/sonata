@@ -1,15 +1,17 @@
-import { MousePointer2, StickyNote, SquareTerminal, type LucideIcon } from "lucide-react";
+import { Globe, MousePointer2, StickyNote, SquareTerminal, type LucideIcon } from "lucide-react";
 import { useCanvas, type Tool } from "../state/canvas";
 
 const TOOLS: { id: Tool; label: string; key: string; icon: LucideIcon }[] = [
   { id: "select", label: "Select", key: "V", icon: MousePointer2 },
   { id: "terminal", label: "Terminal", key: "T", icon: SquareTerminal },
   { id: "note", label: "Note", key: "N", icon: StickyNote },
+  { id: "browser", label: "Browser", key: "B", icon: Globe },
 ];
 
 const HINTS: Partial<Record<Tool, string>> = {
   terminal: "Click on the canvas to place the terminal, or press Enter to place it in the middle.",
   note: "Click on the canvas to place the note.",
+  browser: "Click on the canvas to place a browser.",
 };
 
 // Bottom tool bar (FR-001, FR-002).

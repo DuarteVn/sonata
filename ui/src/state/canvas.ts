@@ -13,7 +13,7 @@ import type {
   Workspace,
 } from "../ipc/types";
 
-export type Tool = "select" | "terminal" | "note";
+export type Tool = "select" | "terminal" | "note" | "browser";
 export type Selection = { kind: "node" | "link"; id: string } | null;
 export type TerminalDialogMode = { kind: "create"; at?: { x: number; y: number } } | { kind: "edit"; nodeId: string };
 
@@ -54,6 +54,9 @@ type CanvasState = {
   setConfirmClose: (id: string | null) => void;
   /** Asks in flight (queued or waiting), by ask id (003 FR-027). */
   asks: Record<string, { from: string; to: string }>;
+  browserStates: Record<string, import("../ipc/types").BrowserState>;
+  setBrowserState: (s: import("../ipc/types").BrowserState) => void;
+  addBrowser: (frame: Frame) => Promise<CanvasNode>;
   setAsk: (e: AskEvent) => void;
   applyNodesChanged: (workspaceId: string, nodes: CanvasNode[], links: Link[]) => void;
   notes: Record<string, NoteState>;
@@ -181,6 +184,15 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   openTerminalDialog: (terminalDialog) => set({ terminalDialog }),
   confirmClose: null,
   asks: {},
+  browserStates: {},
+  setBrowserState: (b) => set((s) => ({ browserStates: { ...s.browserStates, [b.nodeId]: b } })),
+  addBrowser: async (frame) => {
+    const ws = get().workspaceId;
+    if (!ws) throw new Error("No workspace open.");
+    const node = await ipc.nodeCreateBrowser(ws, frame);
+    set((s) => ({ nodes: [...s.nodes, node], selection: { kind: "node", id: node.id }, focusedId: null }));
+    return node;
+  },
   setAsk: (e) =>
     set((s) => {
       const asks = { ...s.asks };

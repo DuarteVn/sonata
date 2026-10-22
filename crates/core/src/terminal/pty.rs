@@ -117,13 +117,9 @@ pub fn spawn(opts: SpawnOptions<'_>) -> io::Result<Spawned> {
     let pid = child.process_id();
     let killer = child.clone_killer();
     let reader = pty.master.try_clone_reader().map_err(io::Error::other)?;
-    let mut writer = pty.master.take_writer().map_err(io::Error::other)?;
-    if let Some(command) = opts.launch_command.map(str::trim).filter(|c| !c.is_empty()) {
-        // The TTY buffers this until the shell reads input, so it runs as the first command.
-        let command = wrap_launch_command(command, opts.wrap_agents);
-        writer.write_all(format!("{command}\r").as_bytes())?;
-        writer.flush()?;
-    }
+    // The launch command is typed by the terminal manager once the shell shows its prompt:
+    // input typed earlier goes through the TTY's line buffer, which cuts lines at 1024 bytes.
+    let writer = pty.master.take_writer().map_err(io::Error::other)?;
     Ok(Spawned {
         master: pty.master,
         reader,

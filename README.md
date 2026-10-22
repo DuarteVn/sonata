@@ -31,6 +31,11 @@ between them live side by side, organized into as many workspaces as you need.
   Sonata instructions (and the terminal's role) for that session only, plus an end-of-turn
   signal so answers return as soon as the agent finishes. Your global agent settings are never
   changed. Typing plain `claude` in a shell works as usual, without Sonata awareness.
+- Browser nodes (tool `B`): real web pages on the canvas, with back/forward/reload, address bar,
+  developer tools, and "open in default browser". Pages are live at a readable zoom and show a
+  card with the last image otherwise. Browsers in the same workspace share logins. Linked agents
+  drive them with `sonata browser open|read|click|fill|press|screenshot|back|forward|reload`
+  (and `eval` for the Orchestrator).
 - Everything is saved as readable files in `~/.sonata/`, with crash-safe writes, autosave, and
   terminal history restored after a restart.
 

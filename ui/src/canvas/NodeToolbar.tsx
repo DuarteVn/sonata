@@ -3,6 +3,7 @@ import {
   AArrowDown,
   AArrowUp,
   Bold,
+  ExternalLink,
   Code,
   FileCode2,
   Heading,
@@ -58,7 +59,28 @@ export const NOTE_COLORS: { id: NoteColor; swatch: string }[] = [
   { id: "gray", swatch: "#cfd2d8" },
 ];
 
-const SIZES = { terminal: { width: 232, height: 40 }, note: { width: 600, height: 40 } };
+const SIZES = { terminal: { width: 232, height: 40 }, note: { width: 600, height: 40 }, browser: { width: 180, height: 40 } };
+
+function BrowserActions({ node }: { node: CanvasNode }) {
+  const addWarning = useWorkspaces((s) => s.addWarning);
+  const report = (err: unknown) => addWarning(isAppError(err) ? err.message : String(err));
+  return (
+    <>
+      <LinkButton node={node} />
+      <span className="tb-sep" />
+      <Btn label="Reload page" onClick={() => void ipc.browserAction(node.id, "reload").catch(report)}>
+        <RotateCcw size={15} />
+      </Btn>
+      <Btn label="Open in default browser" onClick={() => void ipc.browserAction(node.id, "external").catch(report)}>
+        <ExternalLink size={15} />
+      </Btn>
+      <span className="tb-sep" />
+      <Btn label="Delete browser" onClick={() => void useCanvas.getState().removeNode(node.id, true).catch(report)}>
+        <Trash2 size={15} />
+      </Btn>
+    </>
+  );
+}
 
 function Btn({ label, onClick, children, active }: { label: string; onClick: () => void; children: ReactNode; active?: boolean }) {
   return (
@@ -94,12 +116,17 @@ export function NodeToolbar({ viewport }: { viewport: ScreenRect }) {
   const camera = useCanvas((s) => s.camera);
   const gesturing = useCanvas((s) => s.gesturing);
   if (!selection || !node || gesturing) return null;
-  const kind = isTerminal(node) ? "terminal" : "note";
+  const kind = isTerminal(node) ? "terminal" : "browser" in node.content ? "browser" : "note";
   const pos = placeToolbar(frameToScreen(camera, node.frame), viewport, SIZES[kind]);
   if (!pos) return null;
   return (
-    <div className="node-toolbar" role="toolbar" aria-label={kind === "terminal" ? "Terminal actions" : "Note actions"} style={{ left: pos.left, top: pos.top }}>
-      {kind === "terminal" ? <TerminalActions node={node} /> : <NoteActions node={node} />}
+    <div
+      className="node-toolbar"
+      role="toolbar"
+      aria-label={kind === "terminal" ? "Terminal actions" : kind === "browser" ? "Browser actions" : "Note actions"}
+      style={{ left: pos.left, top: pos.top }}
+    >
+      {kind === "terminal" ? <TerminalActions node={node} /> : kind === "browser" ? <BrowserActions node={node} /> : <NoteActions node={node} />}
     </div>
   );
 }
