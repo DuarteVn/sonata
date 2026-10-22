@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 pub const TERMINAL_MIN_SIZE: (f64, f64) = (240.0, 120.0);
 pub const NOTE_MIN_SIZE: (f64, f64) = (120.0, 80.0);
+pub const BROWSER_MIN_SIZE: (f64, f64) = (320.0, 240.0);
 pub const TERMINAL_NAME_MAX_CHARS: usize = 60;
 pub const FONT_SIZE_RANGE: std::ops::RangeInclusive<u32> = 9..=24;
 pub const NOTE_TEXT_SIZES: std::ops::RangeInclusive<u8> = 1..=5;
@@ -27,20 +28,21 @@ impl Node {
         match self.content {
             NodeContent::Terminal(_) => TERMINAL_MIN_SIZE,
             NodeContent::Note(_) => NOTE_MIN_SIZE,
+            NodeContent::Browser(_) => BROWSER_MIN_SIZE,
         }
     }
 
     pub fn terminal(&self) -> Option<&TerminalContent> {
         match &self.content {
             NodeContent::Terminal(t) => Some(t),
-            NodeContent::Note(_) => None,
+            _ => None,
         }
     }
 
     pub fn terminal_mut(&mut self) -> Option<&mut TerminalContent> {
         match &mut self.content {
             NodeContent::Terminal(t) => Some(t),
-            NodeContent::Note(_) => None,
+            _ => None,
         }
     }
 
@@ -48,17 +50,31 @@ impl Node {
         matches!(self.content, NodeContent::Note(_))
     }
 
+    pub fn browser(&self) -> Option<&BrowserContent> {
+        match &self.content {
+            NodeContent::Browser(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    pub fn browser_mut(&mut self) -> Option<&mut BrowserContent> {
+        match &mut self.content {
+            NodeContent::Browser(b) => Some(b),
+            _ => None,
+        }
+    }
+
     pub fn note_style(&self) -> Option<&NoteContent> {
         match &self.content {
             NodeContent::Note(n) => Some(n),
-            NodeContent::Terminal(_) => None,
+            _ => None,
         }
     }
 
     pub fn note_style_mut(&mut self) -> Option<&mut NoteContent> {
         match &mut self.content {
             NodeContent::Note(n) => Some(n),
-            NodeContent::Terminal(_) => None,
+            _ => None,
         }
     }
 }
@@ -91,6 +107,16 @@ impl Frame {
 pub enum NodeContent {
     Terminal(TerminalContent),
     Note(NoteContent),
+    Browser(BrowserContent),
+}
+
+/// A web page on the canvas (feature 004). The page itself lives in the shell.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserContent {
+    pub url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
