@@ -16,6 +16,7 @@ import { LinkLayer, type LinkDrag } from "./LinkLayer";
 import { NodeToolbar } from "./NodeToolbar";
 import { ToolBar } from "./ToolBar";
 import { planBrowsers } from "./browserLayout";
+import { nodesInRect, rectFromPoints } from "./marquee";
 import { frameToScreen, pan, screenToCanvas, zoomAt, type ScreenRect } from "./viewport";
 import { startDrag } from "./useDrag";
 
@@ -40,6 +41,8 @@ export function Canvas() {
   const confirmClose = useCanvas((s) => s.confirmClose);
   const [viewport, setViewport] = useState<ScreenRect>({ left: 0, top: 0, width: 0, height: 0 });
   const [linkDrag, setLinkDrag] = useState<LinkDrag>(null);
+  const [marquee, setMarquee] = useState<ScreenRect | null>(null);
+  const confirmCloseMany = useCanvas((s) => s.confirmCloseMany);
   const spaceHeld = useRef(false);
 
   const report = (err: unknown) => useWorkspaces.getState().addWarning(isAppError(err) ? err.message : String(err));
@@ -119,7 +122,7 @@ export function Canvas() {
         key: e.key,
         textFocus: hasTextFocus(),
         terminalFocus: false,
-        hasSelection: s.selection !== null,
+        hasSelection: s.selection !== null || s.group.length > 0,
         linking: s.linkingFrom !== null,
         meta: e.metaKey || e.ctrlKey || e.altKey,
       });
@@ -251,10 +254,25 @@ export function Canvas() {
               .catch(report);
             s.setTool("select");
           } else {
+            // Select tool on empty canvas: clear the selection, and dragging draws a selection
+            // rectangle. Shift adds to the current selection.
+            const base = !e.shiftKey ? [] : s.group.length > 0 ? s.group : s.selection?.kind === "node" ? [s.selection.id] : [];
             s.cancelLinking();
-            s.select(null);
+            if (!e.shiftKey) s.select(null);
             s.setFocus(null);
             (document.activeElement as HTMLElement | null)?.blur?.();
+            const origin = { x: e.clientX - r.left, y: e.clientY - r.top };
+            startDrag(
+              e,
+              (dx, dy) => {
+                const end = { x: origin.x + dx, y: origin.y + dy };
+                setMarquee(rectFromPoints(origin, end));
+                const st = useCanvas.getState();
+                const area = rectFromPoints(screenToCanvas(st.camera, origin), screenToCanvas(st.camera, end));
+                st.setGroup([...new Set([...base, ...nodesInRect(st.nodes, area)])]);
+              },
+              () => setMarquee(null),
+            );
           }
         }}
       >
@@ -272,6 +290,12 @@ export function Canvas() {
         </div>
         <LiveTerminalLayer viewport={viewport} />
         <NodeToolbar viewport={viewport} />
+        {marquee && (
+          <div
+            className="marquee"
+            style={{ left: marquee.left, top: marquee.top, width: marquee.width, height: marquee.height }}
+          />
+        )}
       </div>
       <ToolBar onPlaceAtCenter={placeTerminalAtCenter} />
       {linkingFrom && <div className="linking-hint">Click another item to link it · Esc to cancel</div>}
@@ -287,6 +311,23 @@ export function Canvas() {
             const s = useCanvas.getState();
             s.setConfirmClose(null);
             s.removeNode(closing.id, true).catch(report);
+          }}
+        />
+      )}
+      {confirmCloseMany && (
+        <ConfirmDialog
+          title={`Close ${confirmCloseMany.length === 1 ? "terminal" : `${confirmCloseMany.length} terminals`}?`}
+          body={`A program is still running in ${confirmCloseMany
+            .map((id) => nodes.find((n) => n.id === id))
+            .map((n) => `"${n && "terminal" in n.content ? n.content.terminal.name : "a terminal"}"`)
+            .join(", ")}. Closing stops it.`}
+          confirmLabel="Close"
+          danger
+          onCancel={() => useCanvas.getState().setConfirmCloseMany(null)}
+          onConfirm={() => {
+            const s = useCanvas.getState();
+            s.setConfirmCloseMany(null);
+            for (const id of confirmCloseMany) s.removeNode(id, true).catch(report);
           }}
         />
       )}

@@ -29,6 +29,9 @@ type CanvasState = {
   terminalStates: Record<string, TerminalStateEvent>;
   tool: Tool;
   selection: Selection;
+  /** Nodes selected together (two or more), from a selection rectangle or Shift+click. */
+  group: string[];
+  setGroup: (ids: string[]) => void;
   links: Link[];
   attention: Set<string>;
   rawNotes: Set<string>;
@@ -47,11 +50,18 @@ type CanvasState = {
   setNoteStyle: (id: string, style: NoteStyle) => Promise<void>;
   /** Terminal waiting for "close anyway?" confirmation. */
   confirmClose: string | null;
-  /** A press on a node: completes a pending link, else selects (and focuses terminals). */
-  pressNode: (id: string, kind: "terminal" | "note") => boolean;
-  /** Deletes the selected node or link (Delete key, Cmd+W, toolbar). */
+  /**
+   * A press on a node: completes a pending link, else selects (and focuses terminals). With
+   * `additive` (Shift), adds the node to the group or removes it. Pressing a grouped node keeps
+   * the group so it can be dragged together.
+   */
+  pressNode: (id: string, kind: "terminal" | "note", additive?: boolean) => boolean;
+  /** Deletes the selected node, group, or link (Delete key, Cmd+W, toolbar). */
   deleteSelection: () => Promise<void>;
   setConfirmClose: (id: string | null) => void;
+  /** Terminals of a group deletion still running a program, waiting for confirmation. */
+  confirmCloseMany: string[] | null;
+  setConfirmCloseMany: (ids: string[] | null) => void;
   /** Asks in flight (queued or waiting), by ask id (003 FR-027). */
   asks: Record<string, { from: string; to: string }>;
   browserStates: Record<string, import("../ipc/types").BrowserState>;
@@ -75,6 +85,7 @@ type CanvasState = {
   setGesturing: (on: boolean) => void;
   setFocus: (id: string | null) => void;
   previewFrame: (id: string, frame: Frame) => void;
+  previewFrames: (frames: Record<string, Frame>) => void;
   commitFrame: (id: string, frame: Frame) => Promise<void>;
   bringToFront: (id: string) => Promise<void>;
   addTerminal: (
@@ -140,6 +151,7 @@ export const useCanvas = create<CanvasState>((set, get) => ({
       links: ws?.links ?? [],
       focusedId: null,
       selection: null,
+      group: [],
       linkingFrom: null,
       tool: "select",
     }),
@@ -152,8 +164,14 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   linkingFrom: null,
   terminalDialog: null,
 
+  group: [],
+
   setTool: (tool) => set({ tool }),
-  select: (selection) => set({ selection }),
+  select: (selection) => set({ selection, group: [] }),
+  setGroup: (ids) => {
+    if (ids.length === 1) set({ selection: { kind: "node", id: ids[0] }, group: [], focusedId: null });
+    else set({ selection: null, group: ids, focusedId: ids.length > 0 ? null : get().focusedId });
+  },
 
   createLink: async (a, b) => {
     const ws = get().workspaceId;
@@ -207,22 +225,47 @@ export const useCanvas = create<CanvasState>((set, get) => ({
       nodes,
       links,
       selection: s.selection && s.selection.kind === "node" && !ids.has(s.selection.id) ? null : s.selection,
+      group: s.group.filter((id) => ids.has(id)),
     }));
   },
   setConfirmClose: (confirmClose) => set({ confirmClose }),
+  confirmCloseMany: null,
+  setConfirmCloseMany: (confirmCloseMany) => set({ confirmCloseMany }),
 
-  pressNode: (id, kind) => {
-    const { linkingFrom, createLink, select, setFocus } = get();
+  pressNode: (id, kind, additive = false) => {
+    const { linkingFrom, createLink, select, setFocus, group, selection, setGroup } = get();
     if (linkingFrom && linkingFrom !== id) {
       void createLink(linkingFrom, id).catch(() => set({ linkingFrom: null }));
       return true;
     }
+    if (additive) {
+      const current = group.length > 0 ? group : selection?.kind === "node" ? [selection.id] : [];
+      setGroup(current.includes(id) ? current.filter((g) => g !== id) : [...current, id]);
+      return true;
+    }
+    if (group.includes(id)) return false;
     select({ kind: "node", id });
     setFocus(kind === "terminal" ? id : null);
     return false;
   },
 
   deleteSelection: async () => {
+    const group = get().group;
+    if (group.length > 0) {
+      const busy: string[] = [];
+      for (const id of group) {
+        const node = get().nodes.find((n) => n.id === id);
+        if (!node) continue;
+        try {
+          await get().removeNode(id, "note" in node.content);
+        } catch (err) {
+          if ((err as { code?: string })?.code === "TerminalBusy") busy.push(id);
+          else throw err;
+        }
+      }
+      if (busy.length > 0) set({ group: busy, confirmCloseMany: busy });
+      return;
+    }
     // Cmd+W also closes the focused terminal when nothing is selected.
     const focused = get().focusedId;
     const sel = get().selection ?? (focused ? { kind: "node" as const, id: focused } : null);
@@ -262,6 +305,7 @@ export const useCanvas = create<CanvasState>((set, get) => ({
     }),
 
   previewFrame: (id, frame) => set((s) => ({ nodes: replaceNode(s.nodes, id, (n) => ({ ...n, frame })) })),
+  previewFrames: (frames) => set((s) => ({ nodes: s.nodes.map((n) => (frames[n.id] ? { ...n, frame: frames[n.id] } : n)) })),
 
   commitFrame: async (id, frame) => {
     const ws = get().workspaceId;
@@ -297,6 +341,7 @@ export const useCanvas = create<CanvasState>((set, get) => ({
       links: s.links.filter((l) => l.a !== id && l.b !== id),
       focusedId: s.focusedId === id ? null : s.focusedId,
       selection: s.selection?.id === id ? null : s.selection,
+      group: s.group.filter((g) => g !== id),
     }));
   },
 
