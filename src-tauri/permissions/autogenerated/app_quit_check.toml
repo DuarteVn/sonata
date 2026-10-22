@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-app-quit-check"
+description = "Enables the app_quit_check command without any pre-configured scope."
+commands.allow = ["app_quit_check"]
+
+[[permission]]
+identifier = "deny-app-quit-check"
+description = "Denies the app_quit_check command without any pre-configured scope."
+commands.deny = ["app_quit_check"]

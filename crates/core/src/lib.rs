@@ -1,0 +1,20 @@
+//! Sonata core: data model, persistence, workspaces, terminals, and notes.
+//!
+//! This crate has no Tauri dependency (constitution principle II). The desktop shell
+//! calls into [`App`] and receives [`events::CoreEvent`]s through an [`events::EventSink`].
+
+pub mod app;
+pub mod autosave;
+pub mod crash_guard;
+pub mod error;
+pub mod events;
+pub mod logging;
+pub mod model;
+pub mod notes;
+pub mod paths;
+pub mod persistence;
+pub mod terminal;
+pub mod workspace;
+
+pub use app::App;
+pub use error::{AppError, ErrorCode};

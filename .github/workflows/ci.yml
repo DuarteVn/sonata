@@ -1,0 +1,26 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  core-and-ui:
+    # Linux runners are free and fast; the core crate and the frontend do not need macOS.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: cargo fmt --all --check
+      - run: cargo clippy -p sonata-core --all-targets -- -D warnings
+      - run: cargo test -p sonata-core
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
