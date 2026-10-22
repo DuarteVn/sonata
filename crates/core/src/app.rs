@@ -21,6 +21,7 @@ use crate::paths::{self, DataRoot};
 use crate::persistence::store::{LoadFailure, Store};
 use crate::terminal::history;
 use crate::terminal::manager::{SpawnSpec, TerminalManager};
+use crate::terminal::preview::{PREVIEW_INTERVAL, PreviewState};
 use crate::workspace::manager::{CreateWorkspace, SaveReport, WorkspaceManager, WorkspaceSummary};
 
 /// A workspace with programs running, listed in the quit dialog (FR-018a).
@@ -123,6 +124,7 @@ pub struct App {
     history_saved_seq: Mutex<HashMap<Uuid, u64>>,
     notes: Mutex<NoteStore>,
     note_watchers: Mutex<HashMap<Uuid, NotesWatcher>>,
+    previews: Mutex<PreviewState>,
     this: Weak<App>,
 }
 
@@ -175,8 +177,10 @@ impl App {
             history_saved_seq: Mutex::default(),
             notes: Mutex::new(notes),
             note_watchers: Mutex::default(),
+            previews: Mutex::default(),
             this: this.clone(),
         }))
+        .inspect(|app| app.spawn_preview_loop())
     }
 
     pub fn preferences(&self) -> Preferences {
@@ -384,6 +388,40 @@ impl App {
             w.nodes.retain(|n| n.id != node);
             Ok(())
         })
+    }
+
+    /// Sets which terminals get text previews (the UI sends the ones near the viewport that
+    /// are not live). New ones get a preview at once, then at most one per second.
+    pub fn subscribe_previews(&self, ids: Vec<Uuid>) {
+        let events = {
+            let mut p = self.previews.lock().unwrap_or_else(|e| e.into_inner());
+            let added = p.set(ids);
+            p.due(&self.terminals, Some(&added))
+        };
+        for e in events {
+            self.emit(CoreEvent::TerminalPreview(e));
+        }
+    }
+
+    fn spawn_preview_loop(&self) {
+        let this = self.this.clone();
+        std::thread::Builder::new()
+            .name("sonata-previews".into())
+            .spawn(move || {
+                loop {
+                    std::thread::sleep(PREVIEW_INTERVAL);
+                    let Some(app) = this.upgrade() else { break };
+                    let events = app
+                        .previews
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .due(&app.terminals, None);
+                    for e in events {
+                        app.emit(CoreEvent::TerminalPreview(e));
+                    }
+                }
+            })
+            .expect("spawn preview thread");
     }
 
     fn note_store(&self) -> MutexGuard<'_, NoteStore> {

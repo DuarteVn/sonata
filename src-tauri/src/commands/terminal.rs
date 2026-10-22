@@ -92,3 +92,8 @@ pub fn terminal_set_save_history(
 pub fn terminal_clear_history(app: State<'_, Arc<App>>, node_id: Uuid) -> Result<(), AppError> {
     app.clear_history(node_id)
 }
+
+#[tauri::command]
+pub fn terminal_preview_subscribe(app: State<'_, Arc<App>>, node_ids: Vec<Uuid>) {
+    app.subscribe_previews(node_ids);
+}

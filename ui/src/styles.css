@@ -136,3 +136,5 @@ button.danger { background: var(--danger); border-color: var(--danger); color: w
 .markdown table { border-collapse: collapse; }
 .markdown th, .markdown td { border: 1px solid #4a4126; padding: 2px 6px; }
 .markdown a { color: #9db1ff; }
+
+.terminal-preview { margin: 0; padding: 6px; height: 100%; overflow: hidden; font-family: "SF Mono", Menlo, monospace; font-size: 13px; line-height: 1.2; color: #c5c7cf; white-space: pre; }

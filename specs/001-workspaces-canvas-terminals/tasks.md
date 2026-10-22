@@ -207,16 +207,16 @@ immediate echo, complete output when brought into view.
 
 ### Tests for User Story 5 (write first, must fail)
 
-- [ ] T079 [P] [US5] Live-set tests in `ui/tests/liveSet.test.ts`: a terminal is live only if it intersects the viewport and `terminalFontSize × zoom ≥ 7`; at most 12 live terminals use WebGL and the rest use the DOM renderer; `onContextLoss` switches that terminal to DOM
-- [ ] T080 [P] [US5] Preview tests in `crates/core/tests/preview.rs`: only subscribed nodes emit `terminal://preview`; at most 1 event per second per node; lines equal the visible screen text
-- [ ] T081 [P] [US5] Playwright test in `e2e/scale.spec.ts` (mocked IPC, 30 terminals): zoom out → all previews and no xterm instances; zoom into one → it becomes live; never more than 12 WebGL contexts
+- [X] T079 [P] [US5] Live-set tests in `ui/tests/liveSet.test.ts`: a terminal is live only if it intersects the viewport and `terminalFontSize × zoom ≥ 7`; at most 12 live terminals use WebGL and the rest use the DOM renderer; `onContextLoss` switches that terminal to DOM
+- [X] T080 [P] [US5] Preview tests in `crates/core/tests/preview.rs`: only subscribed nodes emit `terminal://preview`; at most 1 event per second per node; lines equal the visible screen text
+- [X] T081 [P] [US5] Playwright test in `e2e/scale.spec.ts` (mocked IPC, 30 terminals): zoom out → all previews and no xterm instances; zoom into one → it becomes live; never more than 12 WebGL contexts
 
 ### Implementation for User Story 5
 
-- [ ] T082 [US5] Implement preview snapshots and subscriptions (≤ 1 Hz per node) in `crates/core/src/terminal/preview.rs`, wire into `TerminalManager`, and add command `terminal_preview_subscribe` in `src-tauri/src/commands/terminal.rs`
-- [ ] T083 [US5] Implement `ui/src/terminal/liveSet.ts` (legibility, WebGL budget of 12, DOM fallback, context-loss handling) and use it in `ui/src/terminal/LiveTerminalLayer.tsx` to attach on enter and detach on leave
-- [ ] T084 [US5] Implement viewport culling in `ui/src/canvas/culling.ts` and the preview `<pre>` in `ui/src/nodes/TerminalNode.tsx`; update the preview subscription set (debounced) as the viewport changes
-- [ ] T085 [US5] Create `scripts/bench-terminals.sh N [workspaces]` that writes workspaces into a temp `SONATA_HOME` with N terminal nodes whose launch command prints continuously, then starts the dev app
+- [X] T082 [US5] Implement preview snapshots and subscriptions (≤ 1 Hz per node) in `crates/core/src/terminal/preview.rs`, wire into `TerminalManager`, and add command `terminal_preview_subscribe` in `src-tauri/src/commands/terminal.rs`
+- [X] T083 [US5] Implement `ui/src/terminal/liveSet.ts` (legibility, WebGL budget of 12, DOM fallback, context-loss handling) and use it in `ui/src/terminal/LiveTerminalLayer.tsx` to attach on enter and detach on leave
+- [X] T084 [US5] Implement viewport culling in `ui/src/canvas/culling.ts` and the preview `<pre>` in `ui/src/nodes/TerminalNode.tsx`; update the preview subscription set (debounced) as the viewport changes
+- [X] T085 [US5] Create `scripts/bench-terminals.sh N [workspaces]` that writes workspaces into a temp `SONATA_HOME` with N terminal nodes whose launch command prints continuously, then starts the dev app
 - [ ] T086 [US5] Run the bench for SC-003 (30 terminals) and SC-004 (100 terminals in 4 workspaces) and record frame times and findings in `specs/001-workspaces-canvas-terminals/perf-notes.md`
 
 **Checkpoint**: All five stories pass their independent tests.

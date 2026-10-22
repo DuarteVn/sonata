@@ -13,6 +13,12 @@ type CanvasState = {
   gesturing: boolean;
   terminalStates: Record<string, TerminalStateEvent>;
   notes: Record<string, NoteState>;
+  previews: Record<string, string[]>;
+  liveIds: Set<string>;
+  webglLost: Set<string>;
+  setPreview: (id: string, lines: string[]) => void;
+  setLiveIds: (ids: Set<string>) => void;
+  markWebglLost: (id: string) => void;
   addNote: (frame: Frame) => Promise<CanvasNode>;
   loadNote: (id: string) => Promise<void>;
   setNoteText: (id: string, text: string, sync: NoteSync) => void;
@@ -45,6 +51,17 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   gesturing: false,
   terminalStates: {},
   notes: {},
+  previews: {},
+  liveIds: new Set(),
+  webglLost: new Set(),
+
+  setPreview: (id, lines) => set((s) => ({ previews: { ...s.previews, [id]: lines } })),
+  setLiveIds: (ids) => {
+    const cur = get().liveIds;
+    if (cur.size === ids.size && [...ids].every((id) => cur.has(id))) return;
+    set({ liveIds: ids });
+  },
+  markWebglLost: (id) => set((s) => ({ webglLost: new Set([...s.webglLost, id]) })),
 
   addNote: async (frame) => {
     const ws = get().workspaceId;

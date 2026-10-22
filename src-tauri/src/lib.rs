@@ -71,6 +71,7 @@ pub fn run() {
             commands::terminal::terminal_restart,
             commands::terminal::terminal_set_save_history,
             commands::terminal::terminal_clear_history,
+            commands::terminal::terminal_preview_subscribe,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Sonata");

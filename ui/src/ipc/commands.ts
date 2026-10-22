@@ -55,6 +55,7 @@ export const ipc = {
   terminalRestart: (nodeId: string) => invoke<void>("terminal_restart", { nodeId }),
   terminalSetSaveHistory: (nodeId: string, enabled: boolean) =>
     invoke<void>("terminal_set_save_history", { nodeId, enabled }),
+  terminalPreviewSubscribe: (nodeIds: string[]) => invoke<void>("terminal_preview_subscribe", { nodeIds }),
   terminalClearHistory: (nodeId: string) => invoke<void>("terminal_clear_history", { nodeId }),
 };
 

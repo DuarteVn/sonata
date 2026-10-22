@@ -38,6 +38,7 @@ export function installMockIpc() {
   let seq = 0;
   const id = () => `id-${++seq}`;
   const noteTexts: Record<string, string> = {};
+  let seededActive: string | null = null;
   const find = (wsId: unknown) => state.workspaces.find((w) => w.id === wsId);
 
   mockIPC(
@@ -54,7 +55,7 @@ export function installMockIpc() {
         const boot: Bootstrap = {
           workspaces: state.workspaces.map(summary),
           loadFailures: [],
-          activeWorkspaceId: null,
+          activeWorkspaceId: seededActive,
           crashGuardTripped: false,
           recentWorkspaceIds: [],
           preferences: { autosaveIntervalSeconds: 30, terminalFontSize: 13, historyMaxRows: 10000 },
@@ -188,6 +189,32 @@ export function installMockIpc() {
     },
     { shouldMockEvents: true },
   );
+  // `?mock&seed=N`: start with one open workspace holding N terminals in a grid.
+  const seed = Number(new URLSearchParams(location.search).get("seed") ?? 0);
+  if (seed > 0) {
+    const now = new Date().toISOString();
+    const nodes: CanvasNode[] = Array.from({ length: seed }, (_, i) => ({
+      id: `seed-${i}`,
+      frame: { x: (i % 6) * 680, y: Math.floor(i / 6) * 440, width: 640, height: 400 },
+      z: i + 1,
+      createdAt: now,
+      modifiedAt: now,
+      content: { terminal: { name: `Agent ${i + 1}`, saveHistory: true } },
+    }));
+    state.workspaces.push({
+      id: "seeded",
+      name: "Seeded",
+      icon: "bot",
+      color: colors[0],
+      workingDirectory: "/projects/seeded",
+      isPinned: false,
+      createdAt: now,
+      lastOpenedAt: now,
+      camera: { x: 0, y: 0, zoom: 1 },
+      nodes,
+    });
+    seededActive = "seeded";
+  }
   return state;
 }
 

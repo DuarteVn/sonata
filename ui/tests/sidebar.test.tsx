@@ -7,6 +7,7 @@ const ipc = vi.hoisted(() => ({
   appBootstrap: vi.fn(),
   workspaceCreate: vi.fn(),
   workspaceOpen: vi.fn(),
+  terminalPreviewSubscribe: vi.fn(async () => {}),
 }));
 vi.mock("../src/ipc/commands", () => ({ ipc }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async () => () => {}) }));

@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { frameToScreen, intersects, type ScreenRect } from "../canvas/viewport";
-import { isTerminal, type Camera, type CanvasNode } from "../ipc/types";
+import { frameToScreen, type ScreenRect } from "../canvas/viewport";
+import { ipc } from "../ipc/commands";
+import { isTerminal, type CanvasNode } from "../ipc/types";
 import { useCanvas } from "../state/canvas";
 import { useWorkspaces } from "../state/workspaces";
+import { computeLiveSet, type Renderer } from "./liveSet";
 import { XtermSession } from "./xtermSession";
 
 export const TITLE_HEIGHT = 28;
 export const BODY_PADDING = 6;
-/** Below this effective font size a terminal is shown as a preview instead (research R3). */
-export const MIN_LEGIBLE_FONT_PX = 7;
 const SETTLE_MS = 150;
+const SUBSCRIBE_DEBOUNCE_MS = 200;
 
 /** Canvas-space rectangle of a terminal's text area. */
 export function bodyFrame(node: CanvasNode) {
@@ -21,17 +22,15 @@ export function bodyFrame(node: CanvasNode) {
   };
 }
 
-export function isLegible(camera: Camera, baseFontSize: number) {
-  return baseFontSize * camera.zoom >= MIN_LEGIBLE_FONT_PX;
-}
-
-// Renders live xterm.js views in screen space, above the scaled canvas (research R2). During a
-// pan or zoom gesture the whole layer follows with a CSS transform; once the camera settles,
-// views snap to crisp positions and font sizes.
+// Renders live xterm.js views in screen space, above the scaled canvas (research R2). Only
+// visible, legible terminals are live (R3); the rest show previews pushed by the core. During a
+// pan or zoom gesture the layer follows with a CSS transform; once the camera settles, views
+// snap to crisp positions and font sizes.
 export function LiveTerminalLayer({ viewport }: { viewport: ScreenRect }) {
   const nodes = useCanvas((s) => s.nodes);
   const camera = useCanvas((s) => s.camera);
   const focusedId = useCanvas((s) => s.focusedId);
+  const lost = useCanvas((s) => s.webglLost);
   const baseFontSize = useWorkspaces((s) => s.preferences.terminalFontSize);
   const [settled, setSettled] = useState(camera);
 
@@ -40,13 +39,30 @@ export function LiveTerminalLayer({ viewport }: { viewport: ScreenRect }) {
     return () => clearTimeout(t);
   }, [camera]);
 
-  const live = useMemo(() => {
-    if (!isLegible(settled, baseFontSize)) return [];
-    return nodes.filter(
-      (n) => isTerminal(n) && intersects(frameToScreen(settled, bodyFrame(n)), { ...viewport, left: 0, top: 0 }),
-    );
-  }, [nodes, settled, baseFontSize, viewport]);
+  const terminals = useMemo(() => nodes.filter(isTerminal), [nodes]);
+  const { live, previews } = useMemo(
+    () =>
+      computeLiveSet({
+        terminals: terminals.map((n) => ({ id: n.id, rect: frameToScreen(settled, bodyFrame(n)) })),
+        viewport,
+        zoom: settled.zoom,
+        baseFontSize,
+        focusedId,
+        lost,
+      }),
+    [terminals, settled, viewport, baseFontSize, focusedId, lost],
+  );
 
+  useEffect(() => useCanvas.getState().setLiveIds(new Set(live.map((l) => l.id))), [live]);
+
+  const previewKey = previews.join(",");
+  useEffect(() => {
+    const t = setTimeout(() => void ipc.terminalPreviewSubscribe(previewKey ? previewKey.split(",") : []), SUBSCRIBE_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [previewKey]);
+  useEffect(() => () => void ipc.terminalPreviewSubscribe([]), []);
+
+  const byId = new Map(terminals.map((n) => [n.id, n]));
   const k = camera.zoom / settled.zoom;
   const transform =
     settled === camera
@@ -55,35 +71,45 @@ export function LiveTerminalLayer({ viewport }: { viewport: ScreenRect }) {
 
   return (
     <div className="live-layer" style={{ transform }}>
-      {live.map((n) => (
-        <LiveTerminal
-          key={n.id}
-          node={n}
-          rect={frameToScreen(settled, bodyFrame(n))}
-          zoom={settled.zoom}
-          baseFontSize={baseFontSize}
-          focused={focusedId === n.id}
-        />
-      ))}
+      {live.map(({ id, renderer }) => {
+        const n = byId.get(id)!;
+        return (
+          <LiveTerminal
+            key={id}
+            node={n}
+            rect={frameToScreen(settled, bodyFrame(n))}
+            zoom={settled.zoom}
+            baseFontSize={baseFontSize}
+            focused={focusedId === id}
+            renderer={renderer}
+          />
+        );
+      })}
     </div>
   );
 }
 
-type LiveProps = { node: CanvasNode; rect: ScreenRect; zoom: number; baseFontSize: number; focused: boolean };
+type LiveProps = {
+  node: CanvasNode;
+  rect: ScreenRect;
+  zoom: number;
+  baseFontSize: number;
+  focused: boolean;
+  renderer: Renderer;
+};
 
-function LiveTerminal({ node, rect, zoom, baseFontSize, focused }: LiveProps) {
+function LiveTerminal({ node, rect, zoom, baseFontSize, focused, renderer }: LiveProps) {
   const ref = useRef<HTMLDivElement>(null);
   const session = useRef<XtermSession | null>(null);
-  const setFocus = useCanvas((s) => s.setFocus);
-  const bringToFront = useCanvas((s) => s.bringToFront);
-  const setTerminalState = useCanvas((s) => s.setTerminalState);
+  const { setFocus, bringToFront, setTerminalState, markWebglLost } = useCanvas.getState();
 
   useEffect(() => {
     const s = new XtermSession(node.id, ref.current!, {
       baseFontSize,
       zoom,
-      useWebgl: true,
+      useWebgl: renderer === "webgl",
       onState: setTerminalState,
+      onWebglLost: () => markWebglLost(node.id),
     });
     session.current = s;
     void s.start();
@@ -91,9 +117,14 @@ function LiveTerminal({ node, rect, zoom, baseFontSize, focused }: LiveProps) {
       s.dispose();
       session.current = null;
     };
-    // The session lives as long as this view; zoom and size changes are applied below.
+    // The session lives as long as this view; zoom, size, and renderer changes apply below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [node.id]);
+
+  useEffect(() => {
+    if (renderer === "webgl") session.current?.enableWebgl();
+    else session.current?.disableWebgl();
+  }, [renderer]);
 
   useEffect(() => session.current?.setZoom(zoom), [zoom]);
 
@@ -113,6 +144,7 @@ function LiveTerminal({ node, rect, zoom, baseFontSize, focused }: LiveProps) {
       className="live-terminal"
       data-node-id={node.id}
       data-node-kind="terminal"
+      data-renderer={renderer}
       style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height, zIndex: node.z }}
       onPointerDown={(e) => {
         if (e.button !== 0) return;

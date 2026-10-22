@@ -17,6 +17,8 @@ export function TerminalNode({ node }: Props) {
   const term = node.content.terminal;
   const state = useCanvas((s) => s.terminalStates[node.id]);
   const focused = useCanvas((s) => s.focusedId === node.id);
+  const live = useCanvas((s) => s.liveIds.has(node.id));
+  const preview = useCanvas((s) => s.previews[node.id]);
   const previewFrame = useCanvas((s) => s.previewFrame);
   const commitFrame = useCanvas((s) => s.commitFrame);
   const bringToFront = useCanvas((s) => s.bringToFront);
@@ -123,7 +125,13 @@ export function TerminalNode({ node }: Props) {
           <X size={14} />
         </button>
       </div>
-      <div className="node-body" />
+      <div className="node-body">
+        {!live && (
+          <pre className="terminal-preview" aria-label={`Preview of ${term.name}`}>
+            {(preview ?? []).join("\n")}
+          </pre>
+        )}
+      </div>
       <ResizeHandles nodeId={node.id} frame={frame} minWidth={240} minHeight={120} />
       {confirmClose && (
         <ConfirmDialog
