@@ -50,6 +50,23 @@ pub struct SpawnOptions<'a> {
     pub launch_command: Option<&'a str>,
     pub rows: u16,
     pub cols: u16,
+    /// Extra environment (Sonata session identity, socket, CLI folder on PATH).
+    pub env: &'a [(String, String)],
+    /// Start Claude Code and Codex through `sonata run` (feature 003, research R4).
+    pub wrap_agents: bool,
+}
+
+/// Agents that `sonata run` knows how to start with session instructions and hooks.
+pub const WRAPPED_AGENTS: [&str; 2] = ["claude", "codex"];
+
+/// `claude --foo` becomes `sonata run claude --foo` when wrapping is on.
+pub fn wrap_launch_command(command: &str, wrap: bool) -> String {
+    let first = command.split_whitespace().next().unwrap_or_default();
+    if wrap && WRAPPED_AGENTS.contains(&first) {
+        format!("sonata run {command}")
+    } else {
+        command.to_string()
+    }
 }
 
 pub fn spawn(opts: SpawnOptions<'_>) -> io::Result<Spawned> {
@@ -91,6 +108,9 @@ pub fn spawn(opts: SpawnOptions<'_>) -> io::Result<Spawned> {
     cmd.env("SONATA_TERMINAL_ID", opts.node_id.to_string());
     cmd.env("PWD", &cwd);
     cmd.env_remove("SONATA_HOME");
+    for (k, v) in opts.env {
+        cmd.env(k, v);
+    }
 
     let child = pty.slave.spawn_command(cmd).map_err(io::Error::other)?;
     drop(pty.slave);
@@ -100,6 +120,7 @@ pub fn spawn(opts: SpawnOptions<'_>) -> io::Result<Spawned> {
     let mut writer = pty.master.take_writer().map_err(io::Error::other)?;
     if let Some(command) = opts.launch_command.map(str::trim).filter(|c| !c.is_empty()) {
         // The TTY buffers this until the shell reads input, so it runs as the first command.
+        let command = wrap_launch_command(command, opts.wrap_agents);
         writer.write_all(format!("{command}\r").as_bytes())?;
         writer.flush()?;
     }

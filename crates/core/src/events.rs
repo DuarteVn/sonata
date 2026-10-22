@@ -50,6 +50,31 @@ pub struct NoteConflictEvent {
     pub conflict_path: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AskEvent {
+    pub ask_id: Uuid,
+    pub from: Uuid,
+    pub to: Uuid,
+    pub state: crate::messaging::broker::AskState,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotifyEvent {
+    pub node_id: Uuid,
+    pub title: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NodesChangedEvent {
+    pub workspace_id: Uuid,
+    pub nodes: Vec<crate::model::node::Node>,
+    pub links: Vec<crate::model::link::Link>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum CoreEvent {
     WorkspacesChanged(Vec<WorkspaceSummary>),
@@ -58,6 +83,9 @@ pub enum CoreEvent {
     NoteChanged(NoteChangedEvent),
     NoteConflict(NoteConflictEvent),
     PersistenceWarning(String),
+    AskState(AskEvent),
+    Notify(NotifyEvent),
+    NodesChanged(NodesChangedEvent),
 }
 
 impl CoreEvent {
@@ -69,6 +97,9 @@ impl CoreEvent {
             Self::NoteChanged(_) => "note://changed",
             Self::NoteConflict(_) => "note://conflict",
             Self::PersistenceWarning(_) => "persistence://warning",
+            Self::AskState(_) => "messaging://ask",
+            Self::Notify(_) => "messaging://notify",
+            Self::NodesChanged(_) => "workspace://nodes-changed",
         }
     }
 
@@ -80,6 +111,9 @@ impl CoreEvent {
             Self::NoteChanged(e) => serde_json::to_value(e),
             Self::NoteConflict(e) => serde_json::to_value(e),
             Self::PersistenceWarning(m) => Ok(serde_json::json!({ "message": m })),
+            Self::AskState(e) => serde_json::to_value(e),
+            Self::Notify(e) => serde_json::to_value(e),
+            Self::NodesChanged(e) => serde_json::to_value(e),
         };
         v.unwrap_or(Value::Null)
     }

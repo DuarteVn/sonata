@@ -36,6 +36,10 @@ pub struct SpawnSpec {
     pub shell: Option<PathBuf>,
     /// Earlier output fed into the screen before the shell starts (FR-015).
     pub restored_history: Option<Vec<u8>>,
+    /// Environment shared by all terminals (socket path, CLI folder on PATH). The per-start
+    /// identity (`SONATA_TOKEN`) is added by the manager.
+    pub session_env: Vec<(String, String)>,
+    pub wrap_agents: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,6 +69,9 @@ struct Terminal {
     warning: Option<String>,
     /// Incremented on every chunk of output; lets callers skip saving unchanged history.
     output_seq: u64,
+    last_output: std::time::Instant,
+    /// Secret identity of the current start (feature 003, research R2). Never written to disk.
+    token: String,
 }
 
 impl Terminal {
@@ -152,18 +159,25 @@ impl TerminalManager {
             generation: 0,
             warning: None,
             output_seq: 0,
+            last_output: std::time::Instant::now(),
+            token: String::new(),
         }));
         lock(&self.terminals).insert(id, terminal.clone());
         self.launch(id, &terminal)
     }
 
     fn launch(&self, id: Uuid, terminal: &Shared) -> io::Result<StartInfo> {
-        let (spec, generation) = {
+        let (spec, generation, token) = {
             let mut t = lock(terminal);
             t.generation += 1;
             t.status = RunStatus::Starting;
-            (t.spec.clone(), t.generation)
+            t.token = new_token();
+            (t.spec.clone(), t.generation, t.token.clone())
         };
+        let mut env = spec.session_env.clone();
+        if !env.is_empty() {
+            env.push(("SONATA_TOKEN".into(), token));
+        }
         let (rows, cols) = lock(terminal).screen.size();
         let spawned = pty::spawn(SpawnOptions {
             node_id: id,
@@ -172,6 +186,8 @@ impl TerminalManager {
             launch_command: spec.launch_command.as_deref(),
             rows,
             cols,
+            env: &env,
+            wrap_agents: spec.wrap_agents,
         })?;
         let pid = spawned.pid;
         {
@@ -322,6 +338,77 @@ impl TerminalManager {
         })
     }
 
+    /// The secret of the terminal's current start (the CLI reads it from the environment).
+    pub fn session_token(&self, id: Uuid) -> Option<String> {
+        self.get(id).ok().map(|t| lock(&t).token.clone())
+    }
+
+    /// True when `token` is the secret of this terminal's current start.
+    pub fn check_token(&self, id: Uuid, token: &str) -> bool {
+        self.get(id).is_ok_and(|t| {
+            let t = lock(&t);
+            !t.token.is_empty() && constant_time_eq(t.token.as_bytes(), token.as_bytes())
+        })
+    }
+
+    pub fn absolute_row(&self, id: Uuid) -> Option<u64> {
+        self.get(id).ok().map(|t| lock(&t).screen.absolute_row())
+    }
+
+    pub fn rows_since(&self, id: Uuid, from: u64) -> Option<(Vec<String>, bool)> {
+        self.get(id).ok().map(|t| {
+            let t = lock(&t);
+            if t.screen.alternate_screen() {
+                (
+                    t.screen
+                        .preview_lines()
+                        .into_iter()
+                        .map(|l| l.trim_end().to_string())
+                        .collect(),
+                    true,
+                )
+            } else {
+                (t.screen.rows_since(from), false)
+            }
+        })
+    }
+
+    /// Text of the cursor's row up to the cursor (the shell prompt, before anything is typed).
+    pub fn cursor_line_prefix(&self, id: Uuid) -> Option<String> {
+        self.get(id).ok().map(|t| {
+            let t = lock(&t);
+            let (row, col) = t.screen.cursor();
+            let line = t
+                .screen
+                .preview_lines()
+                .get(row as usize)
+                .cloned()
+                .unwrap_or_default();
+            line.chars().take(col as usize).collect()
+        })
+    }
+
+    /// Types a message as one block: bracketed paste when the program asked for it, then Enter
+    /// (research 003 R7).
+    pub fn deliver(&self, id: Uuid, text: &str) -> io::Result<()> {
+        let paste = self
+            .get(id)
+            .is_ok_and(|t| lock(&t).screen.bracketed_paste());
+        if paste {
+            self.write(id, format!("\x1b[200~{text}\x1b[201~").as_bytes())?;
+            std::thread::sleep(Duration::from_millis(80));
+            self.write(id, b"\r")
+        } else {
+            let typed = text.replace("\r\n", "\n").replace('\n', "\r");
+            self.write(id, format!("{typed}\r").as_bytes())
+        }
+    }
+
+    /// Time since the terminal last printed something.
+    pub fn quiet_for(&self, id: Uuid) -> Option<Duration> {
+        self.get(id).ok().map(|t| lock(&t).last_output.elapsed())
+    }
+
     pub fn output_seq(&self, id: Uuid) -> Option<u64> {
         self.get(id).ok().map(|t| lock(&t).output_seq)
     }
@@ -389,6 +476,7 @@ fn spawn_reader(
                 }
                 t.screen.process(&buf[..n]);
                 t.output_seq += 1;
+                t.last_output = std::time::Instant::now();
                 if t.sink.is_some() {
                     t.pending.extend_from_slice(&buf[..n]);
                     if t.pending.len() >= MAX_CHUNK {
@@ -450,4 +538,15 @@ fn spawn_flusher(terminals: Weak<Mutex<HashMap<Uuid, Shared>>>) {
             }
         })
         .expect("spawn flusher thread");
+}
+
+fn new_token() -> String {
+    use rand::RngCore;
+    let mut bytes = [0u8; 32];
+    rand::rng().fill_bytes(&mut bytes);
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }

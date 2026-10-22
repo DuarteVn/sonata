@@ -46,6 +46,10 @@ pub struct BusyWorkspace {
 #[derive(Debug, Clone, Default)]
 pub struct AppOptions {
     pub shell: Option<PathBuf>,
+    /// Folder holding the `sonata` CLI; put first on every terminal's PATH (feature 003).
+    pub cli_dir: Option<PathBuf>,
+    /// Start the CLI socket server (feature 003). Off in tests that do not need it.
+    pub socket: bool,
 }
 
 /// Input for `node_create_terminal`.
@@ -237,6 +241,10 @@ pub struct App {
     roles: Mutex<RoleLibrary>,
     activity_last: Mutex<HashMap<Uuid, bool>>,
     this: Weak<App>,
+    broker: crate::messaging::broker::Broker,
+    server: Mutex<Option<crate::messaging::server::Server>>,
+    socket_path: Option<PathBuf>,
+    data_root: DataRoot,
 }
 
 impl App {
@@ -259,6 +267,12 @@ impl App {
             Err(e) => warnings.push(format!("Could not check permissions of Sonata's data: {e}")),
         }
         let notes = NoteStore::new(root.clone());
+        let data_root = root.clone();
+        let socket_path = if options.socket {
+            Some(crate::messaging::server::socket_path(root.path())?)
+        } else {
+            None
+        };
         let (roles, roles_warning) = RoleLibrary::load(root.path().join("roles.json"));
         warnings.extend(roles_warning);
         let store = Store::new(root);
@@ -294,10 +308,15 @@ impl App {
             roles: Mutex::new(roles),
             activity_last: Mutex::default(),
             this: this.clone(),
+            broker: crate::messaging::broker::Broker::default(),
+            server: Mutex::new(None),
+            socket_path,
+            data_root,
         }))
         .inspect(|app| {
             app.spawn_preview_loop();
             app.spawn_activity_loop();
+            app.start_messaging();
         })
     }
 
@@ -383,7 +402,23 @@ impl App {
             history_max_rows: self.preferences.history_max_rows as usize,
             shell: self.options.shell.clone(),
             restored_history: None,
+            session_env: self.session_env(),
+            wrap_agents: self.socket_path.is_some(),
         })
+    }
+
+    /// Environment shared by every terminal when the CLI channel runs.
+    fn session_env(&self) -> Vec<(String, String)> {
+        let Some(socket) = &self.socket_path else {
+            return Vec::new();
+        };
+        let mut env = vec![("SONATA_SOCKET".to_string(), socket.display().to_string())];
+        if let Some(dir) = &self.options.cli_dir {
+            let path =
+                std::env::var("PATH").unwrap_or_else(|_| "/usr/bin:/bin:/usr/sbin:/sbin".into());
+            env.push(("PATH".into(), format!("{}:{path}", dir.display())));
+        }
+        env
     }
 
     fn start_terminal(&self, ws: &Workspace, node: &Node) {
@@ -399,7 +434,9 @@ impl App {
             self.emit(CoreEvent::PersistenceWarning(format!(
                 "A terminal could not start: {err}"
             )));
+            return;
         }
+        self.maybe_type_instructions(ws, node);
     }
 
     fn require_loaded(&self, ws: Uuid) -> AppResult<()> {
@@ -504,7 +541,9 @@ impl App {
                 "A program is still running in this terminal. Close it anyway?",
             ));
         }
+        self.broker.cancel_from(self, node);
         self.terminals.stop(node);
+        let _ = std::fs::remove_dir_all(self.run_dir(node));
         if is_note {
             self.note_store().delete(ws, node)?;
         }
@@ -1095,6 +1134,9 @@ impl App {
 
     /// Saves everything, marks a clean shutdown, and stops all terminals.
     pub fn quit(&self) {
+        self.broker.shutdown(self);
+        self.server.lock().unwrap_or_else(|e| e.into_inner()).take();
+        let _ = std::fs::remove_dir_all(self.data_root.path().join("run").join("sessions"));
         self.save_dirty();
         for (_, path) in self.history_files_to_clean() {
             let _ = history::delete(&path);
@@ -1111,6 +1153,378 @@ impl App {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clear();
+    }
+}
+
+// ---- Agent messaging (feature 003) ----
+impl App {
+    pub fn broker(&self) -> &crate::messaging::broker::Broker {
+        &self.broker
+    }
+
+    pub fn socket_path(&self) -> Option<&std::path::Path> {
+        self.socket_path.as_deref()
+    }
+
+    fn start_messaging(&self) {
+        let Some(path) = self.socket_path.clone() else {
+            return;
+        };
+        match crate::messaging::server::Server::start(self.this.clone(), path) {
+            Ok(server) => *self.server.lock().unwrap_or_else(|e| e.into_inner()) = Some(server),
+            Err(e) => {
+                tracing::error!(error = %e, "could not start the CLI socket");
+                self.emit(CoreEvent::PersistenceWarning(format!(
+                    "Agent messaging is off: {e}"
+                )));
+                return;
+            }
+        }
+        let this = self.this.clone();
+        std::thread::Builder::new()
+            .name("sonata-broker".into())
+            .spawn(move || {
+                loop {
+                    std::thread::sleep(crate::messaging::broker::TICK);
+                    let Some(app) = this.upgrade() else { break };
+                    app.broker.tick(&app);
+                }
+            })
+            .expect("spawn broker thread");
+    }
+
+    pub fn node_name(&self, id: Uuid) -> Option<String> {
+        let ws = self.workspace_of_node(id).ok()?;
+        let m = self.workspaces();
+        let n = m.workspace(ws)?.node(id)?;
+        Some(match n.terminal() {
+            Some(t) => t.name.clone(),
+            None => {
+                drop(m);
+                crate::messaging::commands::note_title(
+                    &self.note_read(id).map(|v| v.text).unwrap_or_default(),
+                )
+            }
+        })
+    }
+
+    /// Running and quiet for `quiet` after printing at least once.
+    pub fn terminal_ready(&self, id: Uuid, quiet: std::time::Duration) -> bool {
+        self.terminals.output_seq(id).unwrap_or(0) > 0
+            && self.terminals.quiet_for(id).is_some_and(|q| q >= quiet)
+    }
+
+    /// Starts the terminals of a workspace that is not open, without switching to it.
+    pub fn load_workspace_terminals(&self, ws_id: Uuid) {
+        let ws = {
+            let mut m = self.workspaces();
+            if !m.mark_loaded(ws_id) {
+                return;
+            }
+            m.workspace(ws_id).cloned()
+        };
+        let Some(ws) = ws else { return };
+        for node in &ws.nodes {
+            if node.terminal().is_some() && !self.terminals.contains(node.id) {
+                self.start_terminal(&ws, node);
+            }
+        }
+        self.watch_notes(ws_id);
+        self.notify_workspaces_changed();
+    }
+
+    fn run_dir(&self, node: Uuid) -> PathBuf {
+        self.data_root
+            .path()
+            .join("run")
+            .join("sessions")
+            .join(node.to_string())
+    }
+
+    /// Writes this terminal's session instructions and hook settings (research 003 R4).
+    pub fn prepare_agent_session(
+        &self,
+        node: Uuid,
+        hook: &str,
+    ) -> AppResult<crate::messaging::instructions::SessionFiles> {
+        let ws_id = self.workspace_of_node(node)?;
+        let (name, workspace, role, orchestrator) = {
+            let m = self.workspaces();
+            let ws = m
+                .workspace(ws_id)
+                .ok_or_else(|| AppError::workspace_not_found(ws_id))?;
+            let t = ws
+                .node(node)
+                .and_then(|n| n.terminal().cloned())
+                .ok_or_else(|| AppError::node_not_found(node))?;
+            (
+                t.name,
+                ws.name.clone(),
+                t.role.map(|r| r.text),
+                t.orchestrator,
+            )
+        };
+        let info = crate::messaging::instructions::SessionInfo {
+            name: &name,
+            workspace: &workspace,
+            role: role.as_deref(),
+            orchestrator,
+        };
+        Ok(crate::messaging::instructions::write_session(
+            &self.run_dir(node),
+            &info,
+            hook,
+        )?)
+    }
+
+    /// Types a short instruction into agents that cannot get session instructions (FR-019).
+    fn maybe_type_instructions(&self, ws: &Workspace, node: &Node) {
+        let Some(t) = node.terminal() else { return };
+        if self.socket_path.is_none() {
+            return;
+        }
+        let kind = crate::messaging::commands::target_kind(node);
+        let first = t
+            .launch_command
+            .as_deref()
+            .and_then(|c| c.split_whitespace().next());
+        let automatic = match kind {
+            crate::messaging::broker::TargetKind::Shell => false,
+            crate::messaging::broker::TargetKind::Other => true,
+            // Codex has no verified session-instructions option yet (research 003 R4).
+            crate::messaging::broker::TargetKind::Hooked => first == Some("codex"),
+        };
+        if !t.send_instructions.unwrap_or(automatic) {
+            return;
+        }
+        let info = crate::messaging::instructions::SessionInfo {
+            name: &t.name,
+            workspace: &ws.name,
+            role: t.role.as_ref().map(|r| r.text.as_str()),
+            orchestrator: t.orchestrator,
+        };
+        let text = crate::messaging::instructions::typed_instructions(&info);
+        let this = self.this.clone();
+        let id = node.id;
+        std::thread::spawn(move || {
+            let start = std::time::Instant::now();
+            // Give the agent time to start, then wait for its screen to settle.
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            while start.elapsed() < crate::messaging::broker::READY_LIMIT {
+                let Some(app) = this.upgrade() else { return };
+                if app.terminal_ready(id, std::time::Duration::from_secs(2)) {
+                    let _ = app.terminals.deliver(id, &text);
+                    return;
+                }
+                drop(app);
+                std::thread::sleep(std::time::Duration::from_millis(300));
+            }
+        });
+    }
+
+    /// Writes a note on behalf of an agent and shows the change on the canvas (FR-024).
+    pub fn note_write_from_agent(&self, node: Uuid, text: &str, append: bool) -> AppResult<()> {
+        let current = self.note_read(node)?;
+        let next = if append {
+            let sep = if current.text.is_empty() || current.text.ends_with('\n') {
+                ""
+            } else {
+                "\n"
+            };
+            format!("{}{sep}{text}", current.text)
+        } else {
+            text.to_string()
+        };
+        if matches!(current.sync, crate::notes::store::NoteSync::Dirty) {
+            // The user is editing: keep their text and leave the agent's version as a conflict copy.
+            let ws = self.workspace_of_node(node)?;
+            let path = self.note_store().conflict_path(ws, node);
+            crate::persistence::atomic::write(&path, next.as_bytes())?;
+            self.emit(CoreEvent::NoteConflict(crate::events::NoteConflictEvent {
+                node_id: node,
+                conflict_path: path.display().to_string(),
+            }));
+            return Ok(());
+        }
+        self.note_write(node, &next, true)?;
+        self.emit(CoreEvent::NoteChanged(crate::events::NoteChangedEvent {
+            node_id: node,
+            text: next,
+            sync: "clean".into(),
+        }));
+        Ok(())
+    }
+
+    pub fn notify_nodes_changed(&self, ws: Uuid) {
+        let snapshot = self
+            .workspaces()
+            .workspace(ws)
+            .map(|w| (w.nodes.clone(), w.links.clone()));
+        if let Some((nodes, links)) = snapshot {
+            self.emit(CoreEvent::NodesChanged(crate::events::NodesChangedEvent {
+                workspace_id: ws,
+                nodes,
+                links,
+            }));
+        }
+    }
+
+    /// A free 640×400 spot near `anchor` (research 003 R10).
+    fn free_spot(&self, ws: Uuid, anchor: &Node) -> Frame {
+        let nodes: Vec<Frame> = self
+            .workspaces()
+            .workspace(ws)
+            .map(|w| w.nodes.iter().map(|n| n.frame).collect())
+            .unwrap_or_default();
+        let (w, h, gap) = (640.0, 400.0, 24.0);
+        let overlaps = |f: &Frame| {
+            nodes.iter().any(|o| {
+                f.x < o.x + o.width + gap
+                    && o.x < f.x + f.width + gap
+                    && f.y < o.y + o.height + gap
+                    && o.y < f.y + f.height + gap
+            })
+        };
+        let a = anchor.frame;
+        for step in 0..40 {
+            let d = f64::from(step) * 40.0;
+            for f in [
+                Frame {
+                    x: a.x + a.width + gap * 2.0 + d,
+                    y: a.y,
+                    width: w,
+                    height: h,
+                },
+                Frame {
+                    x: a.x,
+                    y: a.y + a.height + gap * 2.0 + d,
+                    width: w,
+                    height: h,
+                },
+                Frame {
+                    x: a.x - w - gap * 2.0 - d,
+                    y: a.y,
+                    width: w,
+                    height: h,
+                },
+            ] {
+                if !overlaps(&f) {
+                    return f;
+                }
+            }
+        }
+        Frame {
+            x: a.x + a.width + gap * 2.0,
+            y: a.y,
+            width: w,
+            height: h,
+        }
+    }
+
+    /// Creates a terminal linked to the orchestrator (FR-021). Returns its final name.
+    pub fn recruit(
+        &self,
+        orchestrator: Uuid,
+        what: &str,
+        name: Option<&str>,
+        role: Option<&str>,
+        role_text: Option<&str>,
+        folder: Option<PathBuf>,
+    ) -> AppResult<String> {
+        let ws = self.workspace_of_node(orchestrator)?;
+        let anchor = self
+            .workspaces()
+            .workspace(ws)
+            .and_then(|w| w.node(orchestrator).cloned())
+            .ok_or_else(|| AppError::node_not_found(orchestrator))?;
+        let preset = crate::presets::PRESETS
+            .iter()
+            .find(|p| p.id == what.to_lowercase());
+        let command = match preset {
+            Some(p) => p.command.map(str::to_string),
+            None => Some(what.to_string()),
+        };
+        let base = name.map(str::to_string).unwrap_or_else(|| {
+            preset
+                .map(|p| p.name.to_string())
+                .unwrap_or_else(|| "Worker".into())
+        });
+        let taken: Vec<String> = self
+            .links_of(ws, orchestrator)
+            .iter()
+            .filter_map(|l| l.other(orchestrator))
+            .filter_map(|id| self.node_name(id))
+            .map(|n| n.to_lowercase())
+            .collect();
+        let mut final_name = base.clone();
+        let mut i = 2;
+        while taken.contains(&final_name.to_lowercase()) {
+            final_name = format!("{base} {i}");
+            i += 1;
+        }
+        let role = match (role, role_text) {
+            (Some(r), _) => {
+                let lib = self
+                    .roles_list()
+                    .into_iter()
+                    .find(|x| x.name.eq_ignore_ascii_case(r));
+                Some(
+                    lib.map(|x| RoleRef {
+                        name: Some(x.name),
+                        text: x.text,
+                    })
+                    .ok_or_else(|| {
+                        AppError::new(
+                            ErrorCode::NodeNotFound,
+                            format!("No role named \"{r}\" in the role library."),
+                        )
+                    })?,
+                )
+            }
+            (None, Some(t)) => Some(RoleRef {
+                name: None,
+                text: t.to_string(),
+            }),
+            _ => None,
+        };
+        if let Some(f) = &folder {
+            crate::workspace::manager::validate_directory(f)?;
+        }
+        let frame = self.free_spot(ws, &anchor);
+        let node = self.create_terminal(
+            ws,
+            NewTerminal {
+                frame,
+                name: Some(final_name.clone()),
+                launch_command: command,
+                working_directory: folder,
+                settings: TerminalSettings {
+                    role: Some(role),
+                    ..Default::default()
+                },
+            },
+        )?;
+        self.update_node(ws, node.id, |w, id| {
+            if let Some(t) = w.node_mut(id).and_then(Node::terminal_mut) {
+                t.recruited_by = Some(orchestrator);
+            }
+            Ok(())
+        })?;
+        self.create_link(ws, orchestrator, node.id)?;
+        self.notify_nodes_changed(ws);
+        Ok(final_name)
+    }
+
+    /// Closes a recruited terminal and removes it with its links (FR-022).
+    pub fn dismiss(&self, node: Uuid) -> AppResult<()> {
+        let ws = self.workspace_of_node(node)?;
+        self.delete_node(ws, node, true)?;
+        self.notify_nodes_changed(ws);
+        Ok(())
+    }
+
+    pub fn exchange_log(&self, node: Uuid) -> Vec<crate::messaging::broker::LogEntry> {
+        self.broker.log(node)
     }
 }
 

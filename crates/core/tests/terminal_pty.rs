@@ -22,6 +22,8 @@ fn spec(cwd: PathBuf) -> SpawnSpec {
         history_max_rows: 10_000,
         shell: Some("/bin/sh".into()),
         restored_history: None,
+        session_env: Vec::new(),
+        wrap_agents: false,
     }
 }
 

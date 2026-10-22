@@ -40,6 +40,8 @@ fn start(sb: &Sandbox) -> (TerminalManager, Uuid) {
         history_max_rows: 10_000,
         shell: Some("/bin/sh".into()),
         restored_history: None,
+        session_env: Vec::new(),
+        wrap_agents: false,
     };
     let id = spec.node_id;
     m.start(spec).unwrap();
