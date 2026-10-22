@@ -286,6 +286,15 @@ impl TerminalManager {
         Ok(())
     }
 
+    /// Command and folder used at the next start or restart.
+    pub fn set_spawn_settings(&self, id: Uuid, command: Option<String>, cwd: PathBuf) {
+        if let Ok(terminal) = self.get(id) {
+            let mut t = lock(&terminal);
+            t.spec.launch_command = command;
+            t.spec.cwd = cwd;
+        }
+    }
+
     pub fn set_launch_command(&self, id: Uuid, command: Option<String>) {
         if let Ok(terminal) = self.get(id) {
             lock(&terminal).spec.launch_command = command;

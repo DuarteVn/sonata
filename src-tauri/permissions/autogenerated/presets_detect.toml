@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-presets-detect"
+description = "Enables the presets_detect command without any pre-configured scope."
+commands.allow = ["presets_detect"]
+
+[[permission]]
+identifier = "deny-presets-detect"
+description = "Denies the presets_detect command without any pre-configured scope."
+commands.deny = ["presets_detect"]

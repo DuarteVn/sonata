@@ -3,7 +3,7 @@
 // Every call is recorded in `window.__sonataMock.calls` for assertions.
 import { emit } from "@tauri-apps/api/event";
 import { mockIPC } from "@tauri-apps/api/mocks";
-import type { Bootstrap, CanvasNode, Workspace, WorkspaceSummary } from "../../ui/src/ipc/types";
+import type { Bootstrap, CanvasNode, Link, Role, Workspace, WorkspaceSummary } from "../../ui/src/ipc/types";
 
 type Call = { cmd: string; args: Record<string, unknown> };
 
@@ -38,6 +38,7 @@ export function installMockIpc() {
   let seq = 0;
   const id = () => `id-${++seq}`;
   const noteTexts: Record<string, string> = {};
+  let roles: Role[] = [];
   let seededActive: string | null = null;
   const find = (wsId: unknown) => state.workspaces.find((w) => w.id === wsId);
 
@@ -82,6 +83,7 @@ export function installMockIpc() {
           lastOpenedAt: now,
           camera: { x: 0, y: 0, zoom: 1 },
           nodes: [],
+          links: [],
         };
         state.workspaces.push(ws);
         return summary(ws);
@@ -136,6 +138,11 @@ export function installMockIpc() {
               name: (args.name as string) || `Terminal ${count + 1}`,
               launchCommand: (args.launchCommand as string) || undefined,
               saveHistory: true,
+              monitorActivity: true,
+              orchestrator: false,
+              ...Object.fromEntries(
+                Object.entries((args.settings as Record<string, unknown>) ?? {}).filter(([, v]) => v !== null && v !== undefined),
+              ),
             },
           },
         };
@@ -156,7 +163,10 @@ export function installMockIpc() {
       }
       case "node_delete": {
         const ws = find(args.workspaceId);
-        if (ws) ws.nodes = ws.nodes.filter((n) => n.id !== args.nodeId);
+        if (ws) {
+          ws.nodes = ws.nodes.filter((n) => n.id !== args.nodeId);
+          ws.links = ws.links.filter((l) => l.a !== args.nodeId && l.b !== args.nodeId);
+        }
         return null;
       }
       case "node_create_note": {
@@ -170,17 +180,62 @@ export function installMockIpc() {
           z: Math.max(0, ...ws.nodes.map((n) => n.z)) + 1,
           createdAt: now,
           modifiedAt: now,
-          content: { note: {} },
+          content: { note: { color: "yellow", textSize: 3 } },
         };
         ws.nodes.push(node);
         noteTexts[node.id] = "";
         return node;
       }
       case "note_read":
-        return { text: noteTexts[String(args.nodeId)] ?? "", sync: "clean" };
+        return { text: noteTexts[String(args.nodeId)] ?? "", sync: "clean", assetBase: "/mock/notes" };
       case "note_write":
         noteTexts[String(args.nodeId)] = String(args.text);
         return null;
+      case "link_create": {
+        const ws = find(args.workspaceId);
+        const [a, b] = [String(args.a), String(args.b)];
+        if (!ws) throw { code: "WorkspaceNotFound", message: "No workspace." };
+        if (a === b) throw { code: "LinkSelf", message: "A node cannot be linked to itself." };
+        if (ws.links.some((l) => (l.a === a && l.b === b) || (l.a === b && l.b === a)))
+          throw { code: "LinkExists", message: "These two are already linked." };
+        const link: Link = { id: id(), a: a < b ? a : b, b: a < b ? b : a, createdAt: new Date().toISOString() };
+        ws.links.push(link);
+        return link;
+      }
+      case "link_delete": {
+        const ws = find(args.workspaceId);
+        if (ws) ws.links = ws.links.filter((l) => l.id !== args.linkId);
+        return null;
+      }
+      case "presets_detect":
+        return ["claude", "codex", "opencode", "gemini", "shell"].map((p) => ({ id: p, found: p !== "opencode" }));
+      case "roles_list":
+        return roles;
+      case "role_save": {
+        const role: Role = { id: id(), name: String(args.name), text: String(args.text), createdAt: "" };
+        roles.push(role);
+        return role;
+      }
+      case "role_delete":
+        roles = roles.filter((r) => r.id !== args.id);
+        return null;
+      case "terminal_update_settings": {
+        const node = state.workspaces.flatMap((w) => w.nodes).find((n) => n.id === args.nodeId);
+        if (!node || !("terminal" in node.content)) throw { code: "NodeNotFound", message: "No node." };
+        const s = args.settings as Record<string, unknown>;
+        const t = node.content.terminal as Record<string, unknown>;
+        for (const [k, v] of Object.entries(s)) if (v !== undefined) t[k] = v === null ? undefined : v;
+        return { node, appliesOnRestart: "launchCommand" in s };
+      }
+      case "terminal_restart":
+        return null;
+      case "note_set_style": {
+        const node = state.workspaces.flatMap((w) => w.nodes).find((n) => n.id === args.nodeId);
+        if (node) node.content = { note: args.style as never };
+        return null;
+      }
+      case "note_insert_image":
+        return { markdown: "![](../files/mock.png)" };
       case "terminal_rename":
         return String(args.name).trim();
       default:
@@ -212,6 +267,7 @@ export function installMockIpc() {
       lastOpenedAt: now,
       camera: { x: 0, y: 0, zoom: 1 },
       nodes,
+      links: [],
     });
     seededActive = "seeded";
   }

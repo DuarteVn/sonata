@@ -1,0 +1,120 @@
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { CanvasNode } from "../src/ipc/types";
+
+const ipc = vi.hoisted(() => ({
+  presetsDetect: vi.fn(),
+  rolesList: vi.fn(),
+  roleSave: vi.fn(),
+  roleDelete: vi.fn(async () => {}),
+  nodeCreateTerminal: vi.fn(),
+  terminalUpdateSettings: vi.fn(),
+}));
+vi.mock("../src/ipc/commands", () => ({ ipc }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(async () => "/picked/dir") }));
+
+import { TerminalDialog } from "../src/dialogs/TerminalDialog";
+import { useCanvas } from "../src/state/canvas";
+import { useWorkspaces } from "../src/state/workspaces";
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  useCanvas.setState(useCanvas.getInitialState(), true);
+  useCanvas.setState({ workspaceId: "w1" });
+  useWorkspaces.setState({
+    active: {
+      id: "w1", name: "W", icon: "code", color: "#3B82F6", workingDirectory: "/projects/w",
+      isPinned: false, createdAt: "", lastOpenedAt: "", camera: { x: 0, y: 0, zoom: 1 }, nodes: [], links: [],
+    },
+  });
+  ipc.presetsDetect.mockResolvedValue([
+    { id: "claude", found: true },
+    { id: "codex", found: false },
+    { id: "opencode", found: false },
+    { id: "gemini", found: true },
+    { id: "shell", found: true },
+  ]);
+  ipc.rolesList.mockResolvedValue([{ id: "r1", name: "Reviewer", text: "Review diffs.", createdAt: "" }]);
+  ipc.nodeCreateTerminal.mockImplementation(async (_ws, frame, opts) => ({
+    id: "t1", frame, z: 1, createdAt: "", modifiedAt: "",
+    content: { terminal: { name: opts.name ?? "Terminal 1", saveHistory: true, monitorActivity: true, orchestrator: false } },
+  }));
+});
+
+describe("New Terminal dialog", () => {
+  it("presets fill name and command; missing ones are marked but selectable", async () => {
+    render(<TerminalDialog mode={{ kind: "create", at: { x: 10, y: 20 } }} onClose={() => {}} />);
+    const codex = await screen.findByRole("button", { name: /Codex/ });
+    await waitFor(() => expect(codex).toHaveTextContent(/not found/i));
+    await userEvent.click(codex);
+    expect(screen.getByLabelText("Name")).toHaveValue("Codex");
+    expect(screen.getByLabelText("Command")).toHaveValue("codex");
+    await userEvent.click(screen.getByRole("button", { name: /Shell/ }));
+    expect(screen.getByLabelText("Command")).toHaveValue("");
+  });
+
+  it("creates with details, appearance, and a library role at the clicked point", async () => {
+    const onClose = vi.fn();
+    render(<TerminalDialog mode={{ kind: "create", at: { x: 10, y: 20 } }} onClose={onClose} />);
+    await userEvent.click(await screen.findByRole("button", { name: /Claude Code/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Browse…" }));
+    expect(screen.getByLabelText("Working folder")).toHaveValue("/picked/dir");
+    await userEvent.click(screen.getByLabelText(/Orchestrator/));
+    await userEvent.click(screen.getByRole("tab", { name: "Appearance" }));
+    await userEvent.click(screen.getByRole("radio", { name: "#8B5CF6" }));
+    await userEvent.clear(screen.getByLabelText("Font size"));
+    await userEvent.type(screen.getByLabelText("Font size"), "16");
+    await userEvent.click(screen.getByRole("tab", { name: "Role" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Use Reviewer" }));
+    expect(screen.getByLabelText("Role text")).toHaveValue("Review diffs.");
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    await waitFor(() => expect(ipc.nodeCreateTerminal).toHaveBeenCalled());
+    const [ws, frame, opts] = ipc.nodeCreateTerminal.mock.calls[0];
+    expect(ws).toBe("w1");
+    expect(frame).toMatchObject({ x: 10, y: 20 });
+    expect(opts).toMatchObject({
+      name: "Claude Code",
+      launchCommand: "claude",
+      workingDirectory: "/picked/dir",
+      settings: {
+        accentColor: "#8B5CF6",
+        fontSize: 16,
+        orchestrator: true,
+        monitorActivity: true,
+        role: { name: "Reviewer", text: "Review diffs." },
+      },
+    });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("saves a role to the library", async () => {
+    ipc.roleSave.mockResolvedValue({ id: "r2", name: "Lead", text: "Coordinate.", createdAt: "" });
+    render(<TerminalDialog mode={{ kind: "create" }} onClose={() => {}} />);
+    await userEvent.click(screen.getByRole("tab", { name: "Role" }));
+    await userEvent.type(screen.getByLabelText("Role text"), "Coordinate.");
+    await userEvent.type(screen.getByLabelText("Role name"), "Lead");
+    await userEvent.click(screen.getByRole("button", { name: "Save to library" }));
+    expect(ipc.roleSave).toHaveBeenCalledWith("Lead", "Coordinate.");
+    expect(await screen.findByRole("button", { name: "Use Lead" })).toBeInTheDocument();
+  });
+
+  it("edit mode pre-fills and reports that command changes apply on restart", async () => {
+    const node: CanvasNode = {
+      id: "t9", frame: { x: 0, y: 0, width: 600, height: 400 }, z: 1, createdAt: "", modifiedAt: "",
+      content: { terminal: { name: "Lead", launchCommand: "claude", saveHistory: true, monitorActivity: true, orchestrator: true, accentColor: "#8B5CF6" } },
+    };
+    useCanvas.setState({ nodes: [node] });
+    ipc.terminalUpdateSettings.mockResolvedValue({ node, appliesOnRestart: true });
+    render(<TerminalDialog mode={{ kind: "edit", nodeId: "t9" }} onClose={() => {}} />);
+    expect(screen.getByLabelText("Name")).toHaveValue("Lead");
+    expect(screen.getByLabelText(/Orchestrator/)).toBeChecked();
+    await userEvent.clear(screen.getByLabelText("Command"));
+    await userEvent.type(screen.getByLabelText("Command"), "codex");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(ipc.terminalUpdateSettings).toHaveBeenCalledWith("t9", expect.objectContaining({ launchCommand: "codex" })));
+    expect(await screen.findByRole("status")).toHaveTextContent(/restart/i);
+    within(screen.getByRole("dialog"));
+  });
+});

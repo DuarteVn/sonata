@@ -26,6 +26,14 @@
     "allow-node-create-note",
     "allow-note-read",
     "allow-note-write",
+    "allow-note-set-style",
+    "allow-note-insert-image",
+    "allow-link-create",
+    "allow-link-delete",
+    "allow-roles-list",
+    "allow-role-save",
+    "allow-role-delete",
+    "allow-presets-detect",
     "allow-terminal-attach",
     "allow-terminal-detach",
     "allow-terminal-write",
@@ -35,6 +43,7 @@
     "allow-terminal-restart",
     "allow-terminal-set-save-history",
     "allow-terminal-clear-history",
-    "allow-terminal-preview-subscribe"
+    "allow-terminal-preview-subscribe",
+    "allow-terminal-update-settings"
   ]
 }

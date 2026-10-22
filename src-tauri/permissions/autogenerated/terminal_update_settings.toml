@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-terminal-update-settings"
+description = "Enables the terminal_update_settings command without any pre-configured scope."
+commands.allow = ["terminal_update_settings"]
+
+[[permission]]
+identifier = "deny-terminal-update-settings"
+description = "Denies the terminal_update_settings command without any pre-configured scope."
+commands.deny = ["terminal_update_settings"]

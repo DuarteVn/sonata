@@ -11,14 +11,23 @@ use uuid::Uuid;
 use crate::crash_guard;
 use crate::error::{AppError, AppResult, ErrorCode};
 use crate::events::{CoreEvent, EventSink};
-use crate::model::node::{Frame, Node, NodeContent, TERMINAL_NAME_MAX_CHARS, TerminalContent};
+use crate::model::link::Link;
+use crate::model::node::NOTE_TEXT_SIZES;
+use crate::model::node::{
+    FONT_SIZE_RANGE, Frame, Node, NodeContent, ROLE_TEXT_MAX_CHARS, RoleRef,
+    TERMINAL_NAME_MAX_CHARS, TerminalContent,
+};
 use crate::model::node::{NOTE_MIN_SIZE, NoteContent};
 use crate::model::preferences::Preferences;
 use crate::model::workspace::{Camera, Workspace};
+use crate::notes::images;
 use crate::notes::store::{NoteStore, NoteView};
 use crate::notes::watcher::{self, NotesWatcher};
 use crate::paths::{self, DataRoot};
 use crate::persistence::store::{LoadFailure, Store};
+use crate::presets::{self, PresetStatus};
+use crate::roles::{Role, RoleLibrary};
+use crate::terminal::activity::ACTIVITY_INTERVAL;
 use crate::terminal::history;
 use crate::terminal::manager::{SpawnSpec, TerminalManager};
 use crate::terminal::preview::{PREVIEW_INTERVAL, PreviewState};
@@ -46,6 +55,105 @@ pub struct NewTerminal {
     pub name: Option<String>,
     pub launch_command: Option<String>,
     pub working_directory: Option<PathBuf>,
+    pub settings: TerminalSettings,
+}
+
+/// Terminal options from the New/Edit Terminal dialog. For nullable fields, `None` leaves the
+/// value unchanged and `Some(None)` clears it.
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalSettings {
+    pub name: Option<String>,
+    #[serde(default, deserialize_with = "double_option")]
+    pub launch_command: Option<Option<String>>,
+    #[serde(default, deserialize_with = "double_option")]
+    pub working_directory: Option<Option<PathBuf>>,
+    #[serde(default, deserialize_with = "double_option")]
+    pub accent_color: Option<Option<String>>,
+    #[serde(default, deserialize_with = "double_option")]
+    pub font_size: Option<Option<u32>>,
+    #[serde(default, deserialize_with = "double_option")]
+    pub role: Option<Option<RoleRef>>,
+    pub monitor_activity: Option<bool>,
+    pub orchestrator: Option<bool>,
+}
+
+/// Absent → `None`; `null` → `Some(None)`; value → `Some(Some(v))`.
+fn double_option<'de, T, D>(de: D) -> Result<Option<Option<T>>, D::Error>
+where
+    T: serde::Deserialize<'de>,
+    D: serde::Deserializer<'de>,
+{
+    <Option<T> as serde::Deserialize>::deserialize(de).map(Some)
+}
+
+/// Result of `terminal_update_settings`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsUpdate {
+    pub node: Node,
+    /// Command or folder changed while running: they apply at the next start or restart.
+    pub applies_on_restart: bool,
+}
+
+/// Validates and applies settings. Returns true when the command or folder changed.
+fn apply_settings(t: &mut TerminalContent, s: &TerminalSettings) -> AppResult<bool> {
+    if let Some(name) = &s.name {
+        t.name = terminal_name(name)?;
+    }
+    let before = (t.launch_command.clone(), t.working_directory.clone());
+    if let Some(cmd) = &s.launch_command {
+        t.launch_command = clean_optional(cmd.clone());
+    }
+    if let Some(dir) = &s.working_directory {
+        if let Some(d) = dir {
+            crate::workspace::manager::validate_directory(d)?;
+        }
+        t.working_directory = dir.clone();
+    }
+    if let Some(color) = &s.accent_color {
+        if let Some(c) = color
+            && !crate::workspace::palette::COLORS.contains(&c.as_str())
+        {
+            return Err(AppError::new(
+                ErrorCode::Internal,
+                format!("Unknown accent color {c}."),
+            ));
+        }
+        t.accent_color = color.clone();
+    }
+    if let Some(size) = s.font_size {
+        if let Some(n) = size
+            && !FONT_SIZE_RANGE.contains(&n)
+        {
+            return Err(AppError::new(
+                ErrorCode::Internal,
+                "Font size must be between 9 and 24.",
+            ));
+        }
+        t.font_size = size;
+    }
+    if let Some(role) = &s.role {
+        t.role = match role {
+            Some(r) if !r.text.trim().is_empty() => {
+                if r.text.chars().count() > ROLE_TEXT_MAX_CHARS {
+                    return Err(AppError::new(
+                        ErrorCode::NameTooLong,
+                        "Roles can have at most 20,000 characters.",
+                    ));
+                }
+                Some(r.clone())
+            }
+            _ => None,
+        };
+    }
+    if let Some(v) = s.monitor_activity {
+        t.monitor_activity = v;
+    }
+    if let Some(v) = s.orchestrator {
+        t.orchestrator = v;
+    }
+    Ok(before != (t.launch_command.clone(), t.working_directory.clone()))
 }
 
 impl Default for NewTerminal {
@@ -60,6 +168,7 @@ impl Default for NewTerminal {
             name: None,
             launch_command: None,
             working_directory: None,
+            settings: TerminalSettings::default(),
         }
     }
 }
@@ -125,6 +234,8 @@ pub struct App {
     notes: Mutex<NoteStore>,
     note_watchers: Mutex<HashMap<Uuid, NotesWatcher>>,
     previews: Mutex<PreviewState>,
+    roles: Mutex<RoleLibrary>,
+    activity_last: Mutex<HashMap<Uuid, bool>>,
     this: Weak<App>,
 }
 
@@ -148,6 +259,8 @@ impl App {
             Err(e) => warnings.push(format!("Could not check permissions of Sonata's data: {e}")),
         }
         let notes = NoteStore::new(root.clone());
+        let (roles, roles_warning) = RoleLibrary::load(root.path().join("roles.json"));
+        warnings.extend(roles_warning);
         let store = Store::new(root);
         let prefs = store.load_preferences();
         let mut manager = WorkspaceManager::load(store)?;
@@ -178,9 +291,14 @@ impl App {
             notes: Mutex::new(notes),
             note_watchers: Mutex::default(),
             previews: Mutex::default(),
+            roles: Mutex::new(roles),
+            activity_last: Mutex::default(),
             this: this.clone(),
         }))
-        .inspect(|app| app.spawn_preview_loop())
+        .inspect(|app| {
+            app.spawn_preview_loop();
+            app.spawn_activity_loop();
+        })
     }
 
     pub fn preferences(&self) -> Preferences {
@@ -249,7 +367,10 @@ impl App {
 
     fn spawn_spec(&self, ws: &Workspace, node: &Node) -> Option<SpawnSpec> {
         let term = node.terminal()?;
-        let (rows, cols) = grid_for_frame(&node.frame, self.preferences.terminal_font_size);
+        let font = term
+            .font_size
+            .unwrap_or(self.preferences.terminal_font_size);
+        let (rows, cols) = grid_for_frame(&node.frame, font);
         Some(SpawnSpec {
             node_id: node.id,
             cwd: term
@@ -315,11 +436,14 @@ impl App {
                 z: ws.max_z() + 1,
                 created_at: now,
                 modified_at: now,
-                content: NodeContent::Terminal(TerminalContent {
-                    name,
-                    launch_command: clean_optional(req.launch_command),
-                    working_directory: req.working_directory,
-                    save_history: true,
+                content: NodeContent::Terminal({
+                    let mut t = TerminalContent::new(name);
+                    t.launch_command = clean_optional(req.launch_command);
+                    t.working_directory = req.working_directory;
+                    let mut settings = req.settings;
+                    settings.name = None;
+                    apply_settings(&mut t, &settings)?;
+                    t
                 }),
             };
             node.frame = node.frame.clamped(node.min_size());
@@ -386,6 +510,7 @@ impl App {
         }
         self.workspaces().update(ws, |w| {
             w.nodes.retain(|n| n.id != node);
+            w.links.retain(|l| !l.touches(node));
             Ok(())
         })
     }
@@ -424,6 +549,158 @@ impl App {
             .expect("spawn preview thread");
     }
 
+    // ---- Links (feature 002) ----
+
+    /// Links two different nodes of a workspace. Undirected and unique per pair.
+    pub fn create_link(&self, ws: Uuid, x: Uuid, y: Uuid) -> AppResult<Link> {
+        if x == y {
+            return Err(AppError::new(
+                ErrorCode::LinkSelf,
+                "A node cannot be linked to itself.",
+            ));
+        }
+        self.workspaces().update(ws, |w| {
+            for id in [x, y] {
+                if w.node(id).is_none() {
+                    return Err(AppError::node_not_found(id));
+                }
+            }
+            if w.links.iter().any(|l| l.joins(x, y)) {
+                return Err(AppError::new(
+                    ErrorCode::LinkExists,
+                    "These two are already linked.",
+                ));
+            }
+            let link = Link::new(x, y);
+            w.links.push(link.clone());
+            Ok(link)
+        })
+    }
+
+    pub fn delete_link(&self, ws: Uuid, link: Uuid) -> AppResult<()> {
+        self.workspaces().update(ws, |w| {
+            w.links.retain(|l| l.id != link);
+            Ok(())
+        })
+    }
+
+    pub fn links_of(&self, ws: Uuid, node: Uuid) -> Vec<Link> {
+        self.workspaces()
+            .workspace(ws)
+            .map(|w| {
+                w.links
+                    .iter()
+                    .filter(|l| l.touches(node))
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    // ---- Roles and presets (feature 002) ----
+
+    fn role_library(&self) -> MutexGuard<'_, RoleLibrary> {
+        self.roles.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub fn roles_list(&self) -> Vec<Role> {
+        self.role_library().list()
+    }
+
+    pub fn role_save(&self, name: &str, text: &str) -> AppResult<Role> {
+        self.role_library().save(name, text)
+    }
+
+    pub fn role_delete(&self, id: Uuid) -> AppResult<()> {
+        self.role_library().delete(id)
+    }
+
+    pub fn presets_detect(&self) -> Vec<PresetStatus> {
+        let shell = self
+            .options
+            .shell
+            .clone()
+            .unwrap_or_else(crate::terminal::pty::login_shell);
+        presets::detect(&shell, presets::DETECT_TIMEOUT)
+    }
+
+    // ---- Note style and images (feature 002) ----
+
+    pub fn note_set_style(&self, node: Uuid, style: NoteContent) -> AppResult<()> {
+        if !NOTE_TEXT_SIZES.contains(&style.text_size) {
+            return Err(AppError::new(
+                ErrorCode::Internal,
+                "Text size must be between 1 and 5.",
+            ));
+        }
+        let ws = self.workspace_of_node(node)?;
+        self.update_node(ws, node, |w, id| {
+            let n = w
+                .node_mut(id)
+                .and_then(Node::note_style_mut)
+                .ok_or_else(|| AppError::node_not_found(id))?;
+            *n = style.clone();
+            Ok(())
+        })
+    }
+
+    /// Copies a picture next to the workspace's notes and returns the Markdown to insert.
+    pub fn note_insert_image(&self, node: Uuid, source: &std::path::Path) -> AppResult<String> {
+        let ws = self.workspace_of_node(node)?;
+        let root = self.workspaces().store().root().clone();
+        images::insert(&root, ws, source)
+    }
+
+    // ---- Activity (feature 002) ----
+
+    /// Emits `terminal://state` when a monitored terminal switches between busy and idle.
+    fn spawn_activity_loop(&self) {
+        let this = self.this.clone();
+        std::thread::Builder::new()
+            .name("sonata-activity".into())
+            .spawn(move || {
+                loop {
+                    std::thread::sleep(ACTIVITY_INTERVAL);
+                    let Some(app) = this.upgrade() else { break };
+                    app.check_activity();
+                }
+            })
+            .expect("spawn activity thread");
+    }
+
+    fn check_activity(&self) {
+        let monitored: Vec<Uuid> = {
+            let m = self.workspaces();
+            m.ids()
+                .into_iter()
+                .filter(|id| m.is_loaded(*id))
+                .filter_map(|id| m.workspace(id))
+                .flat_map(|w| {
+                    w.nodes
+                        .iter()
+                        .filter(|n| n.terminal().is_some_and(|t| t.monitor_activity))
+                        .map(|n| n.id)
+                })
+                .collect()
+        };
+        let mut changed = Vec::new();
+        {
+            let mut last = self.activity_last.lock().unwrap_or_else(|e| e.into_inner());
+            last.retain(|id, _| monitored.contains(id));
+            for id in monitored {
+                let busy = self.terminals.is_busy(id);
+                if last.insert(id, busy).is_some_and(|prev| prev != busy) {
+                    changed.push(id);
+                }
+            }
+        }
+        for id in changed {
+            if let Some(e) = self.terminals.state_event(id) {
+                self.emit(CoreEvent::TerminalState(e));
+            }
+        }
+    }
+
     fn note_store(&self) -> MutexGuard<'_, NoteStore> {
         self.notes.lock().unwrap_or_else(|e| e.into_inner())
     }
@@ -437,7 +714,7 @@ impl App {
             z: 0,
             created_at: now,
             modified_at: now,
-            content: NodeContent::Note(NoteContent {}),
+            content: NodeContent::Note(NoteContent::default()),
         };
         self.note_store().create(ws_id, node.id)?;
         self.workspaces().update(ws_id, |ws| {
@@ -530,9 +807,45 @@ impl App {
             .ok_or_else(|| AppError::node_not_found(node))
     }
 
-    pub fn restart_terminal(&self, node: Uuid) -> AppResult<()> {
+    /// Restarts a terminal with its current settings. A busy terminal needs `confirmed`.
+    pub fn restart_terminal(&self, node: Uuid, confirmed: bool) -> AppResult<()> {
+        if !confirmed && self.terminals.is_busy(node) {
+            return Err(AppError::new(
+                ErrorCode::TerminalBusy,
+                "A program is still running in this terminal. Restart it anyway?",
+            ));
+        }
         self.terminals.restart(node)?;
         Ok(())
+    }
+
+    pub fn update_terminal_settings(
+        &self,
+        node: Uuid,
+        settings: TerminalSettings,
+    ) -> AppResult<SettingsUpdate> {
+        let ws = self.workspace_of_node(node)?;
+        let (updated, spawn_changed, default_dir) = self.update_node(ws, node, |w, id| {
+            let default_dir = w.working_directory.clone();
+            let n = w.node_mut(id).expect("checked");
+            let t = n
+                .terminal_mut()
+                .ok_or_else(|| AppError::node_not_found(id))?;
+            let changed = apply_settings(t, &settings)?;
+            Ok((n.clone(), changed, default_dir))
+        })?;
+        let t = updated.terminal().expect("terminal");
+        let cwd = t.working_directory.clone().unwrap_or(default_dir);
+        self.terminals
+            .set_spawn_settings(node, t.launch_command.clone(), cwd);
+        let running = matches!(
+            self.terminals.status(node),
+            Some(crate::terminal::manager::RunStatus::Running { .. })
+        );
+        Ok(SettingsUpdate {
+            node: updated,
+            applies_on_restart: spawn_changed && running,
+        })
     }
 
     pub fn shutdown_terminals(&self) {

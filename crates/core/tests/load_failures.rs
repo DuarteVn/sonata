@@ -65,7 +65,7 @@ fn each_failure_reason_is_reported_and_files_are_never_rewritten() {
         reason(2),
         LoadFailureReason::NewerVersion {
             found: 99,
-            supported: 1
+            supported: sonata_core::model::workspace::WORKSPACE_SCHEMA_VERSION
         }
     );
     assert!(matches!(

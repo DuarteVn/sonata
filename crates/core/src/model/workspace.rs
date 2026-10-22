@@ -4,10 +4,12 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::link::Link;
 use super::node::Node;
 
 pub const WORKSPACE_TYPE: &str = "workspace";
-pub const WORKSPACE_SCHEMA_VERSION: u32 = 1;
+/// Version 2 (feature 002) added `links`.
+pub const WORKSPACE_SCHEMA_VERSION: u32 = 2;
 
 pub const ZOOM_MIN: f64 = 0.1;
 pub const ZOOM_MAX: f64 = 4.0;
@@ -29,6 +31,8 @@ pub struct Workspace {
     pub camera: Camera,
     #[serde(default)]
     pub nodes: Vec<Node>,
+    #[serde(default)]
+    pub links: Vec<Link>,
 }
 
 impl Workspace {
