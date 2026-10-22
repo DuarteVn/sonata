@@ -486,7 +486,7 @@ impl App {
             .filter_map(|s| {
                 let ws = m.workspace(s.id)?;
                 let count = self.busy_count(ws);
-                (count > 0).then(|| BusyWorkspace {
+                (count > 0).then_some(BusyWorkspace {
                     workspace_id: s.id,
                     workspace_name: s.name,
                     count,
