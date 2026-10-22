@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-note-insert-image"
+description = "Enables the note_insert_image command without any pre-configured scope."
+commands.allow = ["note_insert_image"]
+
+[[permission]]
+identifier = "deny-note-insert-image"
+description = "Denies the note_insert_image command without any pre-configured scope."
+commands.deny = ["note_insert_image"]

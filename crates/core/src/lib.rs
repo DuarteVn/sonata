@@ -13,6 +13,8 @@ pub mod model;
 pub mod notes;
 pub mod paths;
 pub mod persistence;
+pub mod presets;
+pub mod roles;
 pub mod terminal;
 pub mod workspace;
 

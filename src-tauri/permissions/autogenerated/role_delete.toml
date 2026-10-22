@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-role-delete"
+description = "Enables the role_delete command without any pre-configured scope."
+commands.allow = ["role_delete"]
+
+[[permission]]
+identifier = "deny-role-delete"
+description = "Denies the role_delete command without any pre-configured scope."
+commands.deny = ["role_delete"]

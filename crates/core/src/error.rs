@@ -13,6 +13,11 @@ pub enum ErrorCode {
     NodeNotFound,
     WorkspaceNotLoaded,
     TerminalBusy,
+    LinkSelf,
+    LinkExists,
+    RoleNameTaken,
+    ImageTooLarge,
+    ImageUnsupported,
     Io,
     Internal,
 }

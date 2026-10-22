@@ -7,6 +7,9 @@ use uuid::Uuid;
 pub const TERMINAL_MIN_SIZE: (f64, f64) = (240.0, 120.0);
 pub const NOTE_MIN_SIZE: (f64, f64) = (120.0, 80.0);
 pub const TERMINAL_NAME_MAX_CHARS: usize = 60;
+pub const FONT_SIZE_RANGE: std::ops::RangeInclusive<u32> = 9..=24;
+pub const NOTE_TEXT_SIZES: std::ops::RangeInclusive<u8> = 1..=5;
+pub const ROLE_TEXT_MAX_CHARS: usize = 20_000;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -43,6 +46,20 @@ impl Node {
 
     pub fn is_note(&self) -> bool {
         matches!(self.content, NodeContent::Note(_))
+    }
+
+    pub fn note_style(&self) -> Option<&NoteContent> {
+        match &self.content {
+            NodeContent::Note(n) => Some(n),
+            NodeContent::Terminal(_) => None,
+        }
+    }
+
+    pub fn note_style_mut(&mut self) -> Option<&mut NoteContent> {
+        match &mut self.content {
+            NodeContent::Note(n) => Some(n),
+            NodeContent::Terminal(_) => None,
+        }
     }
 }
 
@@ -86,10 +103,78 @@ pub struct TerminalContent {
     pub working_directory: Option<PathBuf>,
     #[serde(default = "default_true")]
     pub save_history: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accent_color: Option<String>,
+    /// Overrides the app's terminal font size (9–24).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_size: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<RoleRef>,
+    #[serde(default = "default_true")]
+    pub monitor_activity: bool,
+    /// Stored in feature 002; its powers arrive with feature 003.
+    #[serde(default)]
+    pub orchestrator: bool,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct NoteContent {}
+impl TerminalContent {
+    pub fn new(name: String) -> Self {
+        Self {
+            name,
+            launch_command: None,
+            working_directory: None,
+            save_history: true,
+            accent_color: None,
+            font_size: None,
+            role: None,
+            monitor_activity: true,
+            orchestrator: false,
+        }
+    }
+}
+
+/// A terminal's own copy of a role. `name` is set when it came from the role library.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoleRef {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NoteColor {
+    #[default]
+    Yellow,
+    Blue,
+    Green,
+    Pink,
+    Purple,
+    Gray,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteContent {
+    #[serde(default)]
+    pub color: NoteColor,
+    /// 1–5; 3 is the default size.
+    #[serde(default = "default_text_size")]
+    pub text_size: u8,
+}
+
+impl Default for NoteContent {
+    fn default() -> Self {
+        Self {
+            color: NoteColor::Yellow,
+            text_size: default_text_size(),
+        }
+    }
+}
+
+fn default_text_size() -> u8 {
+    3
+}
 
 fn default_true() -> bool {
     true

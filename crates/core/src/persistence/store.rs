@@ -76,7 +76,15 @@ pub struct Store {
 }
 
 fn workspace_migrations() -> Migrations {
-    Migrations::new(WORKSPACE_SCHEMA_VERSION)
+    Migrations::new(WORKSPACE_SCHEMA_VERSION).step(1, workspace_v1_to_v2)
+}
+
+/// Version 2 adds `links` (feature 002).
+fn workspace_v1_to_v2(mut payload: serde_json::Value) -> Result<serde_json::Value, String> {
+    let obj = payload.as_object_mut().ok_or("payload is not an object")?;
+    obj.entry("links")
+        .or_insert_with(|| serde_json::Value::Array(Vec::new()));
+    Ok(payload)
 }
 
 impl Store {

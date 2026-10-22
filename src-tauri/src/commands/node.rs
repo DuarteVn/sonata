@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use sonata_core::app::NewTerminal;
+use sonata_core::app::{NewTerminal, TerminalSettings};
 use sonata_core::model::node::{Frame, Node};
 use sonata_core::model::workspace::Camera;
 use sonata_core::{App, AppError};
@@ -16,6 +16,7 @@ pub fn node_create_terminal(
     name: Option<String>,
     launch_command: Option<String>,
     working_directory: Option<PathBuf>,
+    settings: Option<TerminalSettings>,
 ) -> Result<Node, AppError> {
     app.create_terminal(
         workspace_id,
@@ -24,6 +25,7 @@ pub fn node_create_terminal(
             name,
             launch_command,
             working_directory,
+            settings: settings.unwrap_or_default(),
         },
     )
 }

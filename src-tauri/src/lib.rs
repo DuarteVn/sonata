@@ -22,6 +22,10 @@ pub fn run() {
         .manage(Quitting::default())
         .setup(|tauri_app| {
             let root = DataRoot::from_env()?;
+            // The webview may read only Sonata's own data folder (note images, research R6).
+            tauri_app
+                .asset_protocol_scope()
+                .allow_directory(root.path(), true)?;
             let log_guard = sonata_core::logging::init(&root)?;
             tauri_app.manage(log_guard);
             let sink = Arc::new(TauriEventSink {
@@ -62,6 +66,14 @@ pub fn run() {
             commands::note::node_create_note,
             commands::note::note_read,
             commands::note::note_write,
+            commands::note::note_set_style,
+            commands::note::note_insert_image,
+            commands::link::link_create,
+            commands::link::link_delete,
+            commands::role::roles_list,
+            commands::role::role_save,
+            commands::role::role_delete,
+            commands::role::presets_detect,
             commands::terminal::terminal_attach,
             commands::terminal::terminal_detach,
             commands::terminal::terminal_write,
@@ -72,6 +84,7 @@ pub fn run() {
             commands::terminal::terminal_set_save_history,
             commands::terminal::terminal_clear_history,
             commands::terminal::terminal_preview_subscribe,
+            commands::terminal::terminal_update_settings,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Sonata");

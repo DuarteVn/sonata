@@ -66,8 +66,21 @@ impl WorkspaceManager {
         let discovery = store.discover()?;
         let app_state = store.load_app_state();
         let mut warnings: Vec<String> = app_state.warning.into_iter().collect();
-        let entries = discovery
-            .workspaces
+        let mut workspaces = discovery.workspaces;
+        for ws in &mut workspaces {
+            let before = ws.links.len();
+            let ids: std::collections::HashSet<Uuid> = ws.nodes.iter().map(|n| n.id).collect();
+            ws.links
+                .retain(|l| l.a != l.b && ids.contains(&l.a) && ids.contains(&l.b));
+            let dropped = before - ws.links.len();
+            if dropped > 0 {
+                warnings.push(format!(
+                    "Removed {dropped} link(s) to missing items in workspace \"{}\".",
+                    ws.name
+                ));
+            }
+        }
+        let entries = workspaces
             .into_iter()
             .map(|ws| {
                 (
@@ -160,6 +173,7 @@ impl WorkspaceManager {
             last_opened_at: now,
             camera: Camera::default(),
             nodes: Vec::new(),
+            links: Vec::new(),
         };
         self.store.save_workspace(&ws)?;
         let id = ws.id;
