@@ -84,6 +84,53 @@ export function installMockIpc() {
         if (!ws) throw { code: "WorkspaceNotFound", message: "No workspace." };
         return structuredClone(ws);
       }
+      case "workspace_set_camera": {
+        const ws = find(args.id);
+        if (ws) ws.camera = { x: Number(args.x), y: Number(args.y), zoom: Number(args.zoom) };
+        return ws?.camera ?? null;
+      }
+      case "node_create_terminal": {
+        const ws = find(args.workspaceId);
+        if (!ws) throw { code: "WorkspaceNotFound", message: "No workspace." };
+        const now = new Date().toISOString();
+        const count = ws.nodes.filter((n) => "terminal" in n.content).length;
+        const frame = args.frame as CanvasNode["frame"];
+        const node: CanvasNode = {
+          id: id(),
+          frame: { ...frame, width: Math.max(240, frame.width), height: Math.max(120, frame.height) },
+          z: Math.max(0, ...ws.nodes.map((n) => n.z)) + 1,
+          createdAt: now,
+          modifiedAt: now,
+          content: {
+            terminal: {
+              name: (args.name as string) || `Terminal ${count + 1}`,
+              launchCommand: (args.launchCommand as string) || undefined,
+              saveHistory: true,
+            },
+          },
+        };
+        ws.nodes.push(node);
+        return node;
+      }
+      case "node_update_frame": {
+        const node = find(args.workspaceId)?.nodes.find((n) => n.id === args.nodeId);
+        if (node) node.frame = args.frame as CanvasNode["frame"];
+        return node?.frame ?? null;
+      }
+      case "node_bring_to_front": {
+        const ws = find(args.workspaceId);
+        const node = ws?.nodes.find((n) => n.id === args.nodeId);
+        if (!ws || !node) return null;
+        node.z = Math.max(...ws.nodes.map((n) => n.z)) + 1;
+        return { z: node.z };
+      }
+      case "node_delete": {
+        const ws = find(args.workspaceId);
+        if (ws) ws.nodes = ws.nodes.filter((n) => n.id !== args.nodeId);
+        return null;
+      }
+      case "terminal_rename":
+        return String(args.name).trim();
       default:
         return null;
     }

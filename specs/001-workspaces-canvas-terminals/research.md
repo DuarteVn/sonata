@@ -28,6 +28,10 @@ bytes. On detach, the xterm.js instance is disposed.
 - *`alacritty_terminal` (0.26)*: more complete emulator, but no built-in formatted output for
   replay. Kept as a fallback behind the `ScreenModel` trait (see Complexity Tracking).
 
+**Spike result (2026-10-21)**: passed. Replays of `vim`, `top`, agent-style in-place redraws,
+wrapped lines, colored scrollback, and alternate-screen programs rebuild identical screens and
+scrollback (`crates/core/tests/screen_replay.rs`). `vt100` stays; no switch needed.
+
 **Spike (first task of US1)**: run `claude`, `vim`, and `htop` through `vt100`, detach and
 re-attach, and compare the replayed view with a live view. If the replay is visibly wrong, switch
 the trait implementation to `alacritty_terminal`.
@@ -48,6 +52,9 @@ both problems.
 
 **Reference check (2026-10-21)**: the reference app has a helper that freezes terminal views
 during zoom, which matches this approach.
+
+**Known limitation**: live terminals sit above the scaled canvas layer, so a note dragged over a
+live terminal's text area is drawn under it. Acceptable for 001.
 
 **Alternatives considered**: xterm.js inside scaled nodes (blurry text, wrong selection);
 interactive terminals only at exactly 100% zoom (too restrictive).

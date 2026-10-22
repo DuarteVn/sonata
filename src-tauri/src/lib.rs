@@ -30,6 +30,18 @@ pub fn run() {
             commands::app::app_bootstrap,
             commands::workspace::workspace_create,
             commands::workspace::workspace_open,
+            commands::node::node_create_terminal,
+            commands::node::node_update_frame,
+            commands::node::node_bring_to_front,
+            commands::node::node_delete,
+            commands::node::workspace_set_camera,
+            commands::terminal::terminal_attach,
+            commands::terminal::terminal_detach,
+            commands::terminal::terminal_write,
+            commands::terminal::terminal_resize,
+            commands::terminal::terminal_rename,
+            commands::terminal::terminal_set_launch_command,
+            commands::terminal::terminal_restart,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Sonata");
@@ -39,6 +51,7 @@ pub fn run() {
             && let Some(core) = handle.try_state::<Arc<App>>()
         {
             core.save_dirty();
+            core.shutdown_terminals();
         }
     });
 }

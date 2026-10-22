@@ -54,3 +54,34 @@ input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 
 .form .row input { flex: 1; }
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
 .error { color: var(--danger); margin: 0; }
+
+button.danger { background: var(--danger); border-color: var(--danger); color: white; }
+.dialog-body { margin: 0 0 8px; color: var(--text); line-height: 1.4; }
+
+/* Canvas */
+.canvas-wrap { position: absolute; inset: 0; }
+.canvas {
+  position: absolute; inset: 0; overflow: hidden; touch-action: none;
+  background-color: var(--bg);
+  background-image: radial-gradient(circle, var(--canvas-dot) 1px, transparent 1px);
+}
+.canvas-layer { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.canvas-toolbar { position: absolute; top: 10px; left: 10px; display: flex; gap: 6px; z-index: 10; }
+.canvas-toolbar button { display: inline-flex; align-items: center; gap: 4px; background: var(--bg-elev); }
+
+.node { position: absolute; border-radius: 8px; background: var(--bg-elev); border: 1px solid var(--border); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); }
+.node.focused { border-color: var(--accent); }
+.node-title { display: flex; align-items: center; gap: 8px; padding: 0 6px 0 10px; cursor: grab; user-select: none; border-bottom: 1px solid var(--border); }
+.node-title:active { cursor: grabbing; }
+.node-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node-name-input { padding: 1px 4px; font-weight: 600; width: 50%; }
+.node-sub { color: var(--text-dim); font-family: "SF Mono", Menlo, monospace; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node-exit { color: var(--warning); display: inline-flex; align-items: center; gap: 2px; font-size: 11px; }
+.node-close { margin-left: auto; }
+.terminal-node .node-body { position: absolute; left: 0; right: 0; bottom: 0; top: 28px; background: #101115; border-radius: 0 0 8px 8px; }
+.resize-handle { position: absolute; right: -6px; bottom: -6px; width: 14px; height: 14px; cursor: nwse-resize; border-radius: 3px; }
+.resize-handle:hover { background: var(--accent); }
+
+.live-layer { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
+.live-terminal { position: absolute; overflow: hidden; }
+.live-terminal .xterm { height: 100%; }

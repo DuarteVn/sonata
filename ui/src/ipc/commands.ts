@@ -1,5 +1,13 @@
-import { invoke } from "@tauri-apps/api/core";
-import type { Bootstrap, Workspace, WorkspaceSummary } from "./types";
+import { Channel, invoke } from "@tauri-apps/api/core";
+import type {
+  Bootstrap,
+  CanvasNode,
+  Camera,
+  Frame,
+  TerminalStateEvent,
+  Workspace,
+  WorkspaceSummary,
+} from "./types";
 
 // Typed wrappers for the Tauri commands in contracts/ipc.md. Argument names are camelCase;
 // Tauri maps them to the Rust snake_case parameters.
@@ -8,6 +16,30 @@ export const ipc = {
   workspaceCreate: (name: string, workingDirectory: string) =>
     invoke<WorkspaceSummary>("workspace_create", { name, workingDirectory }),
   workspaceOpen: (id: string) => invoke<Workspace>("workspace_open", { id }),
+  workspaceSetCamera: (id: string, camera: Camera) => invoke<Camera>("workspace_set_camera", { id, ...camera }),
+
+  nodeCreateTerminal: (
+    workspaceId: string,
+    frame: Frame,
+    opts: { name?: string; launchCommand?: string; workingDirectory?: string } = {},
+  ) => invoke<CanvasNode>("node_create_terminal", { workspaceId, frame, ...opts }),
+  nodeUpdateFrame: (workspaceId: string, nodeId: string, frame: Frame) =>
+    invoke<Frame>("node_update_frame", { workspaceId, nodeId, frame }),
+  nodeBringToFront: (workspaceId: string, nodeId: string) =>
+    invoke<{ z: number }>("node_bring_to_front", { workspaceId, nodeId }),
+  nodeDelete: (workspaceId: string, nodeId: string, confirmed: boolean) =>
+    invoke<void>("node_delete", { workspaceId, nodeId, confirmed }),
+
+  terminalAttach: (nodeId: string, channel: Channel<ArrayBuffer>, cols: number, rows: number) =>
+    invoke<TerminalStateEvent | null>("terminal_attach", { nodeId, channel, cols, rows }),
+  terminalDetach: (nodeId: string) => invoke<void>("terminal_detach", { nodeId }),
+  terminalWrite: (nodeId: string, data: string) => invoke<void>("terminal_write", { nodeId, data }),
+  terminalResize: (nodeId: string, cols: number, rows: number) =>
+    invoke<void>("terminal_resize", { nodeId, cols, rows }),
+  terminalRename: (nodeId: string, name: string) => invoke<string>("terminal_rename", { nodeId, name }),
+  terminalSetLaunchCommand: (nodeId: string, launchCommand: string | null) =>
+    invoke<void>("terminal_set_launch_command", { nodeId, launchCommand }),
+  terminalRestart: (nodeId: string) => invoke<void>("terminal_restart", { nodeId }),
 };
 
 export type Ipc = typeof ipc;
