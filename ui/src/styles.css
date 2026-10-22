@@ -85,3 +85,17 @@ button.danger { background: var(--danger); border-color: var(--danger); color: w
 .live-layer { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
 .live-terminal { position: absolute; overflow: hidden; }
 .live-terminal .xterm { height: 100%; }
+
+.ws-item { position: relative; }
+.ws-item .ws-actions { display: flex; gap: 2px; padding-right: 4px; opacity: 0; }
+.ws-item:hover .ws-actions, .ws-item:focus-within .ws-actions { opacity: 1; }
+.ws-item .ws-pinned-mark { position: absolute; right: 6px; }
+.ws-item:hover .ws-pinned-mark { display: none; }
+.ws-item.dragging { opacity: 0.5; outline: 1px dashed var(--accent); }
+.ws-pinned-mark { color: var(--text-dim); margin-right: 8px; flex: none; }
+.ws-name-input { flex: 1; min-width: 0; padding: 2px 4px; }
+.badge { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; font-size: 10px; font-weight: 600; }
+.badge.busy { background: var(--accent); color: white; }
+.badge.warning { color: var(--warning); }
+.badge + .badge { margin-left: 4px; }
+.quit-list { margin: 0 0 8px; padding-left: 18px; color: var(--text); }

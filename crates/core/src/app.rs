@@ -17,6 +17,15 @@ use crate::persistence::store::{LoadFailure, Store};
 use crate::terminal::manager::{SpawnSpec, TerminalManager};
 use crate::workspace::manager::{CreateWorkspace, SaveReport, WorkspaceManager, WorkspaceSummary};
 
+/// A workspace with programs running, listed in the quit dialog (FR-018a).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BusyWorkspace {
+    pub workspace_id: Uuid,
+    pub workspace_name: String,
+    pub count: usize,
+}
+
 /// Startup options. Tests override the shell; the app uses the user's login shell.
 #[derive(Debug, Clone, Default)]
 pub struct AppOptions {
@@ -148,8 +157,9 @@ impl App {
             .app_state()
             .active_workspace_id
             .filter(|id| m.workspace(*id).is_some());
+        let workspaces = self.decorate(m.summaries(), &m);
         Bootstrap {
-            workspaces: m.summaries(),
+            workspaces,
             load_failures: m.failures().to_vec(),
             active_workspace_id: active,
             crash_guard_tripped: false,
@@ -393,9 +403,109 @@ impl App {
         report
     }
 
+    /// Sidebar summaries with live data (busy terminal counts) filled in.
+    pub fn summaries(&self) -> Vec<WorkspaceSummary> {
+        let m = self.workspaces();
+        self.decorate(m.summaries(), &m)
+    }
+
+    fn busy_count(&self, ws: &Workspace) -> usize {
+        ws.nodes
+            .iter()
+            .filter(|n| n.terminal().is_some() && self.terminals.is_busy(n.id))
+            .count()
+    }
+
+    fn decorate(
+        &self,
+        mut list: Vec<WorkspaceSummary>,
+        m: &WorkspaceManager,
+    ) -> Vec<WorkspaceSummary> {
+        for s in &mut list {
+            if let Some(ws) = m.workspace(s.id) {
+                s.busy_terminal_count = self.busy_count(ws);
+            }
+        }
+        list
+    }
+
     pub fn notify_workspaces_changed(&self) {
-        let summaries = self.workspaces().summaries();
-        self.emit(CoreEvent::WorkspacesChanged(summaries));
+        self.emit(CoreEvent::WorkspacesChanged(self.summaries()));
+    }
+
+    /// Emits `workspaces://changed` only when the summaries differ from the last call.
+    pub fn notify_if_summaries_changed(&self, last: &mut Vec<WorkspaceSummary>) {
+        let now = self.summaries();
+        if *last != now {
+            *last = now.clone();
+            self.emit(CoreEvent::WorkspacesChanged(now));
+        }
+    }
+
+    pub fn rename_workspace(&self, id: Uuid, name: &str) -> AppResult<WorkspaceSummary> {
+        let summary = self.workspaces().rename(id, name)?;
+        self.notify_workspaces_changed();
+        Ok(summary)
+    }
+
+    pub fn set_pinned(&self, id: Uuid, pinned: bool) -> AppResult<()> {
+        self.workspaces().set_pinned(id, pinned)?;
+        self.notify_workspaces_changed();
+        Ok(())
+    }
+
+    pub fn reorder_workspaces(&self, ordered: Vec<Uuid>) -> AppResult<()> {
+        self.workspaces().reorder(ordered);
+        self.notify_workspaces_changed();
+        Ok(())
+    }
+
+    /// Stops the workspace's terminals and deletes its Sonata data (FR-006). The UI asks for
+    /// confirmation first.
+    pub fn delete_workspace(&self, id: Uuid) -> AppResult<()> {
+        let node_ids: Vec<Uuid> = {
+            let m = self.workspaces();
+            let ws = m
+                .workspace(id)
+                .ok_or_else(|| AppError::workspace_not_found(id))?;
+            ws.nodes.iter().map(|n| n.id).collect()
+        };
+        for node in node_ids {
+            self.terminals.stop(node);
+        }
+        self.workspaces().delete(id)?;
+        self.notify_workspaces_changed();
+        Ok(())
+    }
+
+    /// Workspaces with terminals running something other than an idle shell (FR-018a).
+    pub fn quit_check(&self) -> Vec<BusyWorkspace> {
+        let m = self.workspaces();
+        m.summaries()
+            .into_iter()
+            .filter_map(|s| {
+                let ws = m.workspace(s.id)?;
+                let count = self.busy_count(ws);
+                (count > 0).then(|| BusyWorkspace {
+                    workspace_id: s.id,
+                    workspace_name: s.name,
+                    count,
+                })
+            })
+            .collect()
+    }
+
+    /// Saves everything, marks a clean shutdown, and stops all terminals.
+    pub fn quit(&self) {
+        self.save_dirty();
+        {
+            let mut m = self.workspaces();
+            m.app_state_mut().clean_shutdown = true;
+            if let Err(err) = m.save_app_state() {
+                tracing::error!(error = %err, "could not save app state on quit");
+            }
+        }
+        self.terminals.stop_all();
     }
 }
 

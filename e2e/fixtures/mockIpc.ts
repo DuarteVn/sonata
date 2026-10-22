@@ -1,6 +1,7 @@
 // In-memory fake of the Sonata core for Playwright runs against the Vite dev server.
 // Loaded by ui/src/main.tsx only in dev builds when the URL contains `?mock`.
 // Every call is recorded in `window.__sonataMock.calls` for assertions.
+import { emit } from "@tauri-apps/api/event";
 import { mockIPC } from "@tauri-apps/api/mocks";
 import type { Bootstrap, CanvasNode, Workspace, WorkspaceSummary } from "../../ui/src/ipc/types";
 
@@ -8,6 +9,9 @@ type Call = { cmd: string; args: Record<string, unknown> };
 
 export type MockState = {
   calls: Call[];
+  /** What `app_quit_check` returns. */
+  busy: unknown[];
+  emit: (name: string, payload: unknown) => Promise<void>;
   workspaces: Workspace[];
   failNext: Record<string, { code: string; message: string }>;
 };
@@ -29,13 +33,14 @@ function summary(ws: Workspace): WorkspaceSummary {
 }
 
 export function installMockIpc() {
-  const state: MockState = { calls: [], workspaces: [], failNext: {} };
+  const state: MockState = { calls: [], busy: [], emit: (n, p) => emit(n, p), workspaces: [], failNext: {} };
   (window as unknown as { __sonataMock: MockState }).__sonataMock = state;
   let seq = 0;
   const id = () => `id-${++seq}`;
   const find = (wsId: unknown) => state.workspaces.find((w) => w.id === wsId);
 
-  mockIPC((cmd, payload) => {
+  mockIPC(
+    (cmd, payload) => {
     const args = (payload ?? {}) as Record<string, unknown>;
     state.calls.push({ cmd, args });
     const failure = state.failNext[cmd];
@@ -84,6 +89,29 @@ export function installMockIpc() {
         if (!ws) throw { code: "WorkspaceNotFound", message: "No workspace." };
         return structuredClone(ws);
       }
+      case "workspace_rename": {
+        const ws = find(args.id);
+        if (!ws) throw { code: "WorkspaceNotFound", message: "No workspace." };
+        ws.name = String(args.name).trim();
+        return summary(ws);
+      }
+      case "workspace_set_pinned": {
+        const ws = find(args.id);
+        if (ws) ws.isPinned = Boolean(args.pinned);
+        return null;
+      }
+      case "workspace_reorder": {
+        const order = args.orderedIds as string[];
+        state.workspaces.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+        return null;
+      }
+      case "workspace_delete":
+        state.workspaces = state.workspaces.filter((w) => w.id !== args.id);
+        return null;
+      case "app_quit_check":
+        return state.busy;
+      case "app_quit":
+        return args.confirmed || state.busy.length === 0 ? [] : state.busy;
       case "workspace_set_camera": {
         const ws = find(args.id);
         if (ws) ws.camera = { x: Number(args.x), y: Number(args.y), zoom: Number(args.zoom) };
@@ -134,7 +162,9 @@ export function installMockIpc() {
       default:
         return null;
     }
-  });
+    },
+    { shouldMockEvents: true },
+  );
   return state;
 }
 

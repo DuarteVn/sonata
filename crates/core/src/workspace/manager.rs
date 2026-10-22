@@ -222,6 +222,52 @@ impl WorkspaceManager {
         Ok(&self.entries[&id].ws)
     }
 
+    pub fn rename(&mut self, id: Uuid, raw: &str) -> AppResult<WorkspaceSummary> {
+        let name = self.validate_name(raw, Some(id))?;
+        self.update(id, |ws| {
+            ws.name = name;
+            Ok(())
+        })?;
+        Ok(self.summary(id).expect("exists"))
+    }
+
+    pub fn set_pinned(&mut self, id: Uuid, pinned: bool) -> AppResult<()> {
+        self.update(id, |ws| {
+            ws.is_pinned = pinned;
+            Ok(())
+        })
+    }
+
+    /// Stores the sidebar order. Unknown ids are dropped; workspaces left out keep their
+    /// relative order after the given ones.
+    pub fn reorder(&mut self, ordered: Vec<Uuid>) {
+        let mut order: Vec<Uuid> = ordered
+            .into_iter()
+            .filter(|id| self.entries.contains_key(id))
+            .collect();
+        let rest: Vec<Uuid> = self
+            .summaries()
+            .into_iter()
+            .map(|s| s.id)
+            .filter(|id| !order.contains(id))
+            .collect();
+        order.extend(rest);
+        self.app_state_mut().workspace_order = order;
+    }
+
+    /// Removes the workspace's Sonata folder. Never touches its working directory.
+    pub fn delete(&mut self, id: Uuid) -> AppResult<()> {
+        if !self.entries.contains_key(&id) {
+            return Err(AppError::workspace_not_found(id));
+        }
+        self.store.delete_workspace_dir(id)?;
+        self.entries.remove(&id);
+        self.app_state_mut().forget(id);
+        self.save_app_state()?;
+        tracing::info!(%id, "workspace deleted");
+        Ok(())
+    }
+
     pub fn set_camera(&mut self, id: Uuid, x: f64, y: f64, zoom: f64) -> AppResult<Camera> {
         self.update(id, |ws| {
             ws.camera = Camera { x, y, zoom }.clamped();

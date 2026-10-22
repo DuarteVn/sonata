@@ -1,6 +1,7 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
   Bootstrap,
+  BusyWorkspace,
   CanvasNode,
   Camera,
   Frame,
@@ -16,6 +17,12 @@ export const ipc = {
   workspaceCreate: (name: string, workingDirectory: string) =>
     invoke<WorkspaceSummary>("workspace_create", { name, workingDirectory }),
   workspaceOpen: (id: string) => invoke<Workspace>("workspace_open", { id }),
+  workspaceRename: (id: string, name: string) => invoke<WorkspaceSummary>("workspace_rename", { id, name }),
+  workspaceSetPinned: (id: string, pinned: boolean) => invoke<void>("workspace_set_pinned", { id, pinned }),
+  workspaceReorder: (orderedIds: string[]) => invoke<void>("workspace_reorder", { orderedIds }),
+  workspaceDelete: (id: string) => invoke<void>("workspace_delete", { id, confirmed: true }),
+  appQuitCheck: () => invoke<BusyWorkspace[]>("app_quit_check"),
+  appQuit: (confirmed: boolean) => invoke<BusyWorkspace[]>("app_quit", { confirmed }),
   workspaceSetCamera: (id: string, camera: Camera) => invoke<Camera>("workspace_set_camera", { id, ...camera }),
 
   nodeCreateTerminal: (

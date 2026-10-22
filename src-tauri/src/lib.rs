@@ -4,16 +4,22 @@ mod commands;
 mod events;
 
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 use sonata_core::App;
 use sonata_core::paths::DataRoot;
-use tauri::{Manager, RunEvent};
+use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 
+use crate::commands::app::Quitting;
 use crate::events::TauriEventSink;
+
+const QUIT_REQUESTED: &str = "app://quit-requested";
 
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .manage(Quitting::default())
         .setup(|tauri_app| {
             let root = DataRoot::from_env()?;
             let log_guard = sonata_core::logging::init(&root)?;
@@ -23,13 +29,29 @@ pub fn run() {
             });
             let core = App::start(root, sink)?;
             spawn_autosave(core.clone());
+            spawn_summary_monitor(core.clone());
             tauri_app.manage(core);
             Ok(())
         })
+        .on_window_event(|window, event| {
+            // Closing the only window quits the app; ask the UI first (FR-018a).
+            if let WindowEvent::CloseRequested { api, .. } = event
+                && !window.state::<Quitting>().0.load(Ordering::SeqCst)
+            {
+                api.prevent_close();
+                let _ = window.emit(QUIT_REQUESTED, ());
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             commands::app::app_bootstrap,
+            commands::app::app_quit_check,
+            commands::app::app_quit,
             commands::workspace::workspace_create,
             commands::workspace::workspace_open,
+            commands::workspace::workspace_rename,
+            commands::workspace::workspace_set_pinned,
+            commands::workspace::workspace_reorder,
+            commands::workspace::workspace_delete,
             commands::node::node_create_terminal,
             commands::node::node_update_frame,
             commands::node::node_bring_to_front,
@@ -46,13 +68,22 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building Sonata");
 
-    app.run(|handle, event| {
-        if let RunEvent::Exit = event
-            && let Some(core) = handle.try_state::<Arc<App>>()
-        {
-            core.save_dirty();
-            core.shutdown_terminals();
+    app.run(|handle, event| match event {
+        // Cmd+Q: let the UI check for running programs unless the user already confirmed.
+        RunEvent::ExitRequested { api, code, .. } => {
+            if code.is_none() && !handle.state::<Quitting>().0.load(Ordering::SeqCst) {
+                api.prevent_exit();
+                let _ = handle.emit(QUIT_REQUESTED, ());
+            }
         }
+        RunEvent::Exit => {
+            if let Some(core) = handle.try_state::<Arc<App>>()
+                && !handle.state::<Quitting>().0.load(Ordering::SeqCst)
+            {
+                core.quit();
+            }
+        }
+        _ => {}
     });
 }
 
@@ -67,4 +98,18 @@ fn spawn_autosave(core: Arc<App>) {
             let _ = tauri::async_runtime::spawn_blocking(move || core.save_dirty()).await;
         }
     });
+}
+
+/// Keeps sidebar badges (busy terminal counts, missing folders) current.
+fn spawn_summary_monitor(core: Arc<App>) {
+    std::thread::Builder::new()
+        .name("sonata-summary-monitor".into())
+        .spawn(move || {
+            let mut last = core.summaries();
+            loop {
+                std::thread::sleep(Duration::from_secs(1));
+                core.notify_if_summaries_changed(&mut last);
+            }
+        })
+        .expect("spawn summary monitor");
 }

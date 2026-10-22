@@ -87,7 +87,7 @@ describe("sidebar and create dialog", () => {
     expect(screen.getByLabelText("Folder")).toHaveValue("/picked/folder");
     await userEvent.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(ipc.workspaceCreate).toHaveBeenCalledWith("Demo", "/picked/folder"));
-    const item = await screen.findByRole("button", { name: /Demo/ });
+    const item = await screen.findByRole("button", { name: "Demo" });
     expect(item.querySelector("[data-icon='rocket']")).not.toBeNull();
     expect(item.querySelector("[data-color='#3B82F6']")).not.toBeNull();
   });

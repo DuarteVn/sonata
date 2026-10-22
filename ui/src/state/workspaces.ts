@@ -14,12 +14,21 @@ type WorkspacesState = {
   init: () => Promise<void>;
   create: (name: string, workingDirectory: string) => Promise<WorkspaceSummary>;
   open: (id: string) => Promise<void>;
+  rename: (id: string, name: string) => Promise<void>;
+  setPinned: (id: string, pinned: boolean) => Promise<void>;
+  reorder: (orderedIds: string[]) => Promise<void>;
+  remove: (id: string) => Promise<void>;
   setSummaries: (summaries: WorkspaceSummary[]) => void;
   addWarning: (message: string) => void;
   dismissWarning: (index: number) => void;
 };
 
 let initStarted = false;
+
+/** Pinned workspaces first, otherwise keeping the current order. */
+function sortPinned(list: WorkspaceSummary[]) {
+  return [...list.filter((w) => w.isPinned), ...list.filter((w) => !w.isPinned)];
+}
 
 /** Test helper: allows `init` to run again. */
 export function resetInitForTests() {
@@ -71,6 +80,31 @@ export const useWorkspaces = create<WorkspacesState>((set, get) => ({
   open: async (id) => {
     const ws = await ipc.workspaceOpen(id);
     set({ activeId: id, active: ws });
+  },
+
+  rename: async (id, name) => {
+    const summary = await ipc.workspaceRename(id, name);
+    set((s) => ({ workspaces: s.workspaces.map((w) => (w.id === id ? summary : w)) }));
+  },
+
+  setPinned: async (id, pinned) => {
+    await ipc.workspaceSetPinned(id, pinned);
+    set((s) => ({ workspaces: sortPinned(s.workspaces.map((w) => (w.id === id ? { ...w, isPinned: pinned } : w))) }));
+  },
+
+  reorder: async (orderedIds) => {
+    set((s) => ({
+      workspaces: [...s.workspaces].sort((a, b) => orderedIds.indexOf(a.id) - orderedIds.indexOf(b.id)),
+    }));
+    await ipc.workspaceReorder(orderedIds);
+  },
+
+  remove: async (id) => {
+    await ipc.workspaceDelete(id);
+    set((s) => ({
+      workspaces: s.workspaces.filter((w) => w.id !== id),
+      ...(s.activeId === id ? { activeId: null, active: null } : {}),
+    }));
   },
 
   setSummaries: (workspaces) => set({ workspaces }),

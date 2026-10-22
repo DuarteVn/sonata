@@ -124,18 +124,18 @@ and back: the command kept running and its output is complete.
 
 ### Tests for User Story 2 (write first, must fail)
 
-- [ ] T049 [P] [US2] Workspace management tests in `crates/core/tests/workspace_manage.rs`: rename follows create rules; pin puts the workspace first; reorder persists in `app-state.json`; 8 workspaces get 8 different colors and the 9th reuses one; delete stops its terminals, removes only `$SONATA_HOME/workspaces/<uuid>`, and leaves the working directory untouched; delete refuses any path failing the deletion guard; `workingDirectoryMissing` is true after the directory is removed
-- [ ] T050 [P] [US2] Multi-workspace runtime tests in `crates/core/tests/multi_workspace.rs`: a terminal in A keeps producing output into its screen model while B is opened and active; `app_quit_check` returns `{workspaceId, workspaceName, count}` for each workspace with busy terminals and an empty list when only idle shells run
-- [ ] T051 [P] [US2] Playwright test in `e2e/workspaces.spec.ts` (mocked IPC): create five workspaces, see three distinct validation errors, pin and drag-reorder, switch, delete with cancel then confirm (dialog names the workspace), quit dialog lists busy counts per workspace
+- [X] T049 [P] [US2] Workspace management tests in `crates/core/tests/workspace_manage.rs`: rename follows create rules; pin puts the workspace first; reorder persists in `app-state.json`; 8 workspaces get 8 different colors and the 9th reuses one; delete stops its terminals, removes only `$SONATA_HOME/workspaces/<uuid>`, and leaves the working directory untouched; delete refuses any path failing the deletion guard; `workingDirectoryMissing` is true after the directory is removed
+- [X] T050 [P] [US2] Multi-workspace runtime tests in `crates/core/tests/multi_workspace.rs`: a terminal in A keeps producing output into its screen model while B is opened and active; `app_quit_check` returns `{workspaceId, workspaceName, count}` for each workspace with busy terminals and an empty list when only idle shells run
+- [X] T051 [P] [US2] Playwright test in `e2e/workspaces.spec.ts` (mocked IPC): create five workspaces, see three distinct validation errors, pin and drag-reorder, switch, delete with cancel then confirm (dialog names the workspace), quit dialog lists busy counts per workspace
 
 ### Implementation for User Story 2
 
-- [ ] T052 [US2] Add `rename`, `set_pinned`, `reorder`, `delete` (stop terminals, rename folder to `.trash-<uuid>` inside `workspaces/`, then remove it, after the deletion guard) and the `workingDirectoryMissing` check to `crates/core/src/workspace/manager.rs`
-- [ ] T053 [US2] Implement quit check and quit flow (`quit_check`, `quit(confirmed)`: save all, set `cleanShutdown = true`, stop terminals) in `crates/core/src/app.rs`
-- [ ] T054 [US2] Implement commands `workspace_rename`, `workspace_set_pinned`, `workspace_reorder`, `workspace_delete`, `app_quit_check`, `app_quit` in `src-tauri/src/commands/workspace.rs` and `src-tauri/src/commands/app.rs`; intercept window close and `RunEvent::ExitRequested` (prevent exit, ask the UI) in `src-tauri/src/main.rs`; register in capabilities
-- [ ] T055 [US2] Sidebar features in `ui/src/sidebar/Sidebar.tsx` and `ui/src/sidebar/WorkspaceItem.tsx`: inline rename, pin toggle, drag reorder, delete via `ConfirmDialog` naming the workspace, missing-directory warning badge, busy-terminal count badge
-- [ ] T056 [US2] Implement `ui/src/dialogs/QuitDialog.tsx` listing busy terminals per workspace and its listener for the quit request event in `ui/src/App.tsx`
-- [ ] T057 [US2] On workspace switch, detach all live terminal sessions of the previous canvas and load the new canvas without stopping processes, in `ui/src/state/canvas.ts` and `ui/src/terminal/LiveTerminalLayer.tsx`
+- [X] T052 [US2] Add `rename`, `set_pinned`, `reorder`, `delete` (stop terminals, rename folder to `.trash-<uuid>` inside `workspaces/`, then remove it, after the deletion guard) and the `workingDirectoryMissing` check to `crates/core/src/workspace/manager.rs`
+- [X] T053 [US2] Implement quit check and quit flow (`quit_check`, `quit(confirmed)`: save all, set `cleanShutdown = true`, stop terminals) in `crates/core/src/app.rs`
+- [X] T054 [US2] Implement commands `workspace_rename`, `workspace_set_pinned`, `workspace_reorder`, `workspace_delete`, `app_quit_check`, `app_quit` in `src-tauri/src/commands/workspace.rs` and `src-tauri/src/commands/app.rs`; intercept window close and `RunEvent::ExitRequested` (prevent exit, ask the UI) in `src-tauri/src/main.rs`; register in capabilities
+- [X] T055 [US2] Sidebar features in `ui/src/sidebar/Sidebar.tsx` and `ui/src/sidebar/WorkspaceItem.tsx`: inline rename, pin toggle, drag reorder, delete via `ConfirmDialog` naming the workspace, missing-directory warning badge, busy-terminal count badge
+- [X] T056 [US2] Implement `ui/src/dialogs/QuitDialog.tsx` listing busy terminals per workspace and its listener for the quit request event in `ui/src/App.tsx`
+- [X] T057 [US2] On workspace switch, detach all live terminal sessions of the previous canvas and load the new canvas without stopping processes, in `ui/src/state/canvas.ts` and `ui/src/terminal/LiveTerminalLayer.tsx`
 
 **Checkpoint**: US1 and US2 both pass their independent tests.
 

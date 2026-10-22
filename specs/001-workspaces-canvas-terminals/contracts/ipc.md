@@ -86,7 +86,7 @@ type WorkspaceView = WorkspaceSummary & { camera: Camera; nodes: NodeView[] };
 | Command | Input | Output |
 |---|---|---|
 | `app_quit_check` | — | `{busy: {workspaceId, workspaceName, count}[]}` (FR-018a) |
-| `app_quit` | `{confirmed}` | — (saves all, writes `cleanShutdown`, exits) |
+| `app_quit` | `{confirmed}` | `BusyWorkspace[]`: without `confirmed`, returns the busy list and does not quit; otherwise saves all, writes `cleanShutdown`, stops terminals, exits |
 
 ## Events (core → frontend)
 
@@ -98,6 +98,7 @@ type WorkspaceView = WorkspaceSummary & { camera: Camera; nodes: NodeView[] };
 | `note://changed` | `{nodeId, text, sync}` (external edit reloaded) |
 | `note://conflict` | `{nodeId, conflictPath}` |
 | `persistence://warning` | `{message}` (save failures, permission fixes) |
+| `app://quit-requested` | `null` (Cmd+Q or window close; the UI runs the quit check) |
 
 ## Channels
 
