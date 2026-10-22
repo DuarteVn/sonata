@@ -2,6 +2,7 @@
 
 mod commands;
 mod events;
+mod menu;
 
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -20,6 +21,8 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Quitting::default())
+        .menu(menu::build)
+        .on_menu_event(|app, event| menu::on_event(app, event.id().as_ref()))
         .setup(|tauri_app| {
             let root = DataRoot::from_env()?;
             // The webview may read only Sonata's own data folder (note images, research R6).

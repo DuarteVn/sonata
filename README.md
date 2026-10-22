@@ -15,6 +15,13 @@ between them live side by side, organized into as many workspaces as you need.
   command such as `claude` or `codex`) and Markdown sticky notes.
 - Terminals keep running when you switch workspaces or scroll them off screen. Off-screen or
   zoomed-out terminals show a light text preview.
+- A tool bar (Select `V`, Terminal `T`, Note `N`), a New Terminal dialog with quick starts for
+  Claude Code, Codex, OpenCode, Gemini CLI, and Shell, plus accent color, font size, roles, and
+  an Orchestrator flag.
+- Links between terminals and notes: drag from the dot on a selected item onto another one, or use
+  the link button in its floating toolbar. Select a link and press Delete to remove it.
+- Floating toolbars for a selected note (color, size, Markdown formatting, pictures) or terminal
+  (edit, link, restart, delete). `Cmd+W` closes the selected item; `Cmd+Q` quits.
 - Everything is saved as readable files in `~/.sonata/`, with crash-safe writes, autosave, and
   terminal history restored after a restart.
 
@@ -23,10 +30,10 @@ between them live side by side, organized into as many workspaces as you need.
 ```sh
 git clone https://github.com/DuarteVn/sonata.git
 cd sonata
-npm install
-npm run tauri build -- --bundles app
-cp -R target/release/bundle/macos/Sonata.app /Applications/
+scripts/install.sh        # builds Sonata.app and copies it to /Applications
 ```
+
+Run the same script again to update.
 
 An app you build yourself opens without any Gatekeeper prompt. A packaged download comes later.
 
@@ -40,11 +47,12 @@ turn it off per terminal (terminal menu → Save history) for sessions that prin
 
 ```text
 ~/.sonata/
-├── app-state.json, preferences.json
+├── app-state.json, preferences.json, roles.json
 ├── logs/sonata.log.<date>              kept 7 days, never contains terminal output
 └── workspaces/<id>/
     ├── workspace.json                  layout: nodes, camera, settings
     ├── notes/<node-id>.md              your notes, editable with any editor
+    ├── files/                          pictures inserted into notes
     └── terminals/<node-id>.history     saved terminal output
 ```
 

@@ -21,11 +21,17 @@ async function createWorkspace(page: Page) {
 test("add, move, resize, rename, front, pan and zoom", async ({ page }) => {
   await createWorkspace(page);
 
-  await page.getByRole("button", { name: "Add terminal" }).click();
-  await page.getByLabel("Launch command").fill("echo hi");
-  await page.getByRole("button", { name: "Add", exact: true }).click();
-  await page.getByRole("button", { name: "Add terminal" }).click();
-  await page.getByRole("button", { name: "Add", exact: true }).click();
+  const canvas0 = page.getByRole("application", { name: "Canvas" });
+  const c0 = (await canvas0.boundingBox())!;
+  await page.keyboard.press("t");
+  await page.mouse.click(c0.x + 60, c0.y + 60);
+  await page.getByLabel("Command", { exact: true }).fill("echo hi");
+  await page.getByRole("button", { name: "Create", exact: true }).click();
+  // The new terminal has keyboard focus; click empty canvas so shortcuts reach the canvas.
+  await page.mouse.click(c0.x + c0.width - 20, c0.y + c0.height - 120);
+  await page.keyboard.press("t");
+  await page.mouse.click(c0.x + c0.width - 260, c0.y + 40);
+  await page.getByRole("button", { name: "Create", exact: true }).click();
   expect(await calls(page, "node_create_terminal")).toHaveLength(2);
 
   const first = page.locator("[data-node-id]").first();

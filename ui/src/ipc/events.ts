@@ -15,6 +15,7 @@ export type EventMap = {
   "note://conflict": NoteConflictEvent;
   "persistence://warning": { message: string };
   "app://quit-requested": null;
+  "app://close-selected": null;
 };
 
 export function onEvent<K extends keyof EventMap>(

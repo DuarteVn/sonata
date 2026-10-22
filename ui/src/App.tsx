@@ -27,6 +27,13 @@ export function App() {
       onEvent("terminal://preview", (e) => useCanvas.getState().setPreview(e.nodeId, e.lines)),
       onEvent("note://changed", (e) => useCanvas.getState().setNoteText(e.nodeId, e.text, e.sync)),
       onEvent("note://conflict", (e) => useCanvas.getState().setNoteConflict(e.nodeId, e.conflictPath)),
+      // Cmd+W: close the selected item (or the focused terminal), not the window.
+      onEvent("app://close-selected", () => {
+        useCanvas
+          .getState()
+          .deleteSelection()
+          .catch((err) => addWarning(String(err?.message ?? err)));
+      }),
       // Cmd+Q or closing the window: quit at once unless programs are running (FR-018a).
       onEvent("app://quit-requested", async () => {
         const busy = await ipc.appQuitCheck();

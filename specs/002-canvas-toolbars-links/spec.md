@@ -215,6 +215,10 @@ delete it.
 - **FR-005**: Delete or Backspace MUST delete the selected node or link when no terminal or text
   field has keyboard focus, with the same confirmations as the other delete actions.
 
+- **FR-028**: Cmd+W MUST close the selected terminal or note (or, with nothing selected, the
+  focused terminal), with the same confirmation as other deletes; it MUST NOT close the window.
+  Cmd+Q keeps quitting the app (001 FR-018a). Added 2026-10-22 from user feedback.
+
 **New Terminal dialog**
 
 - **FR-006**: The dialog MUST offer the presets Claude Code, Codex, OpenCode, Gemini CLI, and
