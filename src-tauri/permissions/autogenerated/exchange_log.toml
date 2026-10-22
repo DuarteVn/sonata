@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-exchange-log"
+description = "Enables the exchange_log command without any pre-configured scope."
+commands.allow = ["exchange_log"]
+
+[[permission]]
+identifier = "deny-exchange-log"
+description = "Denies the exchange_log command without any pre-configured scope."
+commands.deny = ["exchange_log"]

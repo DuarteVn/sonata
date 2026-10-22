@@ -38,6 +38,7 @@ export function TerminalDialog({ mode, onClose }: Props) {
   const [folder, setFolder] = useState(current?.workingDirectory ?? workspaceDir);
   const [monitor, setMonitor] = useState(current?.monitorActivity ?? true);
   const [orchestrator, setOrchestrator] = useState(current?.orchestrator ?? false);
+  const [sendInstructions, setSendInstructions] = useState<boolean | null>(current?.sendInstructions ?? null);
   const [accent, setAccent] = useState<string | null>(current?.accentColor ?? null);
   const [fontSize, setFontSize] = useState(String(current?.fontSize ?? defaultFont));
   const [roleText, setRoleText] = useState(current?.role?.text ?? "");
@@ -112,6 +113,7 @@ export function TerminalDialog({ mode, onClose }: Props) {
               role: role(),
               monitorActivity: monitor,
               orchestrator,
+              sendInstructions,
             },
           },
         );
@@ -127,6 +129,7 @@ export function TerminalDialog({ mode, onClose }: Props) {
           role: role(),
           monitorActivity: monitor,
           orchestrator,
+          sendInstructions,
         };
         const res = await ipc.terminalUpdateSettings(mode.nodeId, settings);
         useCanvas.getState().replaceNode(res.node);
@@ -204,7 +207,18 @@ export function TerminalDialog({ mode, onClose }: Props) {
               <input type="checkbox" checked={orchestrator} onChange={(e) => setOrchestrator(e.target.checked)} />
               <span>
                 Orchestrator
-                <small>Marks the agent that coordinates the others. Its extra commands arrive with agent messaging.</small>
+                <small>Lets this agent recruit and dismiss agents and link items with the sonata command.</small>
+              </span>
+            </label>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={sendInstructions ?? !["", "claude"].includes(command.trim().split(/\s+/)[0] ?? "")}
+                onChange={(e) => setSendInstructions(e.target.checked)}
+              />
+              <span>
+                Type Sonata instructions on start
+                <small>For agents that cannot receive instructions at launch. Claude Code gets them automatically.</small>
               </span>
             </label>
           </div>

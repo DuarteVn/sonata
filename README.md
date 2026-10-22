@@ -22,6 +22,15 @@ between them live side by side, organized into as many workspaces as you need.
   the link button in its floating toolbar. Select a link and press Delete to remove it.
 - Floating toolbars for a selected note (color, size, Markdown formatting, pictures) or terminal
   (edit, link, restart, delete). `Cmd+W` closes the selected item; `Cmd+Q` quits.
+- Agents talk to each other through links with the `sonata` command, available in every Sonata
+  terminal: `sonata list`, `sonata ask <name> "<message>"` (waits for the answer),
+  `sonata ask --all`, `sonata check <name>`, `sonata reply`, `sonata note read|write`, and
+  `sonata notify`. A terminal marked **Orchestrator** can also `sonata recruit`, `sonata dismiss`,
+  `sonata link`, and `sonata unlink`. Run `sonata help` inside a terminal.
+- Claude Code and Codex started from the presets run as `sonata run claude|codex`: they get
+  Sonata instructions (and the terminal's role) for that session only, plus an end-of-turn
+  signal so answers return as soon as the agent finishes. Your global agent settings are never
+  changed. Typing plain `claude` in a shell works as usual, without Sonata awareness.
 - Everything is saved as readable files in `~/.sonata/`, with crash-safe writes, autosave, and
   terminal history restored after a restart.
 
@@ -42,6 +51,15 @@ An app you build yourself opens without any Gatekeeper prompt. A packaged downlo
 Sonata runs shells, `git`, and AI agents with your user permissions, without a sandbox. Only run
 commands you trust. Terminal history is saved to disk in plain text, readable only by your user;
 turn it off per terminal (terminal menu → Save history) for sessions that print secrets.
+
+## Agent messaging and safety
+
+- The `sonata` command talks to the app over a private Unix socket (`~/.sonata/run/`, readable
+  only by you); there is no network listener.
+- Each terminal start gets a secret identity, so one terminal cannot act as another. A terminal
+  can only reach the terminals and notes it is linked to.
+- Waiting loops (A waits on B while B asks A) are refused; asks time out after 10 minutes by
+  default (`--timeout`, up to 60 minutes) and are never sent twice.
 
 ## Your data
 

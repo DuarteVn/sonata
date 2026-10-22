@@ -74,6 +74,8 @@ export type TerminalContent = {
   role?: RoleRef;
   monitorActivity?: boolean;
   orchestrator?: boolean;
+  recruitedBy?: string;
+  sendInstructions?: boolean;
 };
 
 export type NoteColor = "yellow" | "blue" | "green" | "pink" | "purple" | "gray";
@@ -93,6 +95,7 @@ export type TerminalSettings = {
   role?: RoleRef | null;
   monitorActivity?: boolean;
   orchestrator?: boolean;
+  sendInstructions?: boolean | null;
 };
 
 export type SettingsUpdate = { node: CanvasNode; appliesOnRestart: boolean };
@@ -138,6 +141,19 @@ export type NoteSync = "clean" | "dirty" | "conflict" | "fileMissing";
 export type NoteView = { text: string; sync: NoteSync; conflictPath?: string; assetBase: string };
 export type NoteChangedEvent = { nodeId: string; text: string; sync: NoteSync };
 export type NoteConflictEvent = { nodeId: string; conflictPath: string };
+
+export type AskStateName = "queued" | "waiting" | "answered" | "replied" | "timedOut" | "failed" | "cancelled";
+export type AskEvent = { askId: string; from: string; to: string; state: AskStateName };
+export type NotifyEvent = { nodeId: string; title: string; message: string };
+export type NodesChangedEvent = { workspaceId: string; nodes: CanvasNode[]; links: Link[] };
+export type ExchangeEntry = {
+  at: string;
+  direction: "in" | "out";
+  other: string;
+  firstLine: string;
+  outcome: AskStateName;
+  resultChars: number;
+};
 
 export type BusyWorkspace = { workspaceId: string; workspaceName: string; count: number };
 

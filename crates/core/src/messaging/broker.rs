@@ -90,7 +90,7 @@ struct Ask {
     sent_at: Option<Instant>,
     deadline: Option<Instant>,
     anchor: u64,
-    prompt: String,
+    prompt: Vec<String>,
     last_seq: u64,
     last_output: Instant,
     saw_output: bool,
@@ -161,7 +161,7 @@ impl Broker {
                 sent_at: None,
                 deadline: None,
                 anchor: 0,
-                prompt: String::new(),
+                prompt: Vec::new(),
                 last_seq: 0,
                 last_output: now,
                 saw_output: false,
@@ -381,7 +381,7 @@ impl Broker {
                         continue;
                     }
                     let anchor = terms.absolute_row(to).unwrap_or(0);
-                    let prompt = terms.cursor_line_prefix(to).unwrap_or_default();
+                    let prompt = terms.prompt_block(to).unwrap_or_default();
                     if let Err(e) = terms.deliver(to, &message) {
                         self.finish(
                             app,

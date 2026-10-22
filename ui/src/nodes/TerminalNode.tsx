@@ -28,6 +28,14 @@ export function TerminalNode({ node }: Props) {
   const attention = useCanvas((s) => s.attention.has(node.id));
   const live = useCanvas((s) => s.liveIds.has(node.id));
   const preview = useCanvas((s) => s.previews[node.id]);
+  // A string selector keeps the value stable between renders.
+  const askers = useCanvas((s) =>
+    Object.values(s.asks)
+      .filter((a) => a.to === node.id)
+      .map((a) => s.nodes.find((n) => n.id === a.from))
+      .map((n) => (n && "terminal" in n.content ? n.content.terminal.name : "another terminal"))
+      .join(", "),
+  );
   const { previewFrame, commitFrame, bringToFront, pressNode, setConfirmClose, removeNode, renameTerminal } =
     useCanvas.getState();
   const addWarning = useWorkspaces((s) => s.addWarning);
@@ -134,6 +142,7 @@ export function TerminalNode({ node }: Props) {
             </button>
           </span>
         )}
+        {askers && <span className="asked-by">asked by {askers}</span>}
         {monitor && attention && (
           <span className="badge attention" title="Finished while you were away">
             <Bell size={11} aria-label="Needs attention" />

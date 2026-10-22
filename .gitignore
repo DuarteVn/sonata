@@ -30,3 +30,6 @@ playwright-report/
 test-results/
 *.log
 .env*
+
+# CLI copied into the app bundle at build time
+src-tauri/resources/bin/sonata

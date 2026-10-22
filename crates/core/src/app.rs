@@ -80,6 +80,8 @@ pub struct TerminalSettings {
     pub role: Option<Option<RoleRef>>,
     pub monitor_activity: Option<bool>,
     pub orchestrator: Option<bool>,
+    #[serde(default, deserialize_with = "double_option")]
+    pub send_instructions: Option<Option<bool>>,
 }
 
 /// Absent → `None`; `null` → `Some(None)`; value → `Some(Some(v))`.
@@ -156,6 +158,9 @@ fn apply_settings(t: &mut TerminalContent, s: &TerminalSettings) -> AppResult<bo
     }
     if let Some(v) = s.orchestrator {
         t.orchestrator = v;
+    }
+    if let Some(v) = s.send_instructions {
+        t.send_instructions = v;
     }
     Ok(before != (t.launch_command.clone(), t.working_directory.clone()))
 }

@@ -373,18 +373,24 @@ impl TerminalManager {
         })
     }
 
-    /// Text of the cursor's row up to the cursor (the shell prompt, before anything is typed).
-    pub fn cursor_line_prefix(&self, id: Uuid) -> Option<String> {
+    /// The prompt as shown before anything is typed: up to two rows above the cursor and the
+    /// cursor's row up to the cursor (multi-line prompts print a line above the input).
+    pub fn prompt_block(&self, id: Uuid) -> Option<Vec<String>> {
         self.get(id).ok().map(|t| {
             let t = lock(&t);
             let (row, col) = t.screen.cursor();
-            let line = t
-                .screen
-                .preview_lines()
-                .get(row as usize)
-                .cloned()
-                .unwrap_or_default();
-            line.chars().take(col as usize).collect()
+            let lines = t.screen.preview_lines();
+            let row = row as usize;
+            let mut block: Vec<String> = (row.saturating_sub(2)..row)
+                .map(|r| lines.get(r).cloned().unwrap_or_default())
+                .collect();
+            block.push(
+                lines
+                    .get(row)
+                    .map(|l| l.chars().take(col as usize).collect())
+                    .unwrap_or_default(),
+            );
+            block
         })
     }
 
