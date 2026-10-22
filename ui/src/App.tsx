@@ -8,17 +8,27 @@ import { ipc } from "./ipc/commands";
 import { onEvent } from "./ipc/events";
 import type { BusyWorkspace } from "./ipc/types";
 import { CreateWorkspaceDialog } from "./sidebar/CreateWorkspaceDialog";
-import { Sidebar } from "./sidebar/Sidebar";
+import { clampSidebarWidth, Sidebar, SIDEBAR_DEFAULT_WIDTH } from "./sidebar/Sidebar";
 import { useCanvas } from "./state/canvas";
 import { useWorkspaces } from "./state/workspaces";
 
 const SIDEBAR_HIDDEN_KEY = "sonata.sidebarHidden";
+const SIDEBAR_WIDTH_KEY = "sonata.sidebarWidth";
 
 function readSidebarHidden(): boolean {
   try {
     return localStorage.getItem(SIDEBAR_HIDDEN_KEY) === "1";
   } catch {
     return false;
+  }
+}
+
+function readSidebarWidth(): number {
+  try {
+    const saved = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY));
+    return saved > 0 ? clampSidebarWidth(saved) : SIDEBAR_DEFAULT_WIDTH;
+  } catch {
+    return SIDEBAR_DEFAULT_WIDTH;
   }
 }
 
@@ -31,14 +41,16 @@ export function App() {
   const [creating, setCreating] = useState(false);
   const [quitBusy, setQuitBusy] = useState<BusyWorkspace[] | null>(null);
   const [sidebarHidden, setSidebarHidden] = useState(readSidebarHidden);
+  const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
 
   useEffect(() => {
     try {
       localStorage.setItem(SIDEBAR_HIDDEN_KEY, sidebarHidden ? "1" : "0");
+      localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth));
     } catch {
       // Per-device convenience only; ignore storage errors.
     }
-  }, [sidebarHidden]);
+  }, [sidebarHidden, sidebarWidth]);
 
   useEffect(() => {
     const { init, setSummaries, addWarning } = useWorkspaces.getState();
@@ -98,7 +110,14 @@ export function App() {
 
   return (
     <div className="app">
-      {!sidebarHidden && <Sidebar onCreate={() => setCreating(true)} onHide={() => setSidebarHidden(true)} />}
+      {!sidebarHidden && (
+        <Sidebar
+          onCreate={() => setCreating(true)}
+          onHide={() => setSidebarHidden(true)}
+          width={sidebarWidth}
+          onResize={setSidebarWidth}
+        />
+      )}
       <main className="main">
         {sidebarHidden && (
           <button

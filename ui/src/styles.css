@@ -31,8 +31,10 @@ input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 
 .app { display: flex; height: 100%; }
 .main { position: relative; flex: 1; min-width: 0; }
 
-.sidebar { width: 232px; flex: none; background: var(--bg-elev); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+.sidebar { position: relative; width: 232px; flex: none; background: var(--bg-elev); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
 .sidebar-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 12px 8px; color: var(--text-dim); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em; }
+.sidebar-resize { position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; cursor: col-resize; z-index: 5; }
+.sidebar-resize:hover, .sidebar-resize:focus-visible { background: var(--accent); opacity: 0.5; outline: none; }
 .sidebar-actions { display: flex; gap: 2px; }
 .sidebar-show { position: absolute; top: 10px; left: 10px; z-index: 20; background: var(--bg-elev); border-color: var(--border); }
 .icon-button { padding: 3px; display: inline-flex; background: transparent; border-color: transparent; }

@@ -15,6 +15,7 @@ vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async () => () => {}) })
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(async () => "/picked/folder") }));
 
 import { App } from "../src/App";
+import { clampSidebarWidth } from "../src/sidebar/Sidebar";
 import { resetInitForTests, useWorkspaces } from "../src/state/workspaces";
 
 const emptyBoot: Bootstrap = {
@@ -104,5 +105,21 @@ describe("sidebar and create dialog", () => {
     render(<App />);
     await userEvent.click(await screen.findByRole("button", { name: "Show sidebar" }));
     expect(screen.getByRole("navigation", { name: "Workspaces" })).toBeInTheDocument();
+  });
+
+  it("resizes the sidebar within limits and remembers the width", async () => {
+    const { unmount } = render(<App />);
+    const handle = await screen.findByRole("separator", { name: "Resize sidebar" });
+    const nav = screen.getByRole("navigation", { name: "Workspaces" });
+    expect(nav).toHaveStyle({ width: "232px" });
+    handle.focus();
+    await userEvent.keyboard("{ArrowRight}{ArrowRight}");
+    expect(nav).toHaveStyle({ width: "264px" });
+    unmount();
+
+    render(<App />);
+    expect(screen.getByRole("navigation", { name: "Workspaces" })).toHaveStyle({ width: "264px" });
+    expect(clampSidebarWidth(50)).toBe(180);
+    expect(clampSidebarWidth(9999)).toBe(480);
   });
 });
