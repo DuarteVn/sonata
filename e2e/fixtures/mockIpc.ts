@@ -236,6 +236,8 @@ export function installMockIpc() {
       }
       case "note_insert_image":
         return { markdown: "![](../files/mock.png)" };
+      case "exchange_log":
+        return [];
       case "terminal_rename":
         return String(args.name).trim();
       default:

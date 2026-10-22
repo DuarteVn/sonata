@@ -104,7 +104,10 @@ fn update_settings_applies_and_validates() {
     assert!(wait_until(WAIT, || app
         .terminals()
         .screen_text(node)
-        .is_some_and(|s| s.contains("\nrestarted-with-new-command"))));
+        .is_some_and(|s| s.lines().any(|l| common::is_output(
+            l,
+            "restarted-with-new-command"
+        )))));
 
     let bad_font = TerminalSettings {
         font_size: Some(Some(40)),

@@ -1,5 +1,6 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
+  ExchangeEntry,
   Link,
   NoteStyle,
   PresetStatus,
@@ -61,6 +62,7 @@ export const ipc = {
   terminalRestart: (nodeId: string, confirmed = false) => invoke<void>("terminal_restart", { nodeId, confirmed }),
   terminalUpdateSettings: (nodeId: string, settings: TerminalSettings) =>
     invoke<SettingsUpdate>("terminal_update_settings", { nodeId, settings }),
+  exchangeLog: (nodeId: string) => invoke<ExchangeEntry[]>("exchange_log", { nodeId }),
   presetsDetect: () => invoke<PresetStatus[]>("presets_detect"),
   rolesList: () => invoke<Role[]>("roles_list"),
   roleSave: (name: string, text: string) => invoke<Role>("role_save", { name, text }),

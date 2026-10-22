@@ -8,6 +8,7 @@ import {
   Heading,
   Image,
   Italic,
+  MessagesSquare,
   List,
   ListChecks,
   Pencil,
@@ -21,6 +22,7 @@ import { useState, type ReactNode } from "react";
 import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { ipc } from "../ipc/commands";
 import { isAppError, isTerminal, noteStyle, type CanvasNode, type NoteColor } from "../ipc/types";
+import { MessageLog } from "../nodes/MessageLog";
 import { noteEditors } from "../notes/editorRegistry";
 import type { FormatAction } from "../notes/markdownEdit";
 import { useCanvas } from "../state/canvas";
@@ -56,7 +58,7 @@ export const NOTE_COLORS: { id: NoteColor; swatch: string }[] = [
   { id: "gray", swatch: "#cfd2d8" },
 ];
 
-const SIZES = { terminal: { width: 196, height: 40 }, note: { width: 600, height: 40 } };
+const SIZES = { terminal: { width: 232, height: 40 }, note: { width: 600, height: 40 } };
 
 function Btn({ label, onClick, children, active }: { label: string; onClick: () => void; children: ReactNode; active?: boolean }) {
   return (
@@ -106,6 +108,7 @@ function TerminalActions({ node }: { node: CanvasNode }) {
   const { openTerminalDialog, removeNode } = useCanvas.getState();
   const addWarning = useWorkspaces((s) => s.addWarning);
   const [confirm, setConfirm] = useState<"restart" | "delete" | null>(null);
+  const [log, setLog] = useState(false);
   const report = (err: unknown) => addWarning(isAppError(err) ? err.message : String(err));
 
   async function restart(confirmed: boolean) {
@@ -131,6 +134,9 @@ function TerminalActions({ node }: { node: CanvasNode }) {
       <Btn label="Edit terminal" onClick={() => openTerminalDialog({ kind: "edit", nodeId: node.id })}>
         <Pencil size={15} />
       </Btn>
+      <Btn label="Message log" active={log} onClick={() => setLog((v) => !v)}>
+        <MessagesSquare size={15} />
+      </Btn>
       <span className="tb-sep" />
       <LinkButton node={node} />
       <span className="tb-sep" />
@@ -141,6 +147,7 @@ function TerminalActions({ node }: { node: CanvasNode }) {
       <Btn label="Delete terminal" onClick={() => void remove(false)}>
         <Trash2 size={15} />
       </Btn>
+      {log && <MessageLog nodeId={node.id} onClose={() => setLog(false)} />}
       {confirm && (
         <ConfirmDialog
           title={confirm === "restart" ? "Restart terminal?" : "Close terminal?"}

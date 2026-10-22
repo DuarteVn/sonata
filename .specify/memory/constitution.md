@@ -1,5 +1,11 @@
 <!--
 Sync Impact Report
+- Version change: 1.0.0 → 1.1.0 (2026-10-22)
+- Modified section: Technology & Platform Constraints — CLI channel is newline-delimited JSON over
+  a Unix socket with tokio on the app side; `hyper`/HTTP removed (feature 003, research R1).
+- Templates requiring updates: none.
+
+Previous report:
 - Version change: (template, unversioned) → 1.0.0
 - Modified principles: none (initial ratification)
 - Added principles:
@@ -128,7 +134,8 @@ Rationale: a small team ships a working tool faster than a complete one.
   used only for visible, legible terminals; all others use a lighter renderer or a static preview.
 - **Core**: Rust, Cargo workspace with `crates/core`, `crates/cli`, and `src-tauri`; frontend in
   `ui/`.
-- **PTY**: `portable-pty`. **Async and IPC**: `tokio` and `hyper` over a Unix socket.
+- **PTY**: `portable-pty`. **Async and IPC**: `tokio`; the CLI channel is newline-delimited JSON
+  over a Unix socket (no HTTP, no network listener).
 - **Git**: the system `git` binary through process calls. No libgit2.
 - **Language**: English for code, identifiers, UI text, commit messages, and documentation.
 - **License**: MIT.
@@ -157,4 +164,4 @@ Changing an item in this section requires a constitution amendment (MINOR bump a
 - Every code review checks compliance with the principles. A deviation MUST be recorded in the
   plan's Complexity Tracking section with its reason, or the change is rejected.
 
-**Version**: 1.0.0 | **Ratified**: 2026-10-21 | **Last Amended**: 2026-10-21
+**Version**: 1.1.0 | **Ratified**: 2026-10-21 | **Last Amended**: 2026-10-22

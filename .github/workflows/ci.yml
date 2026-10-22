@@ -19,8 +19,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: cargo fmt --all --check
-      - run: cargo clippy -p sonata-core --all-targets -- -D warnings
-      - run: cargo test -p sonata-core
+      - run: cargo clippy -p sonata-core -p sonata-cli --all-targets -- -D warnings
+      - run: cargo test -p sonata-core -p sonata-cli --no-fail-fast
       - run: npm ci
       - run: npm run typecheck
       - run: npm test

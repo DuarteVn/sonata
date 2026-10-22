@@ -9,6 +9,12 @@ export function LinkLayer({ drag }: { drag: LinkDrag }) {
   const links = useCanvas((s) => s.links);
   const nodes = useCanvas((s) => s.nodes);
   const selection = useCanvas((s) => s.selection);
+  const busyKey = useCanvas((s) =>
+    Object.values(s.asks)
+      .map((a) => [a.from, a.to].sort().join("|"))
+      .join(","),
+  );
+  const busy = new Set(busyKey.split(","));
   const frames = new Map(nodes.map((n) => [n.id, n.frame]));
   const { select, deleteLink } = useCanvas.getState();
 
@@ -22,9 +28,10 @@ export function LinkLayer({ drag }: { drag: LinkDrag }) {
         const [p, q] = linkAnchors(a, b);
         const d = linkPath(p, q);
         const selected = selection?.kind === "link" && selection.id === l.id;
+        const active = busy.has([l.a, l.b].sort().join("|"));
         const mid = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
         return (
-          <g key={l.id} className={`link${selected ? " selected" : ""}`} data-link-id={l.id}>
+          <g key={l.id} className={`link${selected ? " selected" : ""}${active ? " busy" : ""}`} data-link-id={l.id}>
             <path d={d} className="link-line" />
             <path
               d={d}

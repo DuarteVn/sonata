@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { ipc } from "../ipc/commands";
 import type {
+  AskEvent,
   Camera,
   CanvasNode,
   Frame,
@@ -51,6 +52,10 @@ type CanvasState = {
   /** Deletes the selected node or link (Delete key, Cmd+W, toolbar). */
   deleteSelection: () => Promise<void>;
   setConfirmClose: (id: string | null) => void;
+  /** Asks in flight (queued or waiting), by ask id (003 FR-027). */
+  asks: Record<string, { from: string; to: string }>;
+  setAsk: (e: AskEvent) => void;
+  applyNodesChanged: (workspaceId: string, nodes: CanvasNode[], links: Link[]) => void;
   notes: Record<string, NoteState>;
   previews: Record<string, string[]>;
   liveIds: Set<string>;
@@ -175,6 +180,23 @@ export const useCanvas = create<CanvasState>((set, get) => ({
     }),
   openTerminalDialog: (terminalDialog) => set({ terminalDialog }),
   confirmClose: null,
+  asks: {},
+  setAsk: (e) =>
+    set((s) => {
+      const asks = { ...s.asks };
+      if (e.state === "queued" || e.state === "waiting") asks[e.askId] = { from: e.from, to: e.to };
+      else delete asks[e.askId];
+      return { asks };
+    }),
+  applyNodesChanged: (workspaceId, nodes, links) => {
+    if (get().workspaceId !== workspaceId) return;
+    const ids = new Set(nodes.map((n) => n.id));
+    set((s) => ({
+      nodes,
+      links,
+      selection: s.selection && s.selection.kind === "node" && !ids.has(s.selection.id) ? null : s.selection,
+    }));
+  },
   setConfirmClose: (confirmClose) => set({ confirmClose }),
 
   pressNode: (id, kind) => {

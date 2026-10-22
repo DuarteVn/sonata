@@ -110,3 +110,11 @@ pub fn terminal_update_settings(
 ) -> Result<sonata_core::app::SettingsUpdate, AppError> {
     app.update_terminal_settings(node_id, settings)
 }
+
+#[tauri::command]
+pub fn exchange_log(
+    app: State<'_, Arc<App>>,
+    node_id: Uuid,
+) -> Vec<sonata_core::messaging::broker::LogEntry> {
+    app.exchange_log(node_id)
+}

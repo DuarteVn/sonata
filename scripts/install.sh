@@ -14,7 +14,7 @@ npm ci
 npm run tauri build -- --bundles app
 
 app="target/release/bundle/macos/Sonata.app"
-if pgrep -x sonata >/dev/null 2>&1; then
+if pgrep -x sonata-app >/dev/null 2>&1; then
   echo "Quit Sonata first, then run this script again."
   exit 1
 fi

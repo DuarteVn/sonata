@@ -212,3 +212,15 @@ button.danger { background: var(--danger); border-color: var(--danger); color: w
 .role-use span { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .notice { margin: 0; padding: 8px 10px; border-radius: 8px; background: rgba(109, 124, 255, 0.15); color: #c8ceff; }
 textarea { resize: vertical; }
+
+.menu.floating { position: fixed; top: auto; right: auto; z-index: 900; }
+
+/* ---- Feature 003 ---- */
+.link.busy .link-line { stroke: #34d399; stroke-width: 3; stroke-dasharray: 10 6; animation: flow 0.8s linear infinite; }
+@keyframes flow { to { stroke-dashoffset: -16; } }
+.asked-by { font-size: 11px; color: #34d399; border: 1px solid rgba(52, 211, 153, 0.4); border-radius: 6px; padding: 0 6px; white-space: nowrap; }
+.message-log { position: fixed; right: 24px; top: 70px; width: 380px; max-height: 60vh; overflow: auto; z-index: 900; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); padding: 10px 12px; }
+.message-log header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.message-log ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.message-log li { display: flex; flex-direction: column; gap: 2px; }
+.dim { color: var(--text-dim); font-size: 11px; }

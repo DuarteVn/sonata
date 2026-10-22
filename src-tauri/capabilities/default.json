@@ -8,6 +8,7 @@
   "permissions": [
     "core:default",
     "dialog:allow-open",
+    "notification:default",
     "allow-app-bootstrap",
     "allow-app-quit-check",
     "allow-app-quit",
@@ -44,6 +45,7 @@
     "allow-terminal-set-save-history",
     "allow-terminal-clear-history",
     "allow-terminal-preview-subscribe",
-    "allow-terminal-update-settings"
+    "allow-terminal-update-settings",
+    "allow-exchange-log"
   ]
 }

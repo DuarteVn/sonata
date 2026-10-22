@@ -40,6 +40,8 @@ fn start(sb: &Sandbox) -> (TerminalManager, Uuid) {
         history_max_rows: 10_000,
         shell: Some("/bin/sh".into()),
         restored_history: None,
+        session_env: Vec::new(),
+        wrap_agents: false,
     };
     let id = spec.node_id;
     m.start(spec).unwrap();
@@ -54,7 +56,8 @@ fn replay_first_then_live_bytes() {
     assert!(wait_until(WAIT, || m
         .screen_text(id)
         .unwrap()
-        .contains("\nbefore-attach")));
+        .lines()
+        .any(|l| common::is_output(l, "before-attach"))));
 
     let sink = Collect::default();
     m.attach(id, Box::new(sink.clone())).unwrap();
@@ -66,7 +69,10 @@ fn replay_first_then_live_bytes() {
     assert!(first.contains("before-attach"));
 
     m.write(id, b"echo after-attach\r").unwrap();
-    assert!(wait_until(WAIT, || sink.text().contains("\nafter-attach")));
+    assert!(wait_until(WAIT, || sink
+        .text()
+        .lines()
+        .any(|l| common::is_output(l, "after-attach"))));
     m.stop(id);
 }
 
@@ -80,7 +86,8 @@ fn output_is_batched_in_chunks_of_at_most_32k() {
         .unwrap();
     assert!(wait_until(std::time::Duration::from_secs(15), || sink
         .text()
-        .contains("\nDONE-MARK")));
+        .lines()
+        .any(|l| common::is_output(l, "DONE-MARK"))));
     let live = &sink.messages()[1..];
     assert!(live.iter().all(|m| m.len() <= 32 * 1024));
     assert!(live.len() < 3000, "not batched: {} messages", live.len());
@@ -98,8 +105,14 @@ fn detach_keeps_process_and_reattach_shows_missed_output() {
     assert!(wait_until(WAIT, || m
         .screen_text(id)
         .unwrap()
-        .contains("\nwhile-detached")));
-    assert!(!first.text().contains("\nwhile-detached"));
+        .lines()
+        .any(|l| common::is_output(l, "while-detached"))));
+    assert!(
+        !first
+            .text()
+            .lines()
+            .any(|l| common::is_output(l, "while-detached"))
+    );
 
     let second = Collect::default();
     m.attach(id, Box::new(second.clone())).unwrap();

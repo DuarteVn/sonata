@@ -112,9 +112,15 @@ pub struct TerminalContent {
     pub role: Option<RoleRef>,
     #[serde(default = "default_true")]
     pub monitor_activity: bool,
-    /// Stored in feature 002; its powers arrive with feature 003.
+    /// Gives the terminal the orchestrator commands of feature 003.
     #[serde(default)]
     pub orchestrator: bool,
+    /// The orchestrator that recruited this terminal; only it may dismiss it (003 FR-022).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recruited_by: Option<Uuid>,
+    /// Type a short Sonata instruction once the agent is ready; `None` = automatic (003 FR-019).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub send_instructions: Option<bool>,
 }
 
 impl TerminalContent {
@@ -129,6 +135,8 @@ impl TerminalContent {
             role: None,
             monitor_activity: true,
             orchestrator: false,
+            recruited_by: None,
+            send_instructions: None,
         }
     }
 }

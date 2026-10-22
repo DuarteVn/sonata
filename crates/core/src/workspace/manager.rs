@@ -282,6 +282,17 @@ impl WorkspaceManager {
         Ok(())
     }
 
+    /// Marks a workspace as loaded (its terminals started) without making it active.
+    pub fn mark_loaded(&mut self, id: Uuid) -> bool {
+        match self.entries.get_mut(&id) {
+            Some(e) if !e.loaded => {
+                e.loaded = true;
+                true
+            }
+            _ => false,
+        }
+    }
+
     pub fn set_camera(&mut self, id: Uuid, x: f64, y: f64, zoom: f64) -> AppResult<Camera> {
         self.update(id, |ws| {
             ws.camera = Camera { x, y, zoom }.clamped();

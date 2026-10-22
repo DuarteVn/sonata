@@ -38,6 +38,7 @@ const COMMANDS: &[&str] = &[
     "terminal_clear_history",
     "terminal_preview_subscribe",
     "terminal_update_settings",
+    "exchange_log",
 ];
 
 fn main() {
