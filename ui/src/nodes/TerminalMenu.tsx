@@ -1,15 +1,19 @@
 import { MoreHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ipc } from "../ipc/commands";
 import { isAppError, type CanvasNode } from "../ipc/types";
 import { useWorkspaces } from "../state/workspaces";
 
-// Per-terminal options: history saving (FR-015a).
+// Per-terminal options: history saving (FR-015a). The menu is rendered in a portal on top of
+// everything: inside the scaled canvas it would sit under the live terminal layer.
 export function TerminalMenu({ node }: { node: CanvasNode }) {
   const initial = "terminal" in node.content ? node.content.terminal.saveHistory : true;
   const [open, setOpen] = useState(false);
   const [saveHistory, setSaveHistory] = useState(initial);
   const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
   const addWarning = useWorkspaces((s) => s.addWarning);
   const report = (err: unknown) => addWarning(isAppError(err) ? err.message : String(err));
 
@@ -17,11 +21,19 @@ export function TerminalMenu({ node }: { node: CanvasNode }) {
 
   useEffect(() => {
     if (!open) return;
-    const close = (e: PointerEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    const close = (e: Event) => {
+      const t = e.target as Node;
+      if (!ref.current?.contains(t) && !menuRef.current?.contains(t)) setOpen(false);
     };
+    const dismiss = () => setOpen(false);
     window.addEventListener("pointerdown", close);
-    return () => window.removeEventListener("pointerdown", close);
+    window.addEventListener("wheel", dismiss, { capture: true });
+    window.addEventListener("resize", dismiss);
+    return () => {
+      window.removeEventListener("pointerdown", close);
+      window.removeEventListener("wheel", dismiss, { capture: true });
+      window.removeEventListener("resize", dismiss);
+    };
   }, [open]);
 
   return (
@@ -32,12 +44,17 @@ export function TerminalMenu({ node }: { node: CanvasNode }) {
         aria-label="Terminal options"
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        onClick={(e) => {
+          const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          setPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+          setOpen((v) => !v);
+        }}
       >
         <MoreHorizontal size={14} />
       </button>
-      {open && (
-        <div role="menu" className="menu">
+      {open &&
+        createPortal(
+        <div role="menu" className="menu floating" ref={menuRef} style={pos ?? undefined}>
           <button
             type="button"
             role="menuitemcheckbox"
@@ -66,8 +83,9 @@ export function TerminalMenu({ node }: { node: CanvasNode }) {
             <span className="menu-check" aria-hidden />
             Clear saved history
           </button>
-        </div>
-      )}
+        </div>,
+          document.body,
+        )}
     </div>
   );
 }

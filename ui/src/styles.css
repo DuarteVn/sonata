@@ -212,3 +212,5 @@ button.danger { background: var(--danger); border-color: var(--danger); color: w
 .role-use span { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .notice { margin: 0; padding: 8px 10px; border-radius: 8px; background: rgba(109, 124, 255, 0.15); color: #c8ceff; }
 textarea { resize: vertical; }
+
+.menu.floating { position: fixed; top: auto; right: auto; z-index: 900; }
