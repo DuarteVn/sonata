@@ -21,4 +21,12 @@ describe("terminal key overrides", () => {
     expect(keyOverride(key("ç"))).toBeNull();
     expect(keyOverride(key("ç", { altKey: true }))).toBeNull();
   });
+
+  it("maps Cmd line-editing shortcuts to the shell's control keys", () => {
+    expect(keyOverride(key("Backspace", { metaKey: true }))).toBe("\x15");
+    expect(keyOverride(key("ArrowLeft", { metaKey: true }))).toBe("\x01");
+    expect(keyOverride(key("ArrowRight", { metaKey: true }))).toBe("\x05");
+    expect(keyOverride(key("Backspace"))).toBeNull();
+    expect(keyOverride(key("c", { metaKey: true }))).toBeNull();
+  });
 });
