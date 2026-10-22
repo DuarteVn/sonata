@@ -1,3 +1,4 @@
+import { PanelLeftOpen } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Banners } from "./Banners";
 import { Canvas } from "./canvas/Canvas";
@@ -11,6 +12,16 @@ import { Sidebar } from "./sidebar/Sidebar";
 import { useCanvas } from "./state/canvas";
 import { useWorkspaces } from "./state/workspaces";
 
+const SIDEBAR_HIDDEN_KEY = "sonata.sidebarHidden";
+
+function readSidebarHidden(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_HIDDEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 let lastNotify: { nodeId: string; at: number } | null = null;
 
 export function App() {
@@ -19,6 +30,15 @@ export function App() {
   const active = useWorkspaces((s) => s.active);
   const [creating, setCreating] = useState(false);
   const [quitBusy, setQuitBusy] = useState<BusyWorkspace[] | null>(null);
+  const [sidebarHidden, setSidebarHidden] = useState(readSidebarHidden);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_HIDDEN_KEY, sidebarHidden ? "1" : "0");
+    } catch {
+      // Per-device convenience only; ignore storage errors.
+    }
+  }, [sidebarHidden]);
 
   useEffect(() => {
     const { init, setSummaries, addWarning } = useWorkspaces.getState();
@@ -50,6 +70,8 @@ export function App() {
           .deleteSelection()
           .catch((err) => addWarning(String(err?.message ?? err)));
       }),
+      // View → Toggle Sidebar (Ctrl+Cmd+S).
+      onEvent("app://toggle-sidebar", () => setSidebarHidden((h) => !h)),
       // Cmd+Q or closing the window: quit at once unless programs are running (FR-018a).
       onEvent("app://quit-requested", async () => {
         const busy = await ipc.appQuitCheck();
@@ -76,8 +98,19 @@ export function App() {
 
   return (
     <div className="app">
-      <Sidebar onCreate={() => setCreating(true)} />
+      {!sidebarHidden && <Sidebar onCreate={() => setCreating(true)} onHide={() => setSidebarHidden(true)} />}
       <main className="main">
+        {sidebarHidden && (
+          <button
+            type="button"
+            className="icon-button sidebar-show"
+            aria-label="Show sidebar"
+            title="Show sidebar (⌃⌘S)"
+            onClick={() => setSidebarHidden(false)}
+          >
+            <PanelLeftOpen size={16} />
+          </button>
+        )}
         <Banners />
         {ready && workspaces.length === 0 && (
           <div className="empty-state">
