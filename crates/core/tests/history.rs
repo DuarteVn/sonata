@@ -42,7 +42,8 @@ fn save_cap_restore_and_relaunch() {
             .terminals()
             .screen_text(node.id)
             .unwrap()
-            .contains("\nbefore-restart")));
+            .lines()
+            .any(|l| common::is_output(l, "before-restart"))));
         app.save_dirty();
         let path = sb
             .root
@@ -129,7 +130,8 @@ fn disabling_history_deletes_file_and_clear_removes_it() {
         .terminals()
         .screen_text(node)
         .unwrap()
-        .contains("\nsecret-token")));
+        .lines()
+        .any(|l| common::is_output(l, "secret-token"))));
     let path = sb.root.terminals_dir(ws).join(format!("{node}.history"));
 
     app.save_dirty();
@@ -143,7 +145,8 @@ fn disabling_history_deletes_file_and_clear_removes_it() {
         .terminals()
         .screen_text(node)
         .unwrap()
-        .contains("\nmore")));
+        .lines()
+        .any(|l| common::is_output(l, "more"))));
     app.save_dirty();
     assert!(!path.exists(), "history written although disabled");
     app.quit();

@@ -186,3 +186,10 @@ pub fn shells(app: &App, sb: &Sandbox, names: &[&str]) -> (uuid::Uuid, Vec<uuid:
     }
     (ws, ids)
 }
+
+/// True when `line` is the output `word`, possibly after a shell prompt that some shells print
+/// before the output of input typed early (e.g. dash on Linux: "$ word").
+pub fn is_output(line: &str, word: &str) -> bool {
+    let line = line.trim_matches(|c: char| c == '\r' || c.is_whitespace());
+    line == word || line.rsplit("$ ").next() == Some(word) || line.rsplit("% ").next() == Some(word)
+}
