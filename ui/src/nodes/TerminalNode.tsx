@@ -1,7 +1,7 @@
 import { Bell, Crown, RotateCcw, X } from "lucide-react";
 import { useState } from "react";
 import { ResizeHandles } from "../canvas/ResizeHandles";
-import { startDrag } from "../canvas/useDrag";
+import { startNodeDrag } from "../canvas/nodeDrag";
 import { ipc } from "../ipc/commands";
 import { isAppError, type CanvasNode, type TerminalContent } from "../ipc/types";
 import { TITLE_HEIGHT } from "../terminal/LiveTerminalLayer";
@@ -25,6 +25,7 @@ export function TerminalNode({ node }: Props) {
   const state = useCanvas((s) => s.terminalStates[node.id]);
   const focused = useCanvas((s) => s.focusedId === node.id);
   const selected = useCanvas((s) => s.selection?.kind === "node" && s.selection.id === node.id);
+  const grouped = useCanvas((s) => s.group.includes(node.id));
   const attention = useCanvas((s) => s.attention.has(node.id));
   const live = useCanvas((s) => s.liveIds.has(node.id));
   const preview = useCanvas((s) => s.previews[node.id]);
@@ -36,7 +37,7 @@ export function TerminalNode({ node }: Props) {
       .map((n) => (n && "terminal" in n.content ? n.content.terminal.name : "another terminal"))
       .join(", "),
   );
-  const { previewFrame, commitFrame, bringToFront, pressNode, setConfirmClose, removeNode, renameTerminal } =
+  const { bringToFront, pressNode, setConfirmClose, removeNode, renameTerminal } =
     useCanvas.getState();
   const addWarning = useWorkspaces((s) => s.addWarning);
   const [editing, setEditing] = useState(false);
@@ -72,7 +73,7 @@ export function TerminalNode({ node }: Props) {
 
   return (
     <div
-      className={`node terminal-node${focused ? " focused" : ""}${selected ? " selected" : ""}`}
+      className={`node terminal-node${focused ? " focused" : ""}${selected || grouped ? " selected" : ""}`}
       data-node-id={node.id}
       data-node-kind="terminal"
       style={{
@@ -90,17 +91,9 @@ export function TerminalNode({ node }: Props) {
         onPointerDown={(e) => {
           if (e.button !== 0 || editing) return;
           if ((e.target as HTMLElement).closest("button, .link-handle")) return;
-          if (pressNode(node.id, "terminal")) return;
+          if (pressNode(node.id, "terminal", e.shiftKey)) return;
           void bringToFront(node.id);
-          const zoom = useCanvas.getState().camera.zoom;
-          const moved = (dx: number, dy: number) => ({ ...frame, x: frame.x + dx / zoom, y: frame.y + dy / zoom });
-          startDrag(
-            e,
-            (dx, dy) => previewFrame(node.id, moved(dx, dy)),
-            (dx, dy) => {
-              if (dx !== 0 || dy !== 0) void commitFrame(node.id, moved(dx, dy));
-            },
-          );
+          startNodeDrag(e, node.id);
         }}
         onDoubleClick={() => {
           setDraft(term.name);

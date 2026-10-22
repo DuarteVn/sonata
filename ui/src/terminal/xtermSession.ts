@@ -5,6 +5,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { ipc } from "../ipc/commands";
 import type { TerminalStateEvent } from "../ipc/types";
+import { keyOverride } from "./xtermKeys";
 
 export const theme: ITheme = {
   background: "#101115",
@@ -43,7 +44,8 @@ export class XtermSession {
       scrollback: 10000,
       cursorBlink: true,
       allowProposedApi: true,
-      macOptionIsMeta: true,
+      // Option types characters (Option+C is "ç"), as in the macOS Terminal default.
+      macOptionIsMeta: false,
       theme,
     });
     this.term.loadAddon(this.fit);
@@ -60,6 +62,13 @@ export class XtermSession {
       this.rows = dims.rows;
     }
     this.term.resize(this.cols, this.rows);
+    this.term.attachCustomKeyEventHandler((ev) => {
+      const bytes = keyOverride(ev);
+      if (bytes === null) return true;
+      if (ev.type === "keydown") void ipc.terminalWrite(this.nodeId, bytes);
+      ev.preventDefault();
+      return false;
+    });
     this.term.onData((data) => void ipc.terminalWrite(this.nodeId, data));
     const channel = new Channel<ArrayBuffer>();
     channel.onmessage = (data) => {

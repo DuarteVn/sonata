@@ -218,6 +218,16 @@ delete it.
 - **FR-028**: Cmd+W MUST close the selected terminal or note (or, with nothing selected, the
   focused terminal), with the same confirmation as other deletes; it MUST NOT close the window.
   Cmd+Q keeps quitting the app (001 FR-018a). Added 2026-10-22 from user feedback.
+- **FR-029**: With the Select tool, dragging on empty canvas MUST draw a selection rectangle that
+  selects every node it touches; Shift+click on a node, or Shift+drag, MUST add to or remove from
+  the selection. Dragging the title bar of a selected node MUST move all selected nodes; Delete,
+  Backspace, and Cmd+W MUST delete all of them, asking once for terminals still running a
+  program. Floating toolbars and link handles show only for a single selection. Added
+  2026-10-22 from user feedback (supersedes "one at a time" in FR-004 and the multi-select
+  exclusion below).
+- **FR-030**: In a live terminal, Shift+Enter MUST send Escape followed by Return, which agent
+  CLIs read as a new line, and Option MUST type characters (for example Option+C types "ç")
+  instead of acting as Meta. Added 2026-10-22 from user feedback.
 
 **New Terminal dialog**
 

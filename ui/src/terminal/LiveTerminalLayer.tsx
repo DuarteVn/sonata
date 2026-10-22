@@ -150,7 +150,7 @@ function LiveTerminal({ node, rect, zoom, baseFontSize, focused, renderer }: Liv
       style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height, zIndex: node.z }}
       onPointerDown={(e) => {
         if (e.button !== 0) return;
-        if (pressNode(node.id, "terminal")) {
+        if (pressNode(node.id, "terminal", e.shiftKey)) {
           e.preventDefault();
           return;
         }

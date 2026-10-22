@@ -2,7 +2,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { ArrowLeft, ArrowRight, Code2, ExternalLink, Globe, RotateCw, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ResizeHandles } from "../canvas/ResizeHandles";
-import { startDrag } from "../canvas/useDrag";
+import { startNodeDrag } from "../canvas/nodeDrag";
 import { ipc } from "../ipc/commands";
 import { isAppError, type CanvasNode } from "../ipc/types";
 import { useCanvas } from "../state/canvas";
@@ -27,6 +27,7 @@ export function BrowserNode({ node }: { node: CanvasNode }) {
   const saved = "browser" in node.content ? node.content.browser : { url: "about:blank" };
   const state = useCanvas((s) => s.browserStates[node.id]);
   const selected = useCanvas((s) => s.selection?.kind === "node" && s.selection.id === node.id);
+  const grouped = useCanvas((s) => s.group.includes(node.id));
   const controlledBy = useCanvas((s) =>
     Object.values(s.asks)
       .filter((a) => a.to === node.id)
@@ -34,7 +35,7 @@ export function BrowserNode({ node }: { node: CanvasNode }) {
       .map((n) => (n && "terminal" in n.content ? n.content.terminal.name : "an agent"))
       .join(", "),
   );
-  const { previewFrame, commitFrame, bringToFront, pressNode, removeNode } = useCanvas.getState();
+  const { bringToFront, pressNode, removeNode } = useCanvas.getState();
   const addWarning = useWorkspaces((s) => s.addWarning);
   const url = state?.url ?? saved.url;
   const title = state?.title || saved.title || (url === "about:blank" ? "New page" : url);
@@ -65,13 +66,13 @@ export function BrowserNode({ node }: { node: CanvasNode }) {
 
   return (
     <div
-      className={`node browser-node${selected ? " selected" : ""}`}
+      className={`node browser-node${selected || grouped ? " selected" : ""}`}
       data-node-id={node.id}
       data-node-kind="browser"
       style={{ left: frame.x, top: frame.y, width: frame.width, height: frame.height, zIndex: node.z }}
       onPointerDown={(e) => {
         if (e.button !== 0 || (e.target as HTMLElement).closest("button, input, .link-handle, .resize-handle")) return;
-        if (pressNode(node.id, "note")) e.preventDefault();
+        if (pressNode(node.id, "note", e.shiftKey)) e.preventDefault();
       }}
     >
       <div
@@ -79,17 +80,9 @@ export function BrowserNode({ node }: { node: CanvasNode }) {
         style={{ height: BROWSER_CHROME_HEIGHT }}
         onPointerDown={(e) => {
           if (e.button !== 0 || (e.target as HTMLElement).closest("button, input")) return;
-          if (useCanvas.getState().linkingFrom) return;
+          if (useCanvas.getState().linkingFrom || e.shiftKey) return;
           void bringToFront(node.id);
-          const zoom = useCanvas.getState().camera.zoom;
-          const moved = (dx: number, dy: number) => ({ ...frame, x: frame.x + dx / zoom, y: frame.y + dy / zoom });
-          startDrag(
-            e,
-            (dx, dy) => previewFrame(node.id, moved(dx, dy)),
-            (dx, dy) => {
-              if (dx !== 0 || dy !== 0) void commitFrame(node.id, moved(dx, dy));
-            },
-          );
+          startNodeDrag(e, node.id);
         }}
       >
         <button type="button" className="icon-button" aria-label="Back" onClick={() => void act("back")}>

@@ -5,7 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { NOTE_COLORS } from "../canvas/NodeToolbar";
 import { ResizeHandles } from "../canvas/ResizeHandles";
-import { startDrag } from "../canvas/useDrag";
+import { startNodeDrag } from "../canvas/nodeDrag";
 import { ipc } from "../ipc/commands";
 import { noteStyle, type CanvasNode } from "../ipc/types";
 import { noteEditors } from "../notes/editorRegistry";
@@ -34,8 +34,9 @@ export function NoteNode({ node }: { node: CanvasNode }) {
   const style = noteStyle(node);
   const note = useCanvas((s) => s.notes[node.id]);
   const selected = useCanvas((s) => s.selection?.kind === "node" && s.selection.id === node.id);
+  const grouped = useCanvas((s) => s.group.includes(node.id));
   const raw = useCanvas((s) => s.rawNotes.has(node.id));
-  const { loadNote, setNoteText, previewFrame, commitFrame, bringToFront, pressNode, removeNode } = useCanvas.getState();
+  const { loadNote, setNoteText, bringToFront, pressNode, removeNode } = useCanvas.getState();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -136,7 +137,7 @@ export function NoteNode({ node }: { node: CanvasNode }) {
 
   return (
     <div
-      className={`node note-node color-${style.color}${selected ? " selected" : ""}`}
+      className={`node note-node color-${style.color}${selected || grouped ? " selected" : ""}`}
       data-node-id={node.id}
       data-node-kind="note"
       style={{
@@ -151,7 +152,7 @@ export function NoteNode({ node }: { node: CanvasNode }) {
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         if ((e.target as HTMLElement).closest("button, .link-handle, .resize-handle")) return;
-        if (pressNode(node.id, "note")) e.preventDefault();
+        if (pressNode(node.id, "note", e.shiftKey)) e.preventDefault();
       }}
     >
       <div
@@ -159,17 +160,9 @@ export function NoteNode({ node }: { node: CanvasNode }) {
         style={{ height: NOTE_TITLE_HEIGHT }}
         onPointerDown={(e) => {
           if (e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
-          if (useCanvas.getState().linkingFrom) return;
+          if (useCanvas.getState().linkingFrom || e.shiftKey) return;
           void bringToFront(node.id);
-          const zoom = useCanvas.getState().camera.zoom;
-          const moved = (dx: number, dy: number) => ({ ...frame, x: frame.x + dx / zoom, y: frame.y + dy / zoom });
-          startDrag(
-            e,
-            (dx, dy) => previewFrame(node.id, moved(dx, dy)),
-            (dx, dy) => {
-              if (dx !== 0 || dy !== 0) void commitFrame(node.id, moved(dx, dy));
-            },
-          );
+          startNodeDrag(e, node.id);
         }}
       >
         <span className="note-label">Note</span>
