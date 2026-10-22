@@ -54,6 +54,8 @@ pub struct SpawnOptions<'a> {
     pub env: &'a [(String, String)],
     /// Start Claude Code and Codex through `sonata run` (feature 003, research R4).
     pub wrap_agents: bool,
+    /// Sonata's zsh startup files (see `terminal::zsh`); used when the shell is zsh.
+    pub zsh_dir: Option<&'a Path>,
 }
 
 /// Agents that `sonata run` knows how to start with session instructions and hooks.
@@ -110,6 +112,13 @@ pub fn spawn(opts: SpawnOptions<'_>) -> io::Result<Spawned> {
     cmd.env_remove("SONATA_HOME");
     for (k, v) in opts.env {
         cmd.env(k, v);
+    }
+    if let Some(dir) = opts.zsh_dir
+        && shell.file_name().is_some_and(|n| n == "zsh")
+    {
+        let user = std::env::var_os("ZDOTDIR").unwrap_or_else(|| home.clone().into_os_string());
+        cmd.env("SONATA_USER_ZDOTDIR", user);
+        cmd.env("ZDOTDIR", dir);
     }
 
     let child = pty.slave.spawn_command(cmd).map_err(io::Error::other)?;

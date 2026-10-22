@@ -126,3 +126,77 @@ fn orchestrator_recruits_links_and_dismisses() {
     assert!(app.terminals().status(helper.id).is_none());
     app.quit();
 }
+
+#[test]
+fn orchestrator_creates_linked_notes_and_browsers() {
+    let sb = Sandbox::new();
+    let (app, _) = messaging_app(&sb);
+    let (ws, ids) = shells(&app, &sb, &["Lead", "Plain"]);
+    let (lead, plain) = (ids[0], ids[1]);
+    assert_eq!(sonata_as(&app, plain, &["note", "new", "Plan"]).code, 3);
+    assert_eq!(sonata_as(&app, plain, &["browser", "new"]).code, 3);
+    app.update_terminal_settings(
+        lead,
+        TerminalSettings {
+            orchestrator: Some(true),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+
+    let n = sonata_as(&app, lead, &["note", "new", "Plan", "- step one"]);
+    assert_eq!(n.code, 0, "{}", n.stderr);
+    let read = sonata_as(&app, lead, &["note", "read", "Plan"]);
+    assert_eq!(read.stdout.trim(), "# Plan\n\n- step one");
+
+    let b = sonata_as(&app, lead, &["browser", "new", "localhost:3000"]);
+    assert_eq!(b.code, 0, "{}", b.stderr);
+    let w = app.workspaces().workspace(ws).unwrap().clone();
+    let browser = w.nodes.iter().find(|n| n.browser().is_some()).unwrap();
+    assert_eq!(browser.browser().unwrap().url, "http://localhost:3000");
+    assert!(w.links.iter().any(|l| l.joins(lead, browser.id)));
+    assert_eq!(
+        sonata_as(&app, lead, &["browser", "new", "file:///x"]).code,
+        2
+    );
+    let list = sonata_as(&app, lead, &["list"]);
+    assert!(
+        list.stdout.contains("note") && list.stdout.contains("browser"),
+        "{}",
+        list.stdout
+    );
+    app.quit();
+}
+
+#[test]
+fn help_and_unknown_options_never_create_anything() {
+    let sb = Sandbox::new();
+    let (app, _) = messaging_app(&sb);
+    let (ws, ids) = shells(&app, &sb, &["Lead"]);
+    app.update_terminal_settings(
+        ids[0],
+        TerminalSettings {
+            orchestrator: Some(true),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let before = app.workspaces().workspace(ws).unwrap().nodes.len();
+    let help = sonata_as(&app, ids[0], &["recruit", "--help"]);
+    assert_eq!(help.code, 0);
+    assert!(help.stdout.contains("sonata recruit"), "{}", help.stdout);
+    for args in [
+        vec!["recruit", "-h"],
+        vec!["note", "new", "--help"],
+        vec!["browser", "new", "--help"],
+    ] {
+        assert_eq!(sonata_as(&app, ids[0], &args).code, 0);
+    }
+    assert_eq!(sonata_as(&app, ids[0], &["recruit", "--verbose"]).code, 2);
+    assert_eq!(
+        app.workspaces().workspace(ws).unwrap().nodes.len(),
+        before,
+        "something was created"
+    );
+    app.quit();
+}

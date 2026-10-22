@@ -411,6 +411,10 @@ impl App {
             restored_history: None,
             session_env: self.session_env(),
             wrap_agents: self.socket_path.is_some(),
+            zsh_dir: self
+                .socket_path
+                .as_ref()
+                .map(|_| self.data_root.path().join("run").join("zsh")),
         })
     }
 
@@ -1195,6 +1199,10 @@ impl App {
         let Some(path) = self.socket_path.clone() else {
             return;
         };
+        let zsh_dir = self.data_root.path().join("run").join("zsh");
+        if let Err(e) = crate::terminal::zsh::write_files(&zsh_dir) {
+            tracing::warn!(error = %e, "could not write zsh helper files");
+        }
         match crate::messaging::server::Server::start(self.this.clone(), path) {
             Ok(server) => *self.server.lock().unwrap_or_else(|e| e.into_inner()) = Some(server),
             Err(e) => {
@@ -1395,12 +1403,17 @@ impl App {
 
     /// A free 640×400 spot near `anchor` (research 003 R10).
     fn free_spot(&self, ws: Uuid, anchor: &Node) -> Frame {
+        self.free_spot_sized(ws, anchor, (640.0, 400.0))
+    }
+
+    /// A free spot of `size` near `anchor`, trying right, below, then left.
+    fn free_spot_sized(&self, ws: Uuid, anchor: &Node, size: (f64, f64)) -> Frame {
         let nodes: Vec<Frame> = self
             .workspaces()
             .workspace(ws)
             .map(|w| w.nodes.iter().map(|n| n.frame).collect())
             .unwrap_or_default();
-        let (w, h, gap) = (640.0, 400.0, 24.0);
+        let ((w, h), gap) = (size, 24.0);
         let overlaps = |f: &Frame| {
             nodes.iter().any(|o| {
                 f.x < o.x + o.width + gap
@@ -1537,6 +1550,55 @@ impl App {
         self.create_link(ws, orchestrator, node.id)?;
         self.notify_nodes_changed(ws);
         Ok(final_name)
+    }
+
+    /// Orchestrator: a note next to it, linked to it, starting with `# title` and `text`.
+    pub fn orchestrator_new_note(
+        &self,
+        orchestrator: Uuid,
+        title: &str,
+        text: &str,
+    ) -> AppResult<Node> {
+        let ws = self.workspace_of_node(orchestrator)?;
+        let anchor = self
+            .workspaces()
+            .workspace(ws)
+            .and_then(|w| w.node(orchestrator).cloned())
+            .ok_or_else(|| AppError::node_not_found(orchestrator))?;
+        let frame = self.free_spot_sized(ws, &anchor, (320.0, 240.0));
+        let note = self.create_note(ws, frame)?;
+        let mut body = format!("# {}\n", title.trim());
+        if !text.trim().is_empty() {
+            body.push_str(&format!("\n{}\n", text.trim_end()));
+        }
+        self.note_write(note.id, &body, true)?;
+        self.create_link(ws, orchestrator, note.id)?;
+        self.emit(CoreEvent::NoteChanged(crate::events::NoteChangedEvent {
+            node_id: note.id,
+            text: body,
+            sync: "clean".into(),
+        }));
+        self.notify_nodes_changed(ws);
+        Ok(note)
+    }
+
+    /// Orchestrator: a browser next to it, linked to it.
+    pub fn orchestrator_new_browser(
+        &self,
+        orchestrator: Uuid,
+        url: Option<&str>,
+    ) -> AppResult<Node> {
+        let ws = self.workspace_of_node(orchestrator)?;
+        let anchor = self
+            .workspaces()
+            .workspace(ws)
+            .and_then(|w| w.node(orchestrator).cloned())
+            .ok_or_else(|| AppError::node_not_found(orchestrator))?;
+        let frame = self.free_spot_sized(ws, &anchor, crate::browser::DEFAULT_SIZE);
+        let node = self.create_browser(ws, frame, url)?;
+        self.create_link(ws, orchestrator, node.id)?;
+        self.notify_nodes_changed(ws);
+        Ok(node)
     }
 
     /// Closes a recruited terminal and removes it with its links (FR-022).

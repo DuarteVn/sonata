@@ -36,6 +36,8 @@ pub fn instructions(info: &SessionInfo<'_>) -> String {
          - `sonata check <name>` — see a linked terminal's screen without sending anything.\n\
          - `sonata note read <note>` / `sonata note write <note> \"<text>\" [--append]` — shared \
          notes.\n\
+         - `sonata browser read <browser>` and `open|click|fill|press|screenshot` — use linked \
+         browsers.\n\
          - `sonata notify \"<message>\"` — tell the user something important (macOS \
          notification).\n\n\
          When another agent asks you something through Sonata, the message arrives as a normal \
@@ -49,6 +51,9 @@ pub fn instructions(info: &SessionInfo<'_>) -> String {
              - `sonata recruit <claude|codex|opencode|gemini|shell> --name <Name> [--role-text \
              \"<what they do>\"] [--folder <path>]` — start a new agent linked to you.\n\
              - `sonata dismiss <name>` — close an agent you recruited.\n\
+             - `sonata note new \"<title>\" [\"<text>\"]` — create a note linked to you.\n\
+             - `sonata browser new [<url>]` — open a browser linked to you; drive it with \
+             `sonata browser open|read|click|fill|press|screenshot <id>`.\n\
              - `sonata link <a> <b>` / `sonata unlink <a> <b>` — connect or disconnect items in \
              this workspace.\n",
         );

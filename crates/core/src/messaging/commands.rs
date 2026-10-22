@@ -47,6 +47,12 @@ pub fn handle(app: &App, req: &Request, progress: &mut dyn FnMut(&str)) -> Reply
         ["reply", rest @ ..] => reply(&ctx, rest, stdin),
         ["note", "read", note] => note_read(&ctx, note),
         ["note", "write", rest @ ..] => note_write(&ctx, rest, stdin),
+        ["note", "new", rest @ ..] => {
+            orchestrator(&ctx).unwrap_or_else(|| note_new(&ctx, rest, stdin))
+        }
+        ["browser", "new", rest @ ..] => {
+            orchestrator(&ctx).unwrap_or_else(|| browser_new(&ctx, rest))
+        }
         ["browser", rest @ ..] => browser(&ctx, rest),
         ["notify", rest @ ..] if !rest.is_empty() || stdin.is_some() => {
             notify(&ctx, &stdin.unwrap_or_else(|| rest.join(" ")))
@@ -643,6 +649,12 @@ fn recruit(ctx: &Ctx<'_>, rest: &[&str]) -> Reply {
             "--role" => role = it.next().map(|s| s.to_string()),
             "--role-text" => role_text = it.next().map(|s| s.to_string()),
             "--folder" => folder = it.next().map(|s| s.to_string()),
+            other if other.starts_with('-') => {
+                return Reply::err(
+                    EXIT_USAGE,
+                    format!("Unknown option \"{other}\". Run `sonata help recruit`."),
+                );
+            }
             other if what.is_none() => what = Some(other.to_string()),
             other => {
                 return Reply::err(
@@ -864,4 +876,46 @@ fn browser(ctx: &Ctx<'_>, rest: &[&str]) -> Reply {
     };
     ctx.app.end_browser_control(marker);
     reply
+}
+
+fn note_new(ctx: &Ctx<'_>, rest: &[&str], stdin: Option<String>) -> Reply {
+    let Some((title, body)) = rest.split_first() else {
+        return Reply::err(
+            EXIT_USAGE,
+            "Usage: sonata note new \"<title>\" [\"<text>\"] (or --stdin for the text)",
+        );
+    };
+    let text = stdin.unwrap_or_else(|| body.join(" "));
+    match ctx.app.orchestrator_new_note(ctx.me, title, &text) {
+        Ok(n) => Reply::ok(format!(
+            "Created note \"{title}\" ({}), linked to you.",
+            short_id(n.id)
+        ))
+        .with_data(json!({"id": short_id(n.id)})),
+        Err(e) => Reply::err(EXIT_ERROR, e.message),
+    }
+}
+
+fn browser_new(ctx: &Ctx<'_>, rest: &[&str]) -> Reply {
+    match ctx
+        .app
+        .orchestrator_new_browser(ctx.me, rest.first().copied())
+    {
+        Ok(n) => {
+            let id = crate::browser::short_id(n.id);
+            let url = n.browser().map(|b| b.url.clone()).unwrap_or_default();
+            Reply::ok(format!(
+                "Created browser {id} ({url}), linked to you. Use `sonata browser read {id}`."
+            ))
+            .with_data(json!({"id": id}))
+        }
+        Err(e) => Reply::err(
+            if e.code == crate::ErrorCode::InvalidAddress {
+                EXIT_USAGE
+            } else {
+                EXIT_ERROR
+            },
+            e.message,
+        ),
+    }
 }

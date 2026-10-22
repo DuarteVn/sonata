@@ -274,6 +274,14 @@ the log and see each exchange.
 - **FR-023**: link and unlink MUST create or remove a link between two named items of the
   orchestrator's workspace, resolved by name among all items of that workspace.
 
+- **FR-021a** (added 2026-10-22 from user testing): `sonata note new "<title>" ["<text>"]` and
+  `sonata browser new [<url>]` MUST create the item next to the Orchestrator, linked to it.
+- **FR-021b** (added 2026-10-22): `--help` or `-h` on any command MUST only print help and never
+  run the command; unknown options MUST be refused.
+- **FR-018a** (added 2026-10-22): In zsh terminals, `claude` and `codex` typed by hand MUST start
+  through `sonata run` (session instructions), while the user's own zsh startup files keep loading
+  unchanged.
+
 **Notes and notifications**
 
 - **FR-024**: note read, write, and write `--append` MUST work on linked notes, update the canvas

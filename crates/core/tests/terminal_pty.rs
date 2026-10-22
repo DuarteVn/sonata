@@ -24,6 +24,7 @@ fn spec(cwd: PathBuf) -> SpawnSpec {
         restored_history: None,
         session_env: Vec::new(),
         wrap_agents: false,
+        zsh_dir: None,
     }
 }
 
