@@ -1,5 +1,7 @@
 mod common;
 
+use std::time::Duration;
+
 use common::{Sandbox, WAIT, test_app, wait_until};
 use sonata_core::app::NewTerminal;
 use sonata_core::terminal::history;
@@ -119,6 +121,9 @@ fn disabling_history_deletes_file_and_clear_removes_it() {
         .id;
     app.open_workspace(ws).unwrap();
     let node = app.create_terminal(ws, NewTerminal::default()).unwrap().id;
+    // Type only once the shell shows its prompt; input sent earlier can be lost on Linux.
+    assert!(wait_until(WAIT, || app
+        .terminal_ready(node, Duration::from_millis(300))));
     app.terminals().write(node, b"echo secret-token\r").unwrap();
     assert!(wait_until(WAIT, || app
         .terminals()
