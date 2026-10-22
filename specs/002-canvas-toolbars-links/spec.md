@@ -227,7 +227,9 @@ delete it.
   exclusion below).
 - **FR-030**: In a live terminal, Shift+Enter MUST send Escape followed by Return, which agent
   CLIs read as a new line, and Option MUST type characters (for example Option+C types "ç")
-  instead of acting as Meta. Added 2026-10-22 from user feedback.
+  instead of acting as Meta. Cmd+Backspace MUST delete the line before the cursor (Ctrl+U), and
+  Cmd+Left and Cmd+Right MUST move to the line start and end (Ctrl+A, Ctrl+E). Added 2026-10-22
+  from user feedback.
 
 **New Terminal dialog**
 
