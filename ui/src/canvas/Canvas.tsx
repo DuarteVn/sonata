@@ -1,29 +1,42 @@
-import { Plus, StickyNote } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { AddTerminalDialog } from "../dialogs/AddTerminalDialog";
-import { isTerminal } from "../ipc/types";
+import { ConfirmDialog } from "../dialogs/ConfirmDialog";
+import { TerminalDialog } from "../dialogs/TerminalDialog";
+import { isAppError, isTerminal } from "../ipc/types";
+import { linkDragBus } from "../nodes/LinkHandle";
 import { NoteNode } from "../nodes/NoteNode";
 import { TerminalNode } from "../nodes/TerminalNode";
 import { useCanvas } from "../state/canvas";
+import { useWorkspaces } from "../state/workspaces";
 import { LiveTerminalLayer } from "../terminal/LiveTerminalLayer";
 import { routePointerDown, routeWheel, targetOf } from "./gestures";
+import { routeKey } from "./keyboard";
+import { LinkLayer, type LinkDrag } from "./LinkLayer";
+import { NodeToolbar } from "./NodeToolbar";
+import { ToolBar } from "./ToolBar";
 import { pan, screenToCanvas, zoomAt, type ScreenRect } from "./viewport";
 import { startDrag } from "./useDrag";
 
 const GESTURE_END_MS = 150;
+const NOTE_SIZE = { width: 260, height: 200 };
 
 function hasTextFocus() {
   const el = document.activeElement;
-  return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
+  return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || (el as HTMLElement | null)?.isContentEditable === true;
 }
 
 export function Canvas() {
   const ref = useRef<HTMLDivElement>(null);
   const nodes = useCanvas((s) => s.nodes);
   const camera = useCanvas((s) => s.camera);
+  const tool = useCanvas((s) => s.tool);
+  const linkingFrom = useCanvas((s) => s.linkingFrom);
+  const dialog = useCanvas((s) => s.terminalDialog);
+  const confirmClose = useCanvas((s) => s.confirmClose);
   const [viewport, setViewport] = useState<ScreenRect>({ left: 0, top: 0, width: 0, height: 0 });
-  const [adding, setAdding] = useState(false);
+  const [linkDrag, setLinkDrag] = useState<LinkDrag>(null);
   const spaceHeld = useRef(false);
+
+  const report = (err: unknown) => useWorkspaces.getState().addWarning(isAppError(err) ? err.message : String(err));
 
   useLayoutEffect(() => {
     const el = ref.current!;
@@ -36,6 +49,21 @@ export function Canvas() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  useEffect(() => {
+    linkDragBus.listener = setLinkDrag;
+    return () => {
+      linkDragBus.listener = null;
+    };
+  }, []);
+
+  const center = () =>
+    screenToCanvas(useCanvas.getState().camera, { x: viewport.width / 2, y: viewport.height / 2 });
+
+  const placeTerminalAtCenter = () => {
+    const c = center();
+    useCanvas.getState().openTerminalDialog({ kind: "create", at: { x: c.x - 320, y: c.y - 200 } });
+  };
 
   // Wheel and pinch (FR-008a). Capture phase, so unfocused terminals never scroll themselves.
   useEffect(() => {
@@ -66,12 +94,39 @@ export function Canvas() {
     return () => el.removeEventListener("wheel", onWheel, { capture: true });
   }, []);
 
-  // Space + drag pans only when nothing has keyboard focus, so typing a space never pans.
+  // Keyboard: Space+drag panning, tool shortcuts, Delete, Escape (FR-002, FR-004, FR-005).
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      if (e.code === "Space" && !useCanvas.getState().focusedId && !hasTextFocus()) {
+      const s = useCanvas.getState();
+      if (e.code === "Space" && !s.focusedId && !hasTextFocus()) {
         spaceHeld.current = true;
         e.preventDefault();
+        return;
+      }
+      if (document.querySelector(".modal-backdrop")) return;
+      if (e.key === "Enter" && s.tool === "terminal" && !hasTextFocus()) {
+        e.preventDefault();
+        placeTerminalAtCenter();
+        return;
+      }
+      const action = routeKey({
+        key: e.key,
+        textFocus: hasTextFocus(),
+        terminalFocus: false,
+        hasSelection: s.selection !== null,
+        linking: s.linkingFrom !== null,
+        meta: e.metaKey || e.ctrlKey || e.altKey,
+      });
+      if (!action) return;
+      e.preventDefault();
+      if (action === "tool:select") s.setTool("select");
+      else if (action === "tool:terminal") s.setTool("terminal");
+      else if (action === "tool:note") s.setTool("note");
+      else if (action === "delete") s.deleteSelection().catch(report);
+      else if (action === "cancelLink") s.cancelLinking();
+      else {
+        s.select(null);
+        s.setTool("select");
       }
     };
     const up = (e: KeyboardEvent) => {
@@ -83,29 +138,18 @@ export function Canvas() {
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
     };
-  }, []);
-
-  const addTerminal = async (opts: { name?: string; launchCommand?: string }) => {
-    const { camera, addTerminal } = useCanvas.getState();
-    const center = screenToCanvas(camera, { x: viewport.width / 2, y: viewport.height / 2 });
-    const offset = (nodes.length % 6) * 24;
-    await addTerminal({ x: center.x - 320 + offset, y: center.y - 200 + offset, width: 640, height: 400 }, opts);
-  };
-
-  const addNote = async () => {
-    const { camera, addNote } = useCanvas.getState();
-    const center = screenToCanvas(camera, { x: viewport.width / 2, y: viewport.height / 2 });
-    await addNote({ x: center.x - 130, y: center.y - 100, width: 260, height: 200 });
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewport]);
 
   const layerTransform = `translate(${-camera.x * camera.zoom}px, ${-camera.y * camera.zoom}px) scale(${camera.zoom})`;
   const grid = 24 * camera.zoom;
+  const closing = confirmClose ? nodes.find((n) => n.id === confirmClose) : undefined;
 
   return (
     <div className="canvas-wrap">
       <div
         ref={ref}
-        className="canvas"
+        className={`canvas tool-${tool}${linkingFrom ? " linking" : ""}`}
         role="application"
         aria-label="Canvas"
         style={{
@@ -113,42 +157,64 @@ export function Canvas() {
           backgroundPosition: `${-camera.x * camera.zoom}px ${-camera.y * camera.zoom}px`,
         }}
         onPointerDownCapture={(e) => {
-          const { focusedId, setFocus } = useCanvas.getState();
+          const s = useCanvas.getState();
+          const target = targetOf(e.target as Element);
           const action = routePointerDown({
             button: e.button,
             spaceHeld: spaceHeld.current,
-            keyboardFocus: focusedId !== null || hasTextFocus(),
-            target: targetOf(e.target as Element),
+            keyboardFocus: s.focusedId !== null || hasTextFocus(),
+            target,
           });
           if (action === "pan") {
             e.preventDefault();
             e.stopPropagation();
-            const start = useCanvas.getState().camera;
-            startDrag(
-              e,
-              (dx, dy) => useCanvas.getState().setCamera(pan(start, dx, dy)),
-              () => {},
-            );
-          } else if (action === "clearFocus") {
-            setFocus(null);
+            const start = s.camera;
+            startDrag(e, (dx, dy) => useCanvas.getState().setCamera(pan(start, dx, dy)), () => {});
+            return;
+          }
+          if (target.kind !== "empty" || e.button !== 0) return;
+          if ((e.target as Element).closest(".link-layer g, .node-toolbar, .tool-bar-wrap")) return;
+          const r = ref.current!.getBoundingClientRect();
+          const at = screenToCanvas(s.camera, { x: e.clientX - r.left, y: e.clientY - r.top });
+          if (s.tool === "terminal") {
+            s.openTerminalDialog({ kind: "create", at });
+          } else if (s.tool === "note") {
+            s.addNote({ x: at.x, y: at.y, ...NOTE_SIZE })
+              .then((n) => s.select({ kind: "node", id: n.id }))
+              .catch(report);
+            s.setTool("select");
+          } else {
+            s.cancelLinking();
+            s.select(null);
+            s.setFocus(null);
             (document.activeElement as HTMLElement | null)?.blur?.();
           }
         }}
       >
         <div className="canvas-layer" style={{ transform: layerTransform }}>
+          <LinkLayer drag={linkDrag} />
           {nodes.map((n) => (isTerminal(n) ? <TerminalNode key={n.id} node={n} /> : <NoteNode key={n.id} node={n} />))}
         </div>
         <LiveTerminalLayer viewport={viewport} />
+        <NodeToolbar viewport={viewport} />
       </div>
-      <div className="canvas-toolbar">
-        <button type="button" onClick={() => setAdding(true)} aria-label="Add terminal">
-          <Plus size={14} /> Terminal
-        </button>
-        <button type="button" onClick={() => void addNote()} aria-label="Add note">
-          <StickyNote size={14} /> Note
-        </button>
-      </div>
-      {adding && <AddTerminalDialog onAdd={addTerminal} onClose={() => setAdding(false)} />}
+      <ToolBar onPlaceAtCenter={placeTerminalAtCenter} />
+      {linkingFrom && <div className="linking-hint">Click another item to link it · Esc to cancel</div>}
+      {dialog && <TerminalDialog mode={dialog} onClose={() => useCanvas.getState().openTerminalDialog(null)} />}
+      {closing && (
+        <ConfirmDialog
+          title="Close terminal?"
+          body={`A program is still running in "${"terminal" in closing.content ? closing.content.terminal.name : ""}". Closing the terminal stops it.`}
+          confirmLabel="Close"
+          danger
+          onCancel={() => useCanvas.getState().setConfirmClose(null)}
+          onConfirm={() => {
+            const s = useCanvas.getState();
+            s.setConfirmClose(null);
+            s.removeNode(closing.id, true).catch(report);
+          }}
+        />
+      )}
     </div>
   );
 }

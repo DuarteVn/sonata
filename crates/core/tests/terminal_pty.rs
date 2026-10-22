@@ -22,6 +22,8 @@ fn spec(cwd: PathBuf) -> SpawnSpec {
         history_max_rows: 10_000,
         shell: Some("/bin/sh".into()),
         restored_history: None,
+        session_env: Vec::new(),
+        wrap_agents: false,
     }
 }
 
@@ -73,14 +75,22 @@ fn launch_command_runs_once_and_shell_stays_open() {
     let id = s.node_id;
     m.start(s).unwrap();
     assert!(
-        screen_has(&m, id, "\nhello-from-launch"),
+        wait_until(WAIT, || m.screen_text(id).is_some_and(|t| t
+            .lines()
+            .any(|l| common::is_output(l, "hello-from-launch")))),
         "{:?}",
         m.screen_text(id)
     );
     std::thread::sleep(std::time::Duration::from_millis(200));
     assert!(matches!(m.status(id), Some(RunStatus::Running { .. })));
     let text = m.screen_text(id).unwrap();
-    assert_eq!(text.matches("\nhello-from-launch").count(), 1, "{text}");
+    assert_eq!(
+        text.lines()
+            .filter(|l| common::is_output(l, "hello-from-launch"))
+            .count(),
+        1,
+        "{text}"
+    );
     m.stop(id);
 }
 
@@ -132,7 +142,9 @@ fn exit_code_is_reported_and_restart_starts_new_shell() {
         Some(RunStatus::Running { .. })
     )));
     m.write(id, b"echo again\r").unwrap();
-    assert!(screen_has(&m, id, "\nagain"));
+    assert!(wait_until(WAIT, || m.screen_text(id).is_some_and(|t| t
+        .lines()
+        .any(|l| common::is_output(l, "again")))));
     m.stop(id);
 }
 

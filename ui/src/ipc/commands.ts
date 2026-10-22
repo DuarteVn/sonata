@@ -1,5 +1,12 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
+  ExchangeEntry,
+  Link,
+  NoteStyle,
+  PresetStatus,
+  Role,
+  SettingsUpdate,
+  TerminalSettings,
   NoteView,
   Bootstrap,
   BusyWorkspace,
@@ -30,7 +37,7 @@ export const ipc = {
   nodeCreateTerminal: (
     workspaceId: string,
     frame: Frame,
-    opts: { name?: string; launchCommand?: string; workingDirectory?: string } = {},
+    opts: { name?: string; launchCommand?: string; workingDirectory?: string; settings?: TerminalSettings } = {},
   ) => invoke<CanvasNode>("node_create_terminal", { workspaceId, frame, ...opts }),
   nodeUpdateFrame: (workspaceId: string, nodeId: string, frame: Frame) =>
     invoke<Frame>("node_update_frame", { workspaceId, nodeId, frame }),
@@ -52,7 +59,19 @@ export const ipc = {
   terminalRename: (nodeId: string, name: string) => invoke<string>("terminal_rename", { nodeId, name }),
   terminalSetLaunchCommand: (nodeId: string, launchCommand: string | null) =>
     invoke<void>("terminal_set_launch_command", { nodeId, launchCommand }),
-  terminalRestart: (nodeId: string) => invoke<void>("terminal_restart", { nodeId }),
+  terminalRestart: (nodeId: string, confirmed = false) => invoke<void>("terminal_restart", { nodeId, confirmed }),
+  terminalUpdateSettings: (nodeId: string, settings: TerminalSettings) =>
+    invoke<SettingsUpdate>("terminal_update_settings", { nodeId, settings }),
+  exchangeLog: (nodeId: string) => invoke<ExchangeEntry[]>("exchange_log", { nodeId }),
+  presetsDetect: () => invoke<PresetStatus[]>("presets_detect"),
+  rolesList: () => invoke<Role[]>("roles_list"),
+  roleSave: (name: string, text: string) => invoke<Role>("role_save", { name, text }),
+  roleDelete: (id: string) => invoke<void>("role_delete", { id }),
+  linkCreate: (workspaceId: string, a: string, b: string) => invoke<Link>("link_create", { workspaceId, a, b }),
+  linkDelete: (workspaceId: string, linkId: string) => invoke<void>("link_delete", { workspaceId, linkId }),
+  noteSetStyle: (nodeId: string, style: NoteStyle) => invoke<void>("note_set_style", { nodeId, style }),
+  noteInsertImage: (nodeId: string, sourcePath: string) =>
+    invoke<{ markdown: string }>("note_insert_image", { nodeId, sourcePath }),
   terminalSetSaveHistory: (nodeId: string, enabled: boolean) =>
     invoke<void>("terminal_set_save_history", { nodeId, enabled }),
   terminalPreviewSubscribe: (nodeIds: string[]) => invoke<void>("terminal_preview_subscribe", { nodeIds }),

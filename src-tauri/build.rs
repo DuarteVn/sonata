@@ -19,6 +19,14 @@ const COMMANDS: &[&str] = &[
     "node_create_note",
     "note_read",
     "note_write",
+    "note_set_style",
+    "note_insert_image",
+    "link_create",
+    "link_delete",
+    "roles_list",
+    "role_save",
+    "role_delete",
+    "presets_detect",
     "terminal_attach",
     "terminal_detach",
     "terminal_write",
@@ -29,6 +37,8 @@ const COMMANDS: &[&str] = &[
     "terminal_set_save_history",
     "terminal_clear_history",
     "terminal_preview_subscribe",
+    "terminal_update_settings",
+    "exchange_log",
 ];
 
 fn main() {

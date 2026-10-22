@@ -1,5 +1,7 @@
 mod common;
 
+use std::time::Duration;
+
 use common::{Sandbox, WAIT, test_app, wait_until};
 use sonata_core::app::NewTerminal;
 use sonata_core::terminal::history;
@@ -40,7 +42,8 @@ fn save_cap_restore_and_relaunch() {
             .terminals()
             .screen_text(node.id)
             .unwrap()
-            .contains("\nbefore-restart")));
+            .lines()
+            .any(|l| common::is_output(l, "before-restart"))));
         app.save_dirty();
         let path = sb
             .root
@@ -119,12 +122,16 @@ fn disabling_history_deletes_file_and_clear_removes_it() {
         .id;
     app.open_workspace(ws).unwrap();
     let node = app.create_terminal(ws, NewTerminal::default()).unwrap().id;
+    // Type only once the shell shows its prompt; input sent earlier can be lost on Linux.
+    assert!(wait_until(WAIT, || app
+        .terminal_ready(node, Duration::from_millis(300))));
     app.terminals().write(node, b"echo secret-token\r").unwrap();
     assert!(wait_until(WAIT, || app
         .terminals()
         .screen_text(node)
         .unwrap()
-        .contains("\nsecret-token")));
+        .lines()
+        .any(|l| common::is_output(l, "secret-token"))));
     let path = sb.root.terminals_dir(ws).join(format!("{node}.history"));
 
     app.save_dirty();
@@ -138,7 +145,8 @@ fn disabling_history_deletes_file_and_clear_removes_it() {
         .terminals()
         .screen_text(node)
         .unwrap()
-        .contains("\nmore")));
+        .lines()
+        .any(|l| common::is_output(l, "more"))));
     app.save_dirty();
     assert!(!path.exists(), "history written although disabled");
     app.quit();

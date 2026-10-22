@@ -149,3 +149,23 @@ fn camera_is_clamped_and_changes_mark_workspace_dirty() {
     assert_eq!(app.workspaces().dirty_ids(), vec![ws]);
     app.shutdown_terminals();
 }
+
+#[test]
+fn restart_of_busy_terminal_needs_confirmation() {
+    let sb = Sandbox::new();
+    let (app, ws) = setup(&sb);
+    let t = app.create_terminal(ws, NewTerminal::default()).unwrap();
+    assert!(wait_until(WAIT, || app
+        .terminals()
+        .screen_text(t.id)
+        .is_some_and(|s| s.contains('$'))));
+    app.terminals().write(t.id, b"sleep 10\r").unwrap();
+    assert!(wait_until(WAIT, || app.terminals().is_busy(t.id)));
+    assert_eq!(
+        app.restart_terminal(t.id, false).unwrap_err().code,
+        ErrorCode::TerminalBusy
+    );
+    app.restart_terminal(t.id, true).unwrap();
+    assert!(wait_until(WAIT, || !app.terminals().is_busy(t.id)));
+    app.shutdown_terminals();
+}

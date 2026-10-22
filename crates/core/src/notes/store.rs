@@ -51,6 +51,8 @@ pub struct NoteView {
     pub sync: NoteSync,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conflict_path: Option<PathBuf>,
+    /// The note's folder, so relative image paths can be resolved.
+    pub asset_base: PathBuf,
 }
 
 #[derive(Debug)]
@@ -132,6 +134,7 @@ impl NoteStore {
     }
 
     pub fn read(&mut self, ws: Uuid, node: Uuid) -> NoteView {
+        let asset_base = self.root.notes_dir(ws);
         let s = self.state(ws, node);
         let conflict_path = match &s.sync {
             NoteSync::Conflict { path } => Some(path.clone()),
@@ -141,6 +144,7 @@ impl NoteStore {
             text: s.text.clone(),
             sync: s.sync.clone(),
             conflict_path,
+            asset_base,
         }
     }
 

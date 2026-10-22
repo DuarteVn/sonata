@@ -36,6 +36,7 @@ export class XtermSession {
     private readonly el: HTMLElement,
     private readonly opts: SessionOptions,
   ) {
+    this.zoom = opts.zoom;
     this.term = new Terminal({
       fontSize: opts.baseFontSize * opts.zoom,
       fontFamily: '"SF Mono", Menlo, Monaco, monospace',
@@ -92,10 +93,21 @@ export class XtermSession {
     return this.webgl !== undefined;
   }
 
+  private zoom = 1;
+
   /** Scales the font with the canvas zoom. The grid (cols × rows) stays the same. */
   setZoom(zoom: number) {
+    this.zoom = zoom;
     this.term.options.fontSize = this.opts.baseFontSize * zoom;
     this.term.resize(this.cols, this.rows);
+  }
+
+  /** A new per-terminal font size changes the grid, so refit and tell the core. */
+  setBaseFontSize(size: number) {
+    if (size === this.opts.baseFontSize) return;
+    this.opts.baseFontSize = size;
+    this.term.options.fontSize = size * this.zoom;
+    this.refit();
   }
 
   /** Recomputes the grid after the node was resized and tells the core. */

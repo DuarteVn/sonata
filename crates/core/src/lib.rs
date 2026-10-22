@@ -9,10 +9,13 @@ pub mod crash_guard;
 pub mod error;
 pub mod events;
 pub mod logging;
+pub mod messaging;
 pub mod model;
 pub mod notes;
 pub mod paths;
 pub mod persistence;
+pub mod presets;
+pub mod roles;
 pub mod terminal;
 pub mod workspace;
 

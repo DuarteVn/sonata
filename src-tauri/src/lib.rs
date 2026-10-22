@@ -2,6 +2,7 @@
 
 mod commands;
 mod events;
+mod menu;
 
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -18,16 +19,35 @@ const QUIT_REQUESTED: &str = "app://quit-requested";
 
 pub fn run() {
     let app = tauri::Builder::default()
+        // A second launch focuses the running app instead (003 FR-031). Registered first.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(Quitting::default())
+        .menu(menu::build)
+        .on_menu_event(|app, event| menu::on_event(app, event.id().as_ref()))
         .setup(|tauri_app| {
             let root = DataRoot::from_env()?;
+            // The webview may read only Sonata's own data folder (note images, research R6).
+            tauri_app
+                .asset_protocol_scope()
+                .allow_directory(root.path(), true)?;
             let log_guard = sonata_core::logging::init(&root)?;
             tauri_app.manage(log_guard);
             let sink = Arc::new(TauriEventSink {
                 handle: tauri_app.handle().clone(),
             });
-            let core = App::start(root, sink)?;
+            let options = sonata_core::app::AppOptions {
+                shell: None,
+                cli_dir: cli_dir(tauri_app.handle()),
+                socket: true,
+            };
+            let core = App::start_with(root, sink, options)?;
             spawn_autosave(core.clone());
             spawn_summary_monitor(core.clone());
             spawn_launch_window_timer(core.clone());
@@ -62,6 +82,14 @@ pub fn run() {
             commands::note::node_create_note,
             commands::note::note_read,
             commands::note::note_write,
+            commands::note::note_set_style,
+            commands::note::note_insert_image,
+            commands::link::link_create,
+            commands::link::link_delete,
+            commands::role::roles_list,
+            commands::role::role_save,
+            commands::role::role_delete,
+            commands::role::presets_detect,
             commands::terminal::terminal_attach,
             commands::terminal::terminal_detach,
             commands::terminal::terminal_write,
@@ -72,6 +100,8 @@ pub fn run() {
             commands::terminal::terminal_set_save_history,
             commands::terminal::terminal_clear_history,
             commands::terminal::terminal_preview_subscribe,
+            commands::terminal::terminal_update_settings,
+            commands::terminal::exchange_log,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Sonata");
@@ -131,4 +161,16 @@ fn spawn_launch_window_timer(core: Arc<App>) {
             core.mark_outlived_launch_window();
         })
         .expect("spawn launch window timer");
+}
+
+/// Folder with the `sonata` CLI: inside the app bundle, or the Cargo target folder in development.
+fn cli_dir(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    let bundled = app.path().resource_dir().ok().map(|d| d.join("bin"));
+    if let Some(dir) = bundled.filter(|d| d.join("sonata").is_file()) {
+        return Some(dir);
+    }
+    let dev = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/debug");
+    dev.join("sonata")
+        .is_file()
+        .then(|| dev.canonicalize().unwrap_or(dev))
 }

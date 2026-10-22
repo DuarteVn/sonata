@@ -72,6 +72,8 @@ describe("recovery UI", () => {
     } satisfies CanvasNode;
     render(<TerminalMenu node={node} />);
     await userEvent.click(screen.getByRole("button", { name: "Terminal options" }));
+    // Regression: the menu must render outside the canvas layers so live terminals cannot cover it.
+    expect(screen.getByRole("menu").parentElement).toBe(document.body);
     const toggle = screen.getByRole("menuitemcheckbox", { name: "Save history" });
     expect(toggle).toHaveAttribute("aria-checked", "true");
     await userEvent.click(toggle);

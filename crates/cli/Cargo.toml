@@ -1,0 +1,14 @@
+[package]
+name = "sonata-cli"
+description = "The `sonata` command used inside Sonata terminals."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "sonata"
+path = "src/main.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true

@@ -1,9 +1,72 @@
 //! Headless terminal screen model (research R1). Every PTY byte goes through it, so screens,
 //! previews, and history exist without any view attached.
 
+use std::collections::VecDeque;
 use std::num::NonZeroU16;
 
-use vt100::capture::{BasicFormattedCaptureRange, BasicFormattedCaptureState};
+use vt100::capture::{BasicFormattedCaptureRange, BasicFormattedCaptureState, RowContents};
+
+/// Rows that scrolled off the main screen, kept as plain text for answer extraction.
+const SCROLLED_KEEP: usize = 20_000;
+
+/// Counts rows scrolled off the main screen and keeps the latest ones as plain text, so a row
+/// has a stable absolute index even after it leaves the scrollback (research 003 R5).
+#[derive(Default)]
+pub struct ScrollTracker {
+    pub scrolled: u64,
+    pub recent: VecDeque<String>,
+}
+
+impl vt100::Callbacks for ScrollTracker {
+    fn on_scroll(&mut self, contents: RowContents<'_>, alternate_screen: bool) {
+        if alternate_screen {
+            return;
+        }
+        let mut formatted = String::new();
+        let _ = contents
+            .write_formatted_basic(&mut formatted, &mut BasicFormattedCaptureState::default());
+        self.scrolled += 1;
+        self.recent
+            .push_back(strip_ansi(&formatted).trim_end().to_string());
+        if self.recent.len() > SCROLLED_KEEP {
+            self.recent.pop_front();
+        }
+    }
+}
+
+/// Removes ANSI escape sequences (CSI, OSC, and two-byte escapes).
+pub fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '\x1b' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('[') => {
+                for c in chars.by_ref() {
+                    if ('@'..='~').contains(&c) {
+                        break;
+                    }
+                }
+            }
+            Some(']') => {
+                while let Some(c) = chars.next() {
+                    if c == '\x07' {
+                        break;
+                    }
+                    if c == '\x1b' && chars.peek() == Some(&'\\') {
+                        chars.next();
+                        break;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
 
 /// A terminal emulator state that can be rebuilt elsewhere from its own replay.
 /// Implemented with `vt100`; kept as a trait so the emulator can be swapped (plan.md,
@@ -21,10 +84,15 @@ pub trait ScreenModel: Send {
     /// Scrollback plus visible rows, oldest first, with SGR colors, at most `max_rows` rows.
     fn history_rows(&self, max_rows: usize) -> Vec<String>;
     fn alternate_screen(&self) -> bool;
+    /// Absolute index of the cursor's row: rows scrolled off so far plus the cursor row.
+    fn absolute_row(&self) -> u64;
+    /// Plain-text rows from absolute row `from` to the last non-empty visible row.
+    fn rows_since(&self, from: u64) -> Vec<String>;
+    fn bracketed_paste(&self) -> bool;
 }
 
 pub struct Vt100Screen {
-    parser: vt100::Parser,
+    parser: vt100::Parser<ScrollTracker>,
 }
 
 fn nz(v: u16) -> NonZeroU16 {
@@ -34,7 +102,12 @@ fn nz(v: u16) -> NonZeroU16 {
 impl Vt100Screen {
     pub fn new(rows: u16, cols: u16, scrollback: usize) -> Self {
         Self {
-            parser: vt100::Parser::new(nz(rows), nz(cols), scrollback),
+            parser: vt100::Parser::new_with_callbacks(
+                nz(rows),
+                nz(cols),
+                scrollback,
+                ScrollTracker::default(),
+            ),
         }
     }
 
@@ -113,6 +186,36 @@ impl ScreenModel for Vt100Screen {
 
     fn alternate_screen(&self) -> bool {
         self.parser.screen().alternate_screen()
+    }
+
+    fn absolute_row(&self) -> u64 {
+        self.parser.callbacks().scrolled + u64::from(self.parser.screen().cursor_position().0)
+    }
+
+    fn rows_since(&self, from: u64) -> Vec<String> {
+        let tracker = self.parser.callbacks();
+        let mut out: Vec<String> = Vec::new();
+        if from < tracker.scrolled {
+            let kept_from = tracker.scrolled - tracker.recent.len() as u64;
+            let start = from.max(kept_from);
+            let skip = (start - kept_from) as usize;
+            out.extend(tracker.recent.iter().skip(skip).cloned());
+        }
+        let first_visible = from.saturating_sub(tracker.scrolled) as usize;
+        let visible: Vec<String> = self
+            .preview_lines()
+            .into_iter()
+            .map(|l| l.trim_end().to_string())
+            .collect();
+        out.extend(visible.into_iter().skip(first_visible));
+        while out.last().is_some_and(|l| l.is_empty()) {
+            out.pop();
+        }
+        out
+    }
+
+    fn bracketed_paste(&self) -> bool {
+        self.parser.screen().bracketed_paste()
     }
 }
 

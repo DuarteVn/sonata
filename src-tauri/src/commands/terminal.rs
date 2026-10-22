@@ -75,8 +75,12 @@ pub fn terminal_set_launch_command(
 }
 
 #[tauri::command]
-pub fn terminal_restart(app: State<'_, Arc<App>>, node_id: Uuid) -> Result<(), AppError> {
-    app.restart_terminal(node_id)
+pub fn terminal_restart(
+    app: State<'_, Arc<App>>,
+    node_id: Uuid,
+    confirmed: bool,
+) -> Result<(), AppError> {
+    app.restart_terminal(node_id, confirmed)
 }
 
 #[tauri::command]
@@ -96,4 +100,21 @@ pub fn terminal_clear_history(app: State<'_, Arc<App>>, node_id: Uuid) -> Result
 #[tauri::command]
 pub fn terminal_preview_subscribe(app: State<'_, Arc<App>>, node_ids: Vec<Uuid>) {
     app.subscribe_previews(node_ids);
+}
+
+#[tauri::command]
+pub fn terminal_update_settings(
+    app: State<'_, Arc<App>>,
+    node_id: Uuid,
+    settings: sonata_core::app::TerminalSettings,
+) -> Result<sonata_core::app::SettingsUpdate, AppError> {
+    app.update_terminal_settings(node_id, settings)
+}
+
+#[tauri::command]
+pub fn exchange_log(
+    app: State<'_, Arc<App>>,
+    node_id: Uuid,
+) -> Vec<sonata_core::messaging::broker::LogEntry> {
+    app.exchange_log(node_id)
 }

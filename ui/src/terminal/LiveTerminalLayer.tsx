@@ -79,7 +79,7 @@ export function LiveTerminalLayer({ viewport }: { viewport: ScreenRect }) {
             node={n}
             rect={frameToScreen(settled, bodyFrame(n))}
             zoom={settled.zoom}
-            baseFontSize={baseFontSize}
+            baseFontSize={("terminal" in n.content && n.content.terminal.fontSize) || baseFontSize}
             focused={focusedId === id}
             renderer={renderer}
           />
@@ -101,7 +101,7 @@ type LiveProps = {
 function LiveTerminal({ node, rect, zoom, baseFontSize, focused, renderer }: LiveProps) {
   const ref = useRef<HTMLDivElement>(null);
   const session = useRef<XtermSession | null>(null);
-  const { setFocus, bringToFront, setTerminalState, markWebglLost } = useCanvas.getState();
+  const { pressNode, bringToFront, setTerminalState, markWebglLost } = useCanvas.getState();
 
   useEffect(() => {
     const s = new XtermSession(node.id, ref.current!, {
@@ -128,6 +128,8 @@ function LiveTerminal({ node, rect, zoom, baseFontSize, focused, renderer }: Liv
 
   useEffect(() => session.current?.setZoom(zoom), [zoom]);
 
+  useEffect(() => session.current?.setBaseFontSize(baseFontSize), [baseFontSize]);
+
   useEffect(() => {
     const t = setTimeout(() => session.current?.refit(), 120);
     return () => clearTimeout(t);
@@ -148,7 +150,10 @@ function LiveTerminal({ node, rect, zoom, baseFontSize, focused, renderer }: Liv
       style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height, zIndex: node.z }}
       onPointerDown={(e) => {
         if (e.button !== 0) return;
-        setFocus(node.id);
+        if (pressNode(node.id, "terminal")) {
+          e.preventDefault();
+          return;
+        }
         void bringToFront(node.id);
       }}
     />
