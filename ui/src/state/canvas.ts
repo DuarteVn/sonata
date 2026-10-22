@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { ipc } from "../ipc/commands";
-import type { Camera, CanvasNode, Frame, TerminalStateEvent, Workspace } from "../ipc/types";
+import type { Camera, CanvasNode, Frame, NoteSync, TerminalStateEvent, Workspace } from "../ipc/types";
+
+export type NoteState = { text: string; sync: NoteSync; conflictPath?: string; loaded: boolean };
 
 type CanvasState = {
   workspaceId: string | null;
@@ -10,6 +12,11 @@ type CanvasState = {
   /** True while a pan/zoom gesture is in progress (live terminals use a CSS transform). */
   gesturing: boolean;
   terminalStates: Record<string, TerminalStateEvent>;
+  notes: Record<string, NoteState>;
+  addNote: (frame: Frame) => Promise<CanvasNode>;
+  loadNote: (id: string) => Promise<void>;
+  setNoteText: (id: string, text: string, sync: NoteSync) => void;
+  setNoteConflict: (id: string, conflictPath: string) => void;
   load: (ws: Workspace | null) => void;
   setCamera: (camera: Camera) => void;
   setGesturing: (on: boolean) => void;
@@ -37,6 +44,26 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   focusedId: null,
   gesturing: false,
   terminalStates: {},
+  notes: {},
+
+  addNote: async (frame) => {
+    const ws = get().workspaceId;
+    if (!ws) throw new Error("No workspace open.");
+    const node = await ipc.nodeCreateNote(ws, frame);
+    set((s) => ({ nodes: [...s.nodes, node], notes: { ...s.notes, [node.id]: { text: "", sync: "clean", loaded: true } } }));
+    return node;
+  },
+
+  loadNote: async (id) => {
+    const view = await ipc.noteRead(id);
+    set((s) => ({ notes: { ...s.notes, [id]: { ...view, loaded: true } } }));
+  },
+
+  setNoteText: (id, text, sync) =>
+    set((s) => ({ notes: { ...s.notes, [id]: { ...s.notes[id], text, sync, loaded: true } } })),
+
+  setNoteConflict: (id, conflictPath) =>
+    set((s) => ({ notes: { ...s.notes, [id]: { ...s.notes[id], sync: "conflict", conflictPath, loaded: true } } })),
 
   load: (ws) =>
     set({

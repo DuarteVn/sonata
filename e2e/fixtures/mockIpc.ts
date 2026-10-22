@@ -37,6 +37,7 @@ export function installMockIpc() {
   (window as unknown as { __sonataMock: MockState }).__sonataMock = state;
   let seq = 0;
   const id = () => `id-${++seq}`;
+  const noteTexts: Record<string, string> = {};
   const find = (wsId: unknown) => state.workspaces.find((w) => w.id === wsId);
 
   mockIPC(
@@ -157,6 +158,28 @@ export function installMockIpc() {
         if (ws) ws.nodes = ws.nodes.filter((n) => n.id !== args.nodeId);
         return null;
       }
+      case "node_create_note": {
+        const ws = find(args.workspaceId);
+        if (!ws) throw { code: "WorkspaceNotFound", message: "No workspace." };
+        const now = new Date().toISOString();
+        const frame = args.frame as CanvasNode["frame"];
+        const node: CanvasNode = {
+          id: id(),
+          frame: { ...frame, width: Math.max(120, frame.width), height: Math.max(80, frame.height) },
+          z: Math.max(0, ...ws.nodes.map((n) => n.z)) + 1,
+          createdAt: now,
+          modifiedAt: now,
+          content: { note: {} },
+        };
+        ws.nodes.push(node);
+        noteTexts[node.id] = "";
+        return node;
+      }
+      case "note_read":
+        return { text: noteTexts[String(args.nodeId)] ?? "", sync: "clean" };
+      case "note_write":
+        noteTexts[String(args.nodeId)] = String(args.text);
+        return null;
       case "terminal_rename":
         return String(args.name).trim();
       default:

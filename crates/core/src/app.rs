@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, Weak};
 
 use chrono::Utc;
 use serde::Serialize;
@@ -12,8 +12,11 @@ use crate::crash_guard;
 use crate::error::{AppError, AppResult, ErrorCode};
 use crate::events::{CoreEvent, EventSink};
 use crate::model::node::{Frame, Node, NodeContent, TERMINAL_NAME_MAX_CHARS, TerminalContent};
+use crate::model::node::{NOTE_MIN_SIZE, NoteContent};
 use crate::model::preferences::Preferences;
 use crate::model::workspace::{Camera, Workspace};
+use crate::notes::store::{NoteStore, NoteView};
+use crate::notes::watcher::{self, NotesWatcher};
 use crate::paths::{self, DataRoot};
 use crate::persistence::store::{LoadFailure, Store};
 use crate::terminal::history;
@@ -118,6 +121,9 @@ pub struct App {
     crash_guard_tripped: bool,
     /// Output sequence number of each terminal at its last history save.
     history_saved_seq: Mutex<HashMap<Uuid, u64>>,
+    notes: Mutex<NoteStore>,
+    note_watchers: Mutex<HashMap<Uuid, NotesWatcher>>,
+    this: Weak<App>,
 }
 
 impl App {
@@ -139,6 +145,7 @@ impl App {
             )),
             Err(e) => warnings.push(format!("Could not check permissions of Sonata's data: {e}")),
         }
+        let notes = NoteStore::new(root.clone());
         let store = Store::new(root);
         let prefs = store.load_preferences();
         let mut manager = WorkspaceManager::load(store)?;
@@ -157,7 +164,7 @@ impl App {
                     .into(),
             );
         }
-        Ok(Arc::new(Self {
+        Ok(Arc::new_cyclic(|this| Self {
             workspaces: Mutex::new(manager),
             terminals: TerminalManager::new(events.clone()),
             preferences: prefs.value,
@@ -166,6 +173,9 @@ impl App {
             startup_warnings: Mutex::new(warnings),
             crash_guard_tripped: tripped,
             history_saved_seq: Mutex::default(),
+            notes: Mutex::new(notes),
+            note_watchers: Mutex::default(),
+            this: this.clone(),
         }))
     }
 
@@ -227,6 +237,7 @@ impl App {
                     self.start_terminal(&ws, node);
                 }
             }
+            self.watch_notes(id);
         }
         self.notify_workspaces_changed();
         Ok(ws)
@@ -351,15 +362,13 @@ impl App {
 
     /// Deletes a node. A busy terminal needs `confirmed` (FR-018).
     pub fn delete_node(&self, ws: Uuid, node: Uuid, confirmed: bool) -> AppResult<()> {
-        let is_terminal = {
+        let (is_terminal, is_note) = {
             let m = self.workspaces();
             let w = m
                 .workspace(ws)
                 .ok_or_else(|| AppError::workspace_not_found(ws))?;
-            w.node(node)
-                .ok_or_else(|| AppError::node_not_found(node))?
-                .terminal()
-                .is_some()
+            let n = w.node(node).ok_or_else(|| AppError::node_not_found(node))?;
+            (n.terminal().is_some(), n.is_note())
         };
         if is_terminal && !confirmed && self.terminals.is_busy(node) {
             return Err(AppError::new(
@@ -368,10 +377,75 @@ impl App {
             ));
         }
         self.terminals.stop(node);
+        if is_note {
+            self.note_store().delete(ws, node)?;
+        }
         self.workspaces().update(ws, |w| {
             w.nodes.retain(|n| n.id != node);
             Ok(())
         })
+    }
+
+    fn note_store(&self) -> MutexGuard<'_, NoteStore> {
+        self.notes.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub fn create_note(&self, ws_id: Uuid, frame: Frame) -> AppResult<Node> {
+        self.require_loaded(ws_id)?;
+        let now = Utc::now();
+        let node = Node {
+            id: Uuid::new_v4(),
+            frame: frame.clamped(NOTE_MIN_SIZE),
+            z: 0,
+            created_at: now,
+            modified_at: now,
+            content: NodeContent::Note(NoteContent {}),
+        };
+        self.note_store().create(ws_id, node.id)?;
+        self.workspaces().update(ws_id, |ws| {
+            let mut node = node.clone();
+            node.z = ws.max_z() + 1;
+            ws.nodes.push(node.clone());
+            Ok(node)
+        })
+    }
+
+    pub fn note_read(&self, node: Uuid) -> AppResult<NoteView> {
+        let ws = self.workspace_of_node(node)?;
+        Ok(self.note_store().read(ws, node))
+    }
+
+    /// Updates a note's text; with `flush` it is written now, otherwise at the next save.
+    pub fn note_write(&self, node: Uuid, text: &str, flush: bool) -> AppResult<()> {
+        let ws = self.workspace_of_node(node)?;
+        self.note_store().write(ws, node, text, flush)?;
+        Ok(())
+    }
+
+    /// Starts watching a loaded workspace's notes folder for outside edits (FR-020a).
+    fn watch_notes(&self, ws: Uuid) {
+        let dir = self.workspaces().store().root().notes_dir(ws);
+        if let Err(e) = paths::ensure_private_dir(&dir) {
+            tracing::warn!(error = %e, "could not create notes folder");
+            return;
+        }
+        let this = self.this.clone();
+        let result = watcher::watch(&dir, move |node| {
+            let Some(app) = this.upgrade() else { return };
+            let event = app.note_store().external_change(ws, node);
+            if let Some(event) = event {
+                app.emit(event);
+            }
+        });
+        match result {
+            Ok(w) => {
+                self.note_watchers
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(ws, w);
+            }
+            Err(e) => tracing::warn!(error = %e, "could not watch notes folder"),
+        }
     }
 
     pub fn set_camera(&self, ws: Uuid, x: f64, y: f64, zoom: f64) -> AppResult<Camera> {
@@ -433,6 +507,10 @@ impl App {
         report
             .errors
             .extend(self.save_histories().into_iter().map(|e| (None, e)));
+        let note_errors = self.note_store().save_dirty();
+        report
+            .errors
+            .extend(note_errors.into_iter().map(|e| (None, e)));
         for (_, err) in &report.errors {
             self.emit(CoreEvent::PersistenceWarning(format!(
                 "Could not save: {err}"
@@ -615,6 +693,11 @@ impl App {
         for node in node_ids {
             self.terminals.stop(node);
         }
+        self.note_watchers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&id);
+        self.note_store().forget_workspace(id);
         self.workspaces().delete(id)?;
         self.notify_workspaces_changed();
         Ok(())
@@ -673,6 +756,10 @@ impl App {
             }
         }
         self.terminals.stop_all();
+        self.note_watchers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
     }
 }
 

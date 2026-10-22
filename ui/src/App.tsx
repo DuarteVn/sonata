@@ -24,6 +24,8 @@ export function App() {
       onEvent("workspaces://changed", setSummaries),
       onEvent("persistence://warning", (p) => addWarning(p.message)),
       onEvent("terminal://state", (e) => useCanvas.getState().setTerminalState(e)),
+      onEvent("note://changed", (e) => useCanvas.getState().setNoteText(e.nodeId, e.text, e.sync)),
+      onEvent("note://conflict", (e) => useCanvas.getState().setNoteConflict(e.nodeId, e.conflictPath)),
       // Cmd+Q or closing the window: quit at once unless programs are running (FR-018a).
       onEvent("app://quit-requested", async () => {
         const busy = await ipc.appQuitCheck();

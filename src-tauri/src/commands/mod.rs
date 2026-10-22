@@ -2,5 +2,6 @@
 
 pub mod app;
 pub mod node;
+pub mod note;
 pub mod terminal;
 pub mod workspace;

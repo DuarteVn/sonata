@@ -183,15 +183,15 @@ present as a readable `.md` file.
 
 ### Tests for User Story 4 (write first, must fail)
 
-- [ ] T073 [P] [US4] Note tests in `crates/core/tests/notes.rs`: creating a note writes an empty `notes/<nodeId>.md`; minimum frame "note 120×80"; `note_write` marks dirty and the next save writes the file; deleting the node removes the file; external edit with no in-app edits emits `note://changed` within 2 s; external edit while dirty writes `<nodeId> (conflict).md`, keeps in-app text, emits `note://conflict`; the app's own writes do not trigger reloads (hash check); a deleted file sets `FileMissing` and is rewritten at the next save
-- [ ] T074 [P] [US4] Note UI tests in `ui/tests/note-node.test.tsx`: double-click enters edit mode with a textarea; blur renders Markdown (heading, GFM list, table); conflict warning shown on `note://conflict`
+- [X] T073 [P] [US4] Note tests in `crates/core/tests/notes.rs`: creating a note writes an empty `notes/<nodeId>.md`; minimum frame "note 120×80"; `note_write` marks dirty and the next save writes the file; deleting the node removes the file; external edit with no in-app edits emits `note://changed` within 2 s; external edit while dirty writes `<nodeId> (conflict).md`, keeps in-app text, emits `note://conflict`; the app's own writes do not trigger reloads (hash check); a deleted file sets `FileMissing` and is rewritten at the next save
+- [X] T074 [P] [US4] Note UI tests in `ui/tests/note-node.test.tsx`: double-click enters edit mode with a textarea; blur renders Markdown (heading, GFM list, table); conflict warning shown on `note://conflict`
 
 ### Implementation for User Story 4
 
-- [ ] T075 [US4] Implement note file read/write/delete with last-written content hash and `NoteSync` states `Clean | Dirty | Conflict{path} | FileMissing` in `crates/core/src/notes/store.rs`
-- [ ] T076 [US4] Implement the watcher per research R8 (`notify-debouncer-full`, 300 ms, per loaded workspace `notes/`) in `crates/core/src/notes/watcher.rs` (depends on T075)
-- [ ] T077 [US4] Add `create_note` and note deletion to `crates/core/src/workspace/manager.rs`; implement commands `node_create_note`, `note_read`, `note_write` in `src-tauri/src/commands/note.rs`; register in capabilities (depends on T076)
-- [ ] T078 [US4] Implement `ui/src/nodes/NoteNode.tsx` (`react-markdown` + `remark-gfm` render, textarea edit, `note_write` debounced and on blur, conflict and missing-file warnings) and an "Add note" toolbar action in `ui/src/canvas/Canvas.tsx`
+- [X] T075 [US4] Implement note file read/write/delete with last-written content hash and `NoteSync` states `Clean | Dirty | Conflict{path} | FileMissing` in `crates/core/src/notes/store.rs`
+- [X] T076 [US4] Implement the watcher per research R8 (`notify-debouncer-full`, 300 ms, per loaded workspace `notes/`) in `crates/core/src/notes/watcher.rs` (depends on T075)
+- [X] T077 [US4] Add `create_note` and note deletion to `crates/core/src/workspace/manager.rs`; implement commands `node_create_note`, `note_read`, `note_write` in `src-tauri/src/commands/note.rs`; register in capabilities (depends on T076)
+- [X] T078 [US4] Implement `ui/src/nodes/NoteNode.tsx` (`react-markdown` + `remark-gfm` render, textarea edit, `note_write` debounced and on blur, conflict and missing-file warnings) and an "Add note" toolbar action in `ui/src/canvas/Canvas.tsx`
 
 **Checkpoint**: US4 passes independently.
 

@@ -1,7 +1,8 @@
-import { Plus } from "lucide-react";
+import { Plus, StickyNote } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AddTerminalDialog } from "../dialogs/AddTerminalDialog";
 import { isTerminal } from "../ipc/types";
+import { NoteNode } from "../nodes/NoteNode";
 import { TerminalNode } from "../nodes/TerminalNode";
 import { useCanvas } from "../state/canvas";
 import { LiveTerminalLayer } from "../terminal/LiveTerminalLayer";
@@ -91,6 +92,12 @@ export function Canvas() {
     await addTerminal({ x: center.x - 320 + offset, y: center.y - 200 + offset, width: 640, height: 400 }, opts);
   };
 
+  const addNote = async () => {
+    const { camera, addNote } = useCanvas.getState();
+    const center = screenToCanvas(camera, { x: viewport.width / 2, y: viewport.height / 2 });
+    await addNote({ x: center.x - 130, y: center.y - 100, width: 260, height: 200 });
+  };
+
   const layerTransform = `translate(${-camera.x * camera.zoom}px, ${-camera.y * camera.zoom}px) scale(${camera.zoom})`;
   const grid = 24 * camera.zoom;
 
@@ -129,13 +136,16 @@ export function Canvas() {
         }}
       >
         <div className="canvas-layer" style={{ transform: layerTransform }}>
-          {nodes.map((n) => (isTerminal(n) ? <TerminalNode key={n.id} node={n} /> : null))}
+          {nodes.map((n) => (isTerminal(n) ? <TerminalNode key={n.id} node={n} /> : <NoteNode key={n.id} node={n} />))}
         </div>
         <LiveTerminalLayer viewport={viewport} />
       </div>
       <div className="canvas-toolbar">
         <button type="button" onClick={() => setAdding(true)} aria-label="Add terminal">
           <Plus size={14} /> Terminal
+        </button>
+        <button type="button" onClick={() => void addNote()} aria-label="Add note">
+          <StickyNote size={14} /> Note
         </button>
       </div>
       {adding && <AddTerminalDialog onAdd={addTerminal} onClose={() => setAdding(false)} />}

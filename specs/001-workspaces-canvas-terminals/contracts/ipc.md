@@ -78,8 +78,8 @@ type WorkspaceView = WorkspaceSummary & { camera: Camera; nodes: NodeView[] };
 
 | Command | Input | Output |
 |---|---|---|
-| `note_read` | `{workspaceId, nodeId}` | `{text, sync}` |
-| `note_write` | `{workspaceId, nodeId, text}` | — (marks dirty; saved by autosave or on blur) |
+| `note_read` | `{nodeId}` | `{text, sync, conflictPath?}` |
+| `note_write` | `{nodeId, text, flush}` | — (`flush: false` marks dirty for autosave; `flush: true` writes now, used on blur) |
 
 ### Quit
 

@@ -101,6 +101,7 @@ export type TerminalStateEvent = {
 export type PreviewEvent = { nodeId: string; lines: string[]; cursor?: [number, number] };
 
 export type NoteSync = "clean" | "dirty" | "conflict" | "fileMissing";
+export type NoteView = { text: string; sync: NoteSync; conflictPath?: string };
 export type NoteChangedEvent = { nodeId: string; text: string; sync: NoteSync };
 export type NoteConflictEvent = { nodeId: string; conflictPath: string };
 
@@ -108,6 +109,10 @@ export type BusyWorkspace = { workspaceId: string; workspaceName: string; count:
 
 export function isTerminal(node: CanvasNode): node is CanvasNode & { content: { terminal: TerminalContent } } {
   return "terminal" in node.content;
+}
+
+export function isNote(node: CanvasNode): boolean {
+  return "note" in node.content;
 }
 
 export function isAppError(value: unknown): value is AppError {

@@ -1,5 +1,6 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
+  NoteView,
   Bootstrap,
   BusyWorkspace,
   CanvasNode,
@@ -37,6 +38,10 @@ export const ipc = {
     invoke<{ z: number }>("node_bring_to_front", { workspaceId, nodeId }),
   nodeDelete: (workspaceId: string, nodeId: string, confirmed: boolean) =>
     invoke<void>("node_delete", { workspaceId, nodeId, confirmed }),
+
+  nodeCreateNote: (workspaceId: string, frame: Frame) => invoke<CanvasNode>("node_create_note", { workspaceId, frame }),
+  noteRead: (nodeId: string) => invoke<NoteView>("note_read", { nodeId }),
+  noteWrite: (nodeId: string, text: string, flush: boolean) => invoke<void>("note_write", { nodeId, text, flush }),
 
   terminalAttach: (nodeId: string, channel: Channel<ArrayBuffer>, cols: number, rows: number) =>
     invoke<TerminalStateEvent | null>("terminal_attach", { nodeId, channel, cols, rows }),
