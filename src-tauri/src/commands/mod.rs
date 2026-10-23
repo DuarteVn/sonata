@@ -3,6 +3,7 @@
 pub mod app;
 pub mod browser;
 pub mod lane;
+pub mod device;
 pub mod link;
 pub mod node;
 pub mod note;

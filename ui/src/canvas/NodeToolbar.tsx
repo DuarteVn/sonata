@@ -59,7 +59,12 @@ export const NOTE_COLORS: { id: NoteColor; swatch: string }[] = [
   { id: "gray", swatch: "#cfd2d8" },
 ];
 
-const SIZES = { terminal: { width: 232, height: 40 }, note: { width: 600, height: 40 }, browser: { width: 180, height: 40 } };
+const SIZES = {
+  terminal: { width: 232, height: 40 },
+  note: { width: 600, height: 40 },
+  browser: { width: 180, height: 40 },
+  device: { width: 120, height: 40 },
+};
 
 function BrowserActions({ node }: { node: CanvasNode }) {
   const addWarning = useWorkspaces((s) => s.addWarning);
@@ -76,6 +81,21 @@ function BrowserActions({ node }: { node: CanvasNode }) {
       </Btn>
       <span className="tb-sep" />
       <Btn label="Delete browser" onClick={() => void useCanvas.getState().removeNode(node.id, true).catch(report)}>
+        <Trash2 size={15} />
+      </Btn>
+    </>
+  );
+}
+
+// Device nodes (feature 007): link and delete; screenshot and stop arrive with the live screen.
+function DeviceActions({ node }: { node: CanvasNode }) {
+  const addWarning = useWorkspaces((s) => s.addWarning);
+  const report = (err: unknown) => addWarning(isAppError(err) ? err.message : String(err));
+  return (
+    <>
+      <LinkButton node={node} />
+      <span className="tb-sep" />
+      <Btn label="Delete device" onClick={() => void useCanvas.getState().removeNode(node.id, true).catch(report)}>
         <Trash2 size={15} />
       </Btn>
     </>
@@ -116,17 +136,26 @@ export function NodeToolbar({ viewport }: { viewport: ScreenRect }) {
   const camera = useCanvas((s) => s.camera);
   const gesturing = useCanvas((s) => s.gesturing);
   if (!selection || !node || gesturing) return null;
-  const kind = isTerminal(node) ? "terminal" : "browser" in node.content ? "browser" : "note";
+  const kind = isTerminal(node) ? "terminal" : "browser" in node.content ? "browser" : "device" in node.content ? "device" : "note";
+  const labels = { terminal: "Terminal actions", browser: "Browser actions", device: "Device actions", note: "Note actions" };
   const pos = placeToolbar(frameToScreen(camera, node.frame), viewport, SIZES[kind]);
   if (!pos) return null;
   return (
     <div
       className="node-toolbar"
       role="toolbar"
-      aria-label={kind === "terminal" ? "Terminal actions" : kind === "browser" ? "Browser actions" : "Note actions"}
+      aria-label={labels[kind]}
       style={{ left: pos.left, top: pos.top }}
     >
-      {kind === "terminal" ? <TerminalActions node={node} /> : kind === "browser" ? <BrowserActions node={node} /> : <NoteActions node={node} />}
+      {kind === "terminal" ? (
+        <TerminalActions node={node} />
+      ) : kind === "browser" ? (
+        <BrowserActions node={node} />
+      ) : kind === "device" ? (
+        <DeviceActions node={node} />
+      ) : (
+        <NoteActions node={node} />
+      )}
     </div>
   );
 }

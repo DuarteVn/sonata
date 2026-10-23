@@ -3,8 +3,9 @@ import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { LaneDialog } from "../dialogs/LaneDialog";
 import { TerminalDialog } from "../dialogs/TerminalDialog";
 import { ipc } from "../ipc/commands";
-import { isAppError, isBrowser, isTerminal } from "../ipc/types";
+import { isAppError, isBrowser, isDevice, isTerminal } from "../ipc/types";
 import { BROWSER_CHROME_HEIGHT, BrowserNode } from "../nodes/BrowserNode";
+import { DEVICE_SIZE, DeviceNode } from "../nodes/DeviceNode";
 import { linkDragBus } from "../nodes/LinkHandle";
 import { NoteNode } from "../nodes/NoteNode";
 import { TerminalNode } from "../nodes/TerminalNode";
@@ -134,6 +135,7 @@ export function Canvas() {
       else if (action === "tool:terminal") s.setTool("terminal");
       else if (action === "tool:note") s.setTool("note");
       else if (action === "tool:browser") s.setTool("browser");
+      else if (action === "tool:device") s.setTool("device");
       else if (action === "delete") s.deleteSelection().catch(report);
       else if (action === "cancelLink") s.cancelLinking();
       else {
@@ -250,6 +252,9 @@ export function Canvas() {
           } else if (s.tool === "browser") {
             s.addBrowser({ x: at.x, y: at.y, ...BROWSER_SIZE }).catch(report);
             s.setTool("select");
+          } else if (s.tool === "device") {
+            s.addDevice({ x: at.x, y: at.y, ...DEVICE_SIZE }).catch(report);
+            s.setTool("select");
           } else if (s.tool === "note") {
             s.addNote({ x: at.x, y: at.y, ...NOTE_SIZE })
               .then((n) => s.select({ kind: "node", id: n.id }))
@@ -285,6 +290,8 @@ export function Canvas() {
               <TerminalNode key={n.id} node={n} />
             ) : isBrowser(n) ? (
               <BrowserNode key={n.id} node={n} />
+            ) : isDevice(n) ? (
+              <DeviceNode key={n.id} node={n} />
             ) : (
               <NoteNode key={n.id} node={n} />
             ),

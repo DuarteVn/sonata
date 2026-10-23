@@ -19,6 +19,8 @@ import type {
   RefreshReason,
   CanvasNode,
   Camera,
+  Platform,
+  ToolReport,
   Frame,
   TerminalStateEvent,
   Workspace,
@@ -84,6 +86,12 @@ export const ipc = {
     invoke<void>("browser_action", { nodeId, action }),
   browserLayout: (items: { nodeId: string; rect: { x: number; y: number; width: number; height: number } | null }[]) =>
     invoke<void>("browser_layout", { items }),
+  nodeCreateDevice: (workspaceId: string, frame: Frame) => invoke<CanvasNode>("node_create_device", { workspaceId, frame }),
+  deviceTools: () => invoke<ToolReport>("device_tools"),
+  deviceChooseSdk: (path: string) => invoke<ToolReport>("device_choose_sdk", { path }),
+  deviceSelect: (nodeId: string, platform: Platform, deviceId: string, name?: string, osVersion?: string) =>
+    invoke<CanvasNode>("device_select", { nodeId, platform, deviceId, name, osVersion }),
+  deviceOpenHelp: (topic: "android" | "avd" | "xcode") => invoke<void>("device_open_help", { topic }),
   exchangeLog: (nodeId: string) => invoke<ExchangeEntry[]>("exchange_log", { nodeId }),
   presetsDetect: () => invoke<PresetStatus[]>("presets_detect"),
   rolesList: () => invoke<Role[]>("roles_list"),

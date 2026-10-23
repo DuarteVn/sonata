@@ -21,7 +21,10 @@ its current schema version (same reasoning as 004 R9). Loading never boots a dev
 
 ## Tool locations (runtime, core)
 
-`ToolReport { android: Found{sdk, emulator, adb} | Missing{looked: [path]}, avds: [Avd] | NoAvd{avdHome}, ios: Found{xcrun} | Missing }`
+`ToolReport { android: {sdk?, looked: [path], avdHome, avds: [Avd], helpUrl, avdHelpUrl}, ios: {developerDir?, helpUrl} }`
+
+Detection reads files and environment variables only; it runs no program (running `xcrun` on a
+Mac without developer tools opens Apple's installer prompt).
 
 `Avd { name, displayName, apiLevel?, osVersion?, abi?, screen: (width, height)? }`
 
@@ -58,5 +61,4 @@ Replaced on each `read`; invalid when the current signature differs (R4, R5).
 
 ## Events
 
-`device://state` `{nodeId, state, message?, controller?, mode, screen?, imageVersion}`
-`device://tools` `ToolReport` (after "Check again" or a chosen SDK folder)
+`device://state` `{nodeId, state: {kind, message?}, startedBySonata, reduced, screen?}`

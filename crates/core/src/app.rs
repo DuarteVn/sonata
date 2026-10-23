@@ -1,7 +1,7 @@
 //! The facade the desktop shell talks to. Owns workspaces, preferences, and the event sink.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use std::time::Instant;
 
@@ -2007,6 +2007,46 @@ impl App {
             d.os_version = clean(os_version);
             Ok(n.clone())
         })
+    }
+
+    /// SDK, virtual devices, and Xcode as found now (FR-009, FR-010). Reads files only.
+    pub fn device_tools(&self) -> crate::device::tools::ToolReport {
+        let pref = Store::new(self.data_root.clone())
+            .load_preferences()
+            .value
+            .android_sdk_path;
+        crate::device::tools::detect(&crate::device::tools::Env::current(), pref.as_deref())
+    }
+
+    /// "Choose SDK folder…": saved in preferences only when it holds the emulator and adb.
+    pub fn device_choose_sdk(&self, path: &Path) -> crate::device::tools::ToolReport {
+        let report =
+            crate::device::tools::detect(&crate::device::tools::Env::current(), Some(path));
+        if report.android.sdk.as_deref() == Some(path) {
+            let store = Store::new(self.data_root.clone());
+            let mut prefs = store.load_preferences().value;
+            prefs.android_sdk_path = Some(path.to_path_buf());
+            if let Err(e) = store.save_preferences(&prefs) {
+                tracing::warn!(error = %e, "could not save the Android SDK folder");
+            }
+        }
+        report
+    }
+
+    /// Opens one of the official install pages in the default browser (FR-010). Only these fixed
+    /// addresses can be opened, never one sent by the page.
+    pub fn device_open_help(&self, topic: &str) -> AppResult<()> {
+        use crate::device::tools::{ANDROID_HELP_URL, AVD_HELP_URL, XCODE_HELP_URL};
+        let url = match topic {
+            "android" => ANDROID_HELP_URL,
+            "avd" => AVD_HELP_URL,
+            "xcode" => XCODE_HELP_URL,
+            _ => return Err(AppError::internal(format!("No help page named {topic}."))),
+        };
+        std::process::Command::new("/usr/bin/open")
+            .arg(url)
+            .spawn()?;
+        Ok(())
     }
 
     pub fn set_device_launcher(&self, launcher: Arc<dyn crate::device::DeviceLauncher>) {

@@ -181,8 +181,11 @@ reinventing gRPC framing).
 
 ## R11. iOS simulator (P3, decided 2026-10-23: detect and list only, plus simctl basics)
 
-**Decision**: `xcrun simctl list devices available --json` lists simulators; "Xcode not found"
-when `xcrun --find simctl` fails (link `https://developer.apple.com/xcode/`). As a last, optional
+**Decision**: Xcode is found without running a program: `DEVELOPER_DIR`, the `xcode-select`
+link `/var/db/xcode_select_link`, then `/Applications/Xcode.app/Contents/Developer`, each valid
+when `usr/bin/simctl` exists. (`xcrun` on a Mac without developer tools opens Apple's install
+prompt, which would break "never install".) `simctl list devices available --json` lists
+simulators; "Xcode not found" otherwise (link `https://developer.apple.com/xcode/`). As a last, optional
 phase: `boot`, `stop` (`shutdown`), `screenshot` (`simctl io <udid> screenshot`), `launch`,
 `apps` (`listapps`), `install` (`.app`). The live view is a screenshot poll (2–4 fps; below
 FR-004, accepted for P3). `tap`, `swipe`, `type`, `key`, `read` fail with "not supported on iOS
