@@ -16,6 +16,13 @@ export type ErrorCode =
   | "ImageTooLarge"
   | "ImageUnsupported"
   | "InvalidAddress"
+  | "LaneUnavailable"
+  | "LaneBlocked"
+  | "LaneConflict"
+  | "LaneUnsafePath"
+  | "LaneHasChanges"
+  | "ConfirmationRequired"
+  | "LaneConfirmationNeeded"
   | "Io"
   | "Internal";
 

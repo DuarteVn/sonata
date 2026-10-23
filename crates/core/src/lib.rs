@@ -9,6 +9,7 @@ pub mod browser;
 pub mod crash_guard;
 pub mod error;
 pub mod events;
+pub mod lanes;
 pub mod logging;
 pub mod messaging;
 pub mod model;

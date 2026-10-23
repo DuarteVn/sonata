@@ -22,6 +22,13 @@ pub enum ErrorCode {
     UsageProviderNotFound,
     ConsentMismatch,
     InvalidColor,
+    LaneUnavailable,
+    LaneBlocked,
+    LaneConflict,
+    LaneUnsafePath,
+    LaneHasChanges,
+    ConfirmationRequired,
+    LaneConfirmationNeeded,
     Io,
     Internal,
 }

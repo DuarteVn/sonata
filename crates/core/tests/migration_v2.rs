@@ -21,7 +21,7 @@ fn payload(id: Uuid, dir: &std::path::Path, nodes: Value) -> Value {
 }
 
 #[test]
-fn v1_file_loads_and_saves_as_v2() {
+fn v1_file_loads_and_saves_as_current() {
     let sb = Sandbox::new();
     let id = Uuid::new_v4();
     let file = write(
@@ -35,7 +35,7 @@ fn v1_file_loads_and_saves_as_v2() {
     app.set_camera(id, 1.0, 1.0, 1.0).unwrap();
     app.save_dirty();
     let saved: Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
-    assert_eq!(saved["schemaVersion"], 2);
+    assert_eq!(saved["schemaVersion"], 3);
     assert_eq!(saved["payload"]["links"], json!([]));
     app.quit();
 }
@@ -68,13 +68,13 @@ fn dangling_links_are_dropped_with_warning() {
 }
 
 #[test]
-fn v3_file_is_refused_and_untouched() {
+fn newer_file_is_refused_and_untouched() {
     let sb = Sandbox::new();
     let id = Uuid::new_v4();
     let file = write(
         &sb,
         id,
-        &json!({"type": "workspace", "schemaVersion": 3, "payload": payload(id, &sb.project("p"), json!([]))}),
+        &json!({"type": "workspace", "schemaVersion": 4, "payload": payload(id, &sb.project("p"), json!([]))}),
     );
     let before = std::fs::read(&file).unwrap();
     let (app, _) = test_app(&sb);
@@ -82,8 +82,8 @@ fn v3_file_is_refused_and_untouched() {
     assert_eq!(
         boot.load_failures[0].reason,
         LoadFailureReason::NewerVersion {
-            found: 3,
-            supported: 2
+            found: 4,
+            supported: 3
         }
     );
     app.quit();
