@@ -1489,6 +1489,7 @@ impl App {
         Some(match &n.content {
             NodeContent::Terminal(t) => t.name.clone(),
             NodeContent::Browser(b) => crate::messaging::commands::browser_title(b),
+            NodeContent::Device(d) => crate::messaging::commands::device_title(d),
             NodeContent::Note(_) => crate::messaging::commands::note_title(
                 &self.note_read(id).map(|v| v.text).unwrap_or_default(),
             ),
@@ -1933,6 +1934,73 @@ impl App {
                 b.title = title.map(str::to_string).filter(|t| !t.is_empty());
             }
             Ok(())
+        })
+    }
+
+    // ---- Device nodes (feature 007) ----
+
+    pub fn create_device(&self, ws_id: Uuid, frame: Frame) -> AppResult<Node> {
+        self.require_loaded(ws_id)?;
+        let now = Utc::now();
+        self.workspaces().update(ws_id, |ws| {
+            let mut node = Node {
+                id: Uuid::new_v4(),
+                frame,
+                z: ws.max_z() + 1,
+                created_at: now,
+                modified_at: now,
+                content: NodeContent::Device(crate::model::node::DeviceContent {
+                    platform: crate::model::node::Platform::Android,
+                    device_id: String::new(),
+                    name: None,
+                    os_version: None,
+                }),
+            };
+            node.frame = node.frame.clamped(node.min_size());
+            ws.nodes.push(node.clone());
+            Ok(node)
+        })
+    }
+
+    /// Binds a device node to a virtual device chosen in the picker. A device already bound to
+    /// another node is refused (spec edge case).
+    pub fn select_device(
+        &self,
+        node: Uuid,
+        platform: crate::model::node::Platform,
+        device_id: &str,
+        name: Option<&str>,
+        os_version: Option<&str>,
+    ) -> AppResult<Node> {
+        let ws = self.workspace_of_node(node)?;
+        let taken = {
+            let m = self.workspaces();
+            m.ids()
+                .into_iter()
+                .filter_map(|id| m.workspace(id))
+                .any(|w| {
+                    w.nodes.iter().any(|n| {
+                        n.id != node
+                            && n.device()
+                                .is_some_and(|d| d.platform == platform && d.device_id == device_id)
+                    })
+                })
+        };
+        if taken {
+            return Err(AppError::new(
+                ErrorCode::DeviceInUse,
+                "Another device node already uses this device.",
+            ));
+        }
+        let clean = |v: Option<&str>| v.map(str::trim).filter(|v| !v.is_empty()).map(String::from);
+        self.update_node(ws, node, |w, id| {
+            let n = w.node_mut(id).ok_or_else(|| AppError::node_not_found(id))?;
+            let d = n.device_mut().ok_or_else(|| AppError::node_not_found(id))?;
+            d.platform = platform;
+            d.device_id = device_id.to_string();
+            d.name = clean(name);
+            d.os_version = clean(os_version);
+            Ok(n.clone())
         })
     }
 

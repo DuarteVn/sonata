@@ -3,3 +3,14 @@
 //! forwards frames and intents (research R12).
 
 pub mod grpc;
+pub mod still;
+
+use uuid::Uuid;
+
+/// Default node frame: a phone screen plus the node's chrome (data-model.md).
+pub const DEFAULT_SIZE: (f64, f64) = (380.0, 820.0);
+
+/// Short id printed by `sonata list` for devices (`d-xxxx`).
+pub fn short_id(id: Uuid) -> String {
+    format!("d-{}", &id.simple().to_string()[..4])
+}

@@ -15,7 +15,7 @@ use super::{
 use crate::App;
 use crate::lanes::confirm::Answer;
 use crate::lanes::ops::Action;
-use crate::model::node::{BrowserContent, Node, NodeContent};
+use crate::model::node::{BrowserContent, DeviceContent, Node, NodeContent};
 use crate::terminal::manager::RunStatus;
 
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10 * 60);
@@ -134,6 +134,7 @@ fn display_name(ctx: &Ctx<'_>, n: &Node) -> String {
     match &n.content {
         NodeContent::Terminal(t) => t.name.clone(),
         NodeContent::Browser(b) => browser_title(b),
+        NodeContent::Device(d) => device_title(d),
         NodeContent::Note(_) => {
             note_title(&ctx.app.note_read(n.id).map(|v| v.text).unwrap_or_default())
         }
@@ -152,11 +153,28 @@ pub fn browser_title(b: &BrowserContent) -> String {
         .unwrap_or_else(fallback)
 }
 
+/// A device is named by its display name, else its device id.
+pub fn device_title(d: &DeviceContent) -> String {
+    d.name
+        .as_deref()
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+        .unwrap_or(if d.device_id.is_empty() {
+            "device"
+        } else {
+            &d.device_id
+        })
+        .chars()
+        .take(60)
+        .collect()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     Terminal,
     Note,
     Browser,
+    Device,
 }
 
 fn kind_of(n: &Node) -> Kind {
@@ -164,6 +182,7 @@ fn kind_of(n: &Node) -> Kind {
         NodeContent::Terminal(_) => Kind::Terminal,
         NodeContent::Note(_) => Kind::Note,
         NodeContent::Browser(_) => Kind::Browser,
+        NodeContent::Device(_) => Kind::Device,
     }
 }
 
@@ -172,6 +191,7 @@ fn item_id(n: &Node) -> Option<String> {
     match kind_of(n) {
         Kind::Note => Some(short_id(n.id)),
         Kind::Browser => Some(crate::browser::short_id(n.id)),
+        Kind::Device => Some(crate::device::short_id(n.id)),
         Kind::Terminal => None,
     }
 }
@@ -190,6 +210,7 @@ fn resolve(ctx: &Ctx<'_>, name: &str, kind: Kind) -> Result<Node, Reply> {
         Kind::Terminal => "terminal",
         Kind::Note => "note",
         Kind::Browser => "browser",
+        Kind::Device => "device",
     };
     match matches.len() {
         1 => Ok(matches.into_iter().next().expect("one")),

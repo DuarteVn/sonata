@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
@@ -22,6 +23,9 @@ pub struct Preferences {
     /// Usage meter settings (feature 006). Written only when not the default.
     #[serde(skip_serializing_if = "UsagePreferences::is_default")]
     pub usage: UsagePreferences,
+    /// Android SDK folder chosen in a device node (feature 007, FR-009).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub android_sdk_path: Option<PathBuf>,
 }
 
 /// Usage meter switches and per-provider choices (data-model "UsagePreferences").
@@ -103,6 +107,7 @@ impl Default for Preferences {
             history_max_rows: 10_000,
             auto_update_check: true,
             usage: UsagePreferences::default(),
+            android_sdk_path: None,
         }
     }
 }
@@ -115,6 +120,7 @@ impl Preferences {
             history_max_rows: self.history_max_rows.clamp(1_000, 100_000),
             auto_update_check: self.auto_update_check,
             usage: self.usage.compacted(),
+            android_sdk_path: self.android_sdk_path,
         }
     }
 }
