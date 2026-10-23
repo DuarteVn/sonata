@@ -1,5 +1,13 @@
 <!--
 Sync Impact Report
+- Version change: 1.1.0 → 1.1.1 (2026-10-23)
+- Modified principle: VI. Free, Open Distribution — names two install paths: the prebuilt
+  universal disk image from GitHub Releases (recommended for users) and the build-from-source
+  script (contributors). Zero cost, ad-hoc signing, and the own updater key are unchanged
+  (feature 005, research R11).
+- Templates requiring updates: none.
+
+Earlier report:
 - Version change: 1.0.0 → 1.1.0 (2026-10-22)
 - Modified section: Technology & Platform Constraints — CLI channel is newline-delimited JSON over
   a Unix socket with tokio on the app side; `hyper`/HTTP removed (feature 003, research R1).
@@ -107,8 +115,9 @@ Rationale: the app is unsandboxed and runs commands with the user's full permiss
   Apple Developer Program and notarization.
 - Binaries use ad-hoc signing (`signingIdentity: "-"`) and a universal build
   (`universal-apple-darwin`).
-- The primary install path is a script that builds from source. A secondary path downloads a
-  GitHub Release with `gh`. Auto-update uses the project's own updater key.
+- Two install paths: a prebuilt universal disk image from GitHub Releases (recommended for
+  users) and a script that builds from source (contributors). Auto-update uses the project's own
+  updater key.
 - The README MUST document the one-command install, the Gatekeeper "Open Anyway" step for
   browser downloads, and a security notice that the app runs shells without a sandbox.
 
@@ -164,4 +173,4 @@ Changing an item in this section requires a constitution amendment (MINOR bump a
 - Every code review checks compliance with the principles. A deviation MUST be recorded in the
   plan's Complexity Tracking section with its reason, or the change is rejected.
 
-**Version**: 1.1.0 | **Ratified**: 2026-10-21 | **Last Amended**: 2026-10-22
+**Version**: 1.1.1 | **Ratified**: 2026-10-21 | **Last Amended**: 2026-10-23

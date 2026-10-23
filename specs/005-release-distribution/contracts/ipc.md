@@ -7,7 +7,7 @@
 | `update_state` | — | `UpdateState` (current banner state) |
 | `update_check` | `{manual: boolean}` | `UpdateState`; with `manual`, the result is also reported by the caller (up to date / available / error) |
 | `update_dismiss` | — | `UpdateState` (`Available` → `Dismissed`) |
-| `update_download` | — | `UpdateState`; progress follows as events |
+| `update_download` | — | `UpdateState` after the download ends; progress arrives as `update://state` with `kind: "downloading"` (about one event per percent) |
 | `update_install` | — | never returns on success (app restarts); error → `Failed` |
 | `update_set_auto_check` | `{enabled: boolean}` | `void`; saves `autoUpdateCheck`, updates the menu check mark |
 
@@ -19,7 +19,6 @@
 | Event | Payload |
 |---|---|
 | `update://state` | `UpdateState` |
-| `update://progress` | `{received: number, total: number \| null}` |
 | `app://check-updates` | — (menu "Check for Updates…"; frontend calls `update_check {manual: true}` and shows the result) |
 
 ## Types

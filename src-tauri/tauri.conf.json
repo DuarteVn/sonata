@@ -47,6 +47,15 @@
     },
     "resources": {
       "resources/bin/": "bin/"
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "REPLACE_WITH_PUBLIC_KEY",
+      "endpoints": [
+        "https://github.com/DuarteVn/sonata/releases/latest/download/latest.json"
+      ]
     }
   }
 }

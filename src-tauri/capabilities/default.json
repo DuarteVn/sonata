@@ -50,7 +50,13 @@
     "allow-terminal-clear-history",
     "allow-terminal-preview-subscribe",
     "allow-terminal-update-settings",
-    "allow-exchange-log"
+    "allow-exchange-log",
+    "allow-update-state",
+    "allow-update-check",
+    "allow-update-dismiss",
+    "allow-update-download",
+    "allow-update-install",
+    "allow-update-set-auto-check"
   ],
   "webviews": [
     "main"

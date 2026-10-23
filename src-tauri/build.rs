@@ -43,6 +43,12 @@ const COMMANDS: &[&str] = &[
     "terminal_preview_subscribe",
     "terminal_update_settings",
     "exchange_log",
+    "update_state",
+    "update_check",
+    "update_dismiss",
+    "update_download",
+    "update_install",
+    "update_set_auto_check",
 ];
 
 fn main() {

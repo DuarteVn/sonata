@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Bootstrap, WorkspaceSummary } from "../src/ipc/types";
+import type { Bootstrap, UpdateState, WorkspaceSummary } from "../src/ipc/types";
 
 const ipc = vi.hoisted(() => ({
   appBootstrap: vi.fn(),
@@ -9,7 +9,7 @@ const ipc = vi.hoisted(() => ({
   workspaceOpen: vi.fn(),
   terminalPreviewSubscribe: vi.fn(async () => {}),
   browserLayout: vi.fn(async () => {}),
-  updateState: vi.fn(async () => ({ kind: "idle" })),
+  updateState: vi.fn(async (): Promise<UpdateState> => ({ kind: "idle" })),
 }));
 vi.mock("../src/ipc/commands", () => ({ ipc }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async () => () => {}) }));
@@ -17,6 +17,7 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(async () => "/picked/f
 
 import { App } from "../src/App";
 import { clampSidebarWidth } from "../src/sidebar/Sidebar";
+import { useUpdate } from "../src/state/update";
 import { resetInitForTests, useWorkspaces } from "../src/state/workspaces";
 
 const emptyBoot: Bootstrap = {
@@ -47,6 +48,8 @@ beforeEach(() => {
   useWorkspaces.setState(useWorkspaces.getInitialState(), true);
   resetInitForTests();
   ipc.appBootstrap.mockResolvedValue(emptyBoot);
+  ipc.updateState.mockResolvedValue({ kind: "idle" });
+  useUpdate.setState(useUpdate.getInitialState(), true);
 });
 
 async function openDialog() {

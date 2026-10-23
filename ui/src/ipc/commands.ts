@@ -10,6 +10,7 @@ import type {
   NoteView,
   Bootstrap,
   BusyWorkspace,
+  UpdateState,
   CanvasNode,
   Camera,
   Frame,
@@ -83,6 +84,12 @@ export const ipc = {
     invoke<void>("terminal_set_save_history", { nodeId, enabled }),
   terminalPreviewSubscribe: (nodeIds: string[]) => invoke<void>("terminal_preview_subscribe", { nodeIds }),
   terminalClearHistory: (nodeId: string) => invoke<void>("terminal_clear_history", { nodeId }),
+  updateState: () => invoke<UpdateState>("update_state"),
+  updateCheck: (manual: boolean) => invoke<UpdateState>("update_check", { manual }),
+  updateDismiss: () => invoke<UpdateState>("update_dismiss"),
+  updateDownload: () => invoke<UpdateState>("update_download"),
+  updateInstall: () => invoke<void>("update_install"),
+  updateSetAutoCheck: (enabled: boolean) => invoke<void>("update_set_auto_check", { enabled }),
 };
 
 export type Ipc = typeof ipc;

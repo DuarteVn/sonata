@@ -7,6 +7,7 @@ import type {
   NoteConflictEvent,
   PreviewEvent,
   TerminalStateEvent,
+  UpdateState,
   WorkspaceSummary,
 } from "./types";
 
@@ -24,6 +25,8 @@ export type EventMap = {
   "browser://state": import("./types").BrowserState;
   "messaging://notify": NotifyEvent;
   "workspace://nodes-changed": NodesChangedEvent;
+  "update://state": UpdateState;
+  "app://check-updates": null;
 };
 
 export function onEvent<K extends keyof EventMap>(

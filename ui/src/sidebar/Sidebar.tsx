@@ -5,6 +5,7 @@ import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { isAppError, type WorkspaceSummary } from "../ipc/types";
 import { useWorkspaces } from "../state/workspaces";
 import { LoadFailureItem } from "./LoadFailureItem";
+import { UpdateBanner } from "./UpdateBanner";
 import { WorkspaceItem } from "./WorkspaceItem";
 
 const DRAG_THRESHOLD_PX = 4;
@@ -22,9 +23,11 @@ type Props = {
   onHide: () => void;
   width: number;
   onResize: (width: number) => void;
+  /** Starts the update install flow from the banner (feature 005). */
+  onInstallUpdate?: () => void;
 };
 
-export function Sidebar({ onCreate, onHide, width, onResize }: Props) {
+export function Sidebar({ onCreate, onHide, width, onResize, onInstallUpdate }: Props) {
   const workspaces = useWorkspaces((s) => s.workspaces);
   const activeId = useWorkspaces((s) => s.activeId);
   const loadFailures = useWorkspaces((s) => s.loadFailures);
@@ -112,6 +115,7 @@ export function Sidebar({ onCreate, onHide, width, onResize }: Props) {
           <LoadFailureItem key={f.path} failure={f} />
         ))}
       </ul>
+      {onInstallUpdate && <UpdateBanner onInstall={onInstallUpdate} />}
       <div
         className="sidebar-resize"
         role="separator"

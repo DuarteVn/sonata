@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
+use std::time::Instant;
 
 use chrono::Utc;
 use serde::Serialize;
@@ -25,6 +26,7 @@ use crate::notes::store::{NoteStore, NoteView};
 use crate::notes::watcher::{self, NotesWatcher};
 use crate::paths::{self, DataRoot};
 use crate::persistence::store::{LoadFailure, Store};
+use crate::update::{UpdateSchedule, UpdateState};
 use crate::presets::{self, PresetStatus};
 use crate::roles::{Role, RoleLibrary};
 use crate::terminal::activity::ACTIVITY_INTERVAL;
@@ -251,6 +253,8 @@ pub struct App {
     socket_path: Option<PathBuf>,
     data_root: DataRoot,
     browser_host: Mutex<Option<Arc<dyn crate::browser::BrowserHost>>>,
+    /// Update schedule and banner state (feature 005).
+    updates: Mutex<(UpdateSchedule, UpdateState)>,
 }
 
 impl App {
@@ -319,6 +323,10 @@ impl App {
             socket_path,
             data_root,
             browser_host: Mutex::new(None),
+            updates: Mutex::new((
+                UpdateSchedule::new(prefs.value.auto_update_check),
+                UpdateState::default(),
+            )),
         }))
         .inspect(|app| {
             app.spawn_preview_loop();
@@ -329,6 +337,51 @@ impl App {
 
     pub fn preferences(&self) -> Preferences {
         self.preferences
+    }
+
+    fn updates(&self) -> MutexGuard<'_, (UpdateSchedule, UpdateState)> {
+        self.updates.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub fn update_state(&self) -> UpdateState {
+        self.updates().1.clone()
+    }
+
+    /// Applies one change to the update state and emits the result when it changed.
+    pub fn update(&self, change: impl FnOnce(&mut UpdateState)) -> UpdateState {
+        let (before, after) = {
+            let mut guard = self.updates();
+            let before = guard.1.clone();
+            change(&mut guard.1);
+            (before, guard.1.clone())
+        };
+        if before != after {
+            self.events.emit(CoreEvent::UpdateState(after.clone()));
+        }
+        after
+    }
+
+    pub fn auto_update_check(&self) -> bool {
+        self.updates().0.enabled()
+    }
+
+    pub fn update_check_due(&self, now: Instant) -> bool {
+        self.updates().0.due(now)
+    }
+
+    pub fn mark_update_checked(&self, now: Instant) {
+        self.updates().0.mark_checked(now);
+    }
+
+    /// Turns automatic update checks on or off and saves the choice in preferences.
+    /// `self.preferences` keeps its startup copy; only the schedule reads this flag later.
+    pub fn set_auto_update_check(&self, enabled: bool) -> std::io::Result<()> {
+        let store = Store::new(self.data_root.clone());
+        let mut prefs = store.load_preferences().value;
+        prefs.auto_update_check = enabled;
+        store.save_preferences(&prefs)?;
+        self.updates().0.set_enabled(enabled);
+        Ok(())
     }
 
     pub fn workspaces(&self) -> MutexGuard<'_, WorkspaceManager> {
