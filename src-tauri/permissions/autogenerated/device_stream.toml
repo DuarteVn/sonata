@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-device-stream"
+description = "Enables the device_stream command without any pre-configured scope."
+commands.allow = ["device_stream"]
+
+[[permission]]
+identifier = "deny-device-stream"
+description = "Denies the device_stream command without any pre-configured scope."
+commands.deny = ["device_stream"]

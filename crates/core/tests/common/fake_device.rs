@@ -9,6 +9,8 @@ use sonata_core::device::grpc::Frame;
 use sonata_core::device::still::Signature;
 use sonata_core::device::{DeviceDriver, DeviceLauncher, Key, Poll, Session, StreamHandle, Target};
 
+type FrameFn = Box<dyn FnMut(Frame) + Send>;
+
 /// Shared script and call log for every fake device.
 #[derive(Default)]
 pub struct FakeWorld {
@@ -24,6 +26,8 @@ pub struct FakeWorld {
     pub screen: AtomicUsize,
     pub apps: Mutex<Vec<String>>,
     pub fail_start: Mutex<Option<String>>,
+    /// Open screen streams; `emit` sends a frame to all of them.
+    pub sinks: Mutex<Vec<FrameFn>>,
 }
 
 impl FakeWorld {
@@ -32,6 +36,16 @@ impl FakeWorld {
     }
     pub fn calls(&self) -> Vec<String> {
         self.calls.lock().unwrap().clone()
+    }
+    pub fn emit(&self, width: u32, height: u32, seq: u32) {
+        for sink in self.sinks.lock().unwrap().iter_mut() {
+            sink(Frame {
+                width,
+                height,
+                seq,
+                rgba: vec![seq as u8; (width * height * 4) as usize],
+            });
+        }
     }
     pub fn take_calls(&self) -> Vec<String> {
         std::mem::take(&mut self.calls.lock().unwrap())
@@ -150,15 +164,12 @@ impl DeviceDriver for FakeDriver {
         &self,
         width: u32,
         height: u32,
-        mut on_frame: Box<dyn FnMut(Frame) + Send>,
+        on_frame: Box<dyn FnMut(Frame) + Send>,
     ) -> Result<StreamHandle, String> {
         self.0.log(format!("stream {width}x{height}"));
-        on_frame(Frame {
-            width,
-            height,
-            seq: 1,
-            rgba: vec![0; (width * height * 4) as usize],
-        });
+        let mut sinks = self.0.sinks.lock().unwrap();
+        sinks.clear();
+        sinks.push(on_frame);
         Ok(Box::new(()))
     }
 }

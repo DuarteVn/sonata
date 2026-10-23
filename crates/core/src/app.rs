@@ -817,6 +817,7 @@ impl App {
             host.close(node);
         }
         self.devices.forget(node);
+        let _ = std::fs::remove_file(self.device_card_path(node));
         let _ = std::fs::remove_dir_all(self.run_dir(node));
         if is_note {
             self.note_store().delete(ws, node)?;
@@ -2125,6 +2126,51 @@ impl App {
 
     pub fn device_driver(&self, node: Uuid) -> AppResult<Arc<dyn crate::device::DeviceDriver>> {
         self.devices.driver(node)
+    }
+
+    /// Starts or resizes the node's live screen; frames go to `send` (research R2).
+    pub fn device_stream(
+        &self,
+        node: Uuid,
+        width: u32,
+        height: u32,
+        send: crate::device::live::FrameSink,
+    ) -> AppResult<()> {
+        self.devices.stream(node, width, height, send)
+    }
+
+    fn device_card_path(&self, node: Uuid) -> PathBuf {
+        self.data_root
+            .path()
+            .join("run")
+            .join("device")
+            .join(format!("{node}.png"))
+    }
+
+    pub fn device_frame_ack(&self, node: Uuid) {
+        self.devices.frame_ack(node);
+    }
+
+    /// Ends the live screen and writes the card image (0600); returns its path when there is one.
+    pub fn device_unstream(&self, node: Uuid) -> AppResult<Option<PathBuf>> {
+        let path = self.device_card_path(node);
+        if let Some(frame) = self.devices.unstream(node) {
+            paths::ensure_private_dir(path.parent().expect("parent"))?;
+            crate::device::live::write_png(&path, &frame)?;
+        }
+        Ok(path.is_file().then_some(path))
+    }
+
+    pub fn device_input(&self, node: Uuid, input: crate::device::live::LiveInput) -> AppResult<()> {
+        use crate::device::live::LiveInput;
+        let d = self.devices.driver(node)?;
+        let r = match input {
+            LiveInput::Touch { x, y, down } => d.touch(x, y, down),
+            LiveInput::Wheel { x, y, dx, dy } => d.wheel(x, y, dx, dy),
+            LiveInput::Text(t) => d.text(&t),
+            LiveInput::Key(k) => d.key(&LiveInput::key(&k)),
+        };
+        r.map_err(AppError::internal)
     }
 
     /// Devices still running, for the quit confirmation (FR-008).

@@ -7,6 +7,7 @@ pub mod android;
 pub mod avd;
 pub mod emulator;
 pub mod grpc;
+pub mod live;
 pub mod process;
 pub mod still;
 pub mod tools;
@@ -200,6 +201,9 @@ impl Runtime {
 pub struct DeviceManager {
     launcher: Mutex<Option<Arc<dyn DeviceLauncher>>>,
     runtimes: Mutex<HashMap<Uuid, Runtime>>,
+    streams: Mutex<HashMap<Uuid, live::Live>>,
+    /// Last frame seen per node, kept after its stream ends for the card image.
+    last_frames: Mutex<HashMap<Uuid, live::LastFrame>>,
 }
 
 impl DeviceManager {
@@ -315,8 +319,65 @@ impl DeviceManager {
         changed
     }
 
+    /// Opens (or reopens at a new size) the node's live stream.
+    pub fn stream(
+        &self,
+        node: Uuid,
+        width: u32,
+        height: u32,
+        send: live::FrameSink,
+    ) -> AppResult<()> {
+        let driver = self.driver(node)?;
+        let last = self
+            .last_frames
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .entry(node)
+            .or_default()
+            .clone();
+        // Close the old stream first so two never run for one node.
+        self.streams
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&node);
+        let live = live::Live::start(send, last, |on_frame| {
+            driver.stream(width.max(1), height.max(1), on_frame)
+        })
+        .map_err(|e| AppError::new(ErrorCode::DeviceNotRunning, e))?;
+        self.streams
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(node, live);
+        Ok(())
+    }
+
+    pub fn frame_ack(&self, node: Uuid) {
+        if let Some(l) = self
+            .streams
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&node)
+        {
+            l.ack();
+        }
+    }
+
+    /// Ends the live stream; returns the last frame for the card image.
+    pub fn unstream(&self, node: Uuid) -> Option<Arc<Frame>> {
+        let live = self
+            .streams
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&node);
+        live.and_then(|l| l.last())
+    }
+
     /// Stops the device if Sonata started it; the node goes back to off.
     pub fn stop(&self, node: Uuid) -> Option<DeviceStateEvent> {
+        self.streams
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&node);
         let mut rt = self.runtimes();
         let r = rt.get_mut(&node)?;
         if let Some(mut s) = r.session.take()
@@ -333,6 +394,10 @@ impl DeviceManager {
     pub fn forget(&self, node: Uuid) {
         self.stop(node);
         self.runtimes().remove(&node);
+        self.last_frames
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&node);
     }
 
     /// Quit: stops every device Sonata started (FR-008).
