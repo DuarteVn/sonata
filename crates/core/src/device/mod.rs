@@ -5,12 +5,14 @@
 pub mod adb;
 pub mod android;
 pub mod avd;
+pub mod control;
 pub mod emulator;
 pub mod grpc;
 pub mod live;
 pub mod process;
 pub mod still;
 pub mod tools;
+pub mod ui_tree;
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -31,6 +33,18 @@ pub const DEFAULT_SIZE: (f64, f64) = (380.0, 820.0);
 pub const TICK: Duration = Duration::from_millis(250);
 /// Longest wait for `sonata device boot` and `install` (FR-017, AS9).
 pub const BOOT_TIMEOUT: Duration = Duration::from_secs(180);
+
+/// `3m`, `45s`, `300ms` for messages.
+pub fn human(d: Duration) -> String {
+    let ms = d.as_millis();
+    if ms.is_multiple_of(60_000) {
+        format!("{}m", ms / 60_000)
+    } else if ms.is_multiple_of(1000) {
+        format!("{}s", ms / 1000)
+    } else {
+        format!("{ms}ms")
+    }
+}
 
 /// Short id printed by `sonata list` for devices (`d-xxxx`).
 pub fn short_id(id: Uuid) -> String {
@@ -202,6 +216,7 @@ pub struct DeviceManager {
     launcher: Mutex<Option<Arc<dyn DeviceLauncher>>>,
     runtimes: Mutex<HashMap<Uuid, Runtime>>,
     streams: Mutex<HashMap<Uuid, live::Live>>,
+    maps: Mutex<HashMap<Uuid, control::ElementMap>>,
     /// Last frame seen per node, kept after its stream ends for the card image.
     last_frames: Mutex<HashMap<Uuid, live::LastFrame>>,
 }
@@ -372,9 +387,29 @@ impl DeviceManager {
         live.and_then(|l| l.last())
     }
 
+    /// Element numbers from the node's last `read` (research R4).
+    pub fn element_map(&self, node: Uuid) -> Option<control::ElementMap> {
+        self.maps
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&node)
+            .cloned()
+    }
+
+    pub fn set_element_map(&self, node: Uuid, map: control::ElementMap) {
+        self.maps
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(node, map);
+    }
+
     /// Stops the device if Sonata started it; the node goes back to off.
     pub fn stop(&self, node: Uuid) -> Option<DeviceStateEvent> {
         self.streams
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&node);
+        self.maps
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .remove(&node);

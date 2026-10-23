@@ -165,6 +165,14 @@ describe("device node with a chosen device (US1)", () => {
     expect(ipc.deviceStop).toHaveBeenCalledWith("d2");
   });
 
+  it("shows which terminal controls it (FR-016)", async () => {
+    ipc.deviceState.mockResolvedValue(state("ready"));
+    const agent: CanvasNode = { ...node, id: "t1", content: { terminal: { name: "Tester", saveHistory: true } } };
+    useCanvas.setState({ nodes: [chosen, agent], asks: { k: { from: "t1", to: "d2" } } });
+    render(<DeviceNode node={chosen} />);
+    expect(await screen.findByText("controlled by Tester")).toBeInTheDocument();
+  });
+
   it("streams only while live and shows the last image as a card otherwise", async () => {
     ipc.deviceState.mockResolvedValue(state("ready"));
     render(<DeviceNode node={chosen} />);

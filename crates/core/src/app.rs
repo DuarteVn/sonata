@@ -2106,6 +2106,36 @@ impl App {
         })
     }
 
+    pub fn devices(&self) -> &crate::device::DeviceManager {
+        &self.devices
+    }
+
+    /// Boots and waits until the device is ready, failed, or `timeout` passed (US3 AS9).
+    pub fn device_boot_and_wait(&self, node: Uuid, timeout: std::time::Duration) -> AppResult<()> {
+        use crate::device::DeviceState;
+        self.device_boot(node)?;
+        let start = Instant::now();
+        loop {
+            match self.devices.state(node).state {
+                DeviceState::Ready => return Ok(()),
+                DeviceState::Error(m) => return Err(AppError::new(ErrorCode::DeviceNotRunning, m)),
+                DeviceState::Stopped | DeviceState::Off => {
+                    return Err(AppError::new(
+                        ErrorCode::DeviceNotRunning,
+                        "the device stopped while booting",
+                    ));
+                }
+                DeviceState::Booting if start.elapsed() >= timeout => {
+                    return Err(AppError::new(
+                        ErrorCode::DeviceNotRunning,
+                        format!("timed out after {}", crate::device::human(timeout)),
+                    ));
+                }
+                DeviceState::Booting => std::thread::sleep(crate::device::TICK),
+            }
+        }
+    }
+
     pub fn device_state(&self, node: Uuid) -> crate::device::DeviceStateEvent {
         self.devices.state(node)
     }

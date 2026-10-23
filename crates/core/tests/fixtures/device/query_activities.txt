@@ -1,0 +1,6 @@
+priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=false
+com.android.settings/.Settings
+priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=false
+com.example.shop/.MainActivity
+com.android.chrome/com.google.android.apps.chrome.Main
+com.example.shop/.OtherLauncher
