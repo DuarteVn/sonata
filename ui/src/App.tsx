@@ -10,6 +10,7 @@ import type { BusyWorkspace } from "./ipc/types";
 import { CreateWorkspaceDialog } from "./sidebar/CreateWorkspaceDialog";
 import { clampSidebarWidth, Sidebar, SIDEBAR_DEFAULT_WIDTH } from "./sidebar/Sidebar";
 import { useCanvas } from "./state/canvas";
+import { updatePending, useUpdate } from "./state/update";
 import { useWorkspaces } from "./state/workspaces";
 
 const SIDEBAR_HIDDEN_KEY = "sonata.sidebarHidden";
@@ -40,6 +41,8 @@ export function App() {
   const active = useWorkspaces((s) => s.active);
   const [creating, setCreating] = useState(false);
   const [quitBusy, setQuitBusy] = useState<BusyWorkspace[] | null>(null);
+  const [updateBusy, setUpdateBusy] = useState<BusyWorkspace[] | null>(null);
+  const updateState = useUpdate((s) => s.state);
   const [sidebarHidden, setSidebarHidden] = useState(readSidebarHidden);
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
 
@@ -55,6 +58,7 @@ export function App() {
   useEffect(() => {
     const { init, setSummaries, addWarning } = useWorkspaces.getState();
     init().catch((err) => addWarning(String(err?.message ?? err)));
+    void useUpdate.getState().load();
     const unlisten = [
       onEvent("workspaces://changed", setSummaries),
       onEvent("persistence://warning", (p) => addWarning(p.message)),
@@ -84,6 +88,17 @@ export function App() {
       }),
       // View → Toggle Sidebar (Ctrl+Cmd+S).
       onEvent("app://toggle-sidebar", () => setSidebarHidden((h) => !h)),
+      onEvent("update://state", (state) => useUpdate.getState().set(state)),
+      // Sonata → Check for Updates…: always report the result (FR-013).
+      onEvent("app://check-updates", async () => {
+        try {
+          const state = await ipc.updateCheck(true);
+          useUpdate.getState().set(state);
+          if (!updatePending(state)) addWarning("Sonata is up to date.");
+        } catch (err) {
+          addWarning(`Could not check for updates: ${String((err as Error)?.message ?? err)}`);
+        }
+      }),
       // Cmd+Q or closing the window: quit at once unless programs are running (FR-018a).
       onEvent("app://quit-requested", async () => {
         const busy = await ipc.appQuitCheck();
@@ -108,6 +123,25 @@ export function App() {
 
   useEffect(() => useCanvas.getState().load(active), [active]);
 
+  // "Install and restart": download and verify first (nothing stops yet), then the same
+  // running-programs check as quitting, then install and restart (FR-010, FR-012).
+  const installUpdate = async () => {
+    const { set } = useUpdate.getState();
+    try {
+      let state = useUpdate.getState().state;
+      if (state.kind !== "readyToInstall") {
+        state = await ipc.updateDownload();
+        set(state);
+      }
+      if (state.kind !== "readyToInstall") return;
+      const busy = await ipc.appQuitCheck();
+      if (busy.length === 0) await ipc.updateInstall();
+      else setUpdateBusy(busy);
+    } catch (err) {
+      useWorkspaces.getState().addWarning(`Update failed: ${String((err as Error)?.message ?? err)}`);
+    }
+  };
+
   return (
     <div className="app">
       {!sidebarHidden && (
@@ -116,6 +150,7 @@ export function App() {
           onHide={() => setSidebarHidden(true)}
           width={sidebarWidth}
           onResize={setSidebarWidth}
+          onInstallUpdate={() => void installUpdate()}
         />
       )}
       <main className="main">
@@ -123,11 +158,12 @@ export function App() {
           <button
             type="button"
             className="icon-button sidebar-show"
-            aria-label="Show sidebar"
+            aria-label={updatePending(updateState) ? "Show sidebar (update available)" : "Show sidebar"}
             title="Show sidebar (⌃⌘S)"
             onClick={() => setSidebarHidden(false)}
           >
             <PanelLeftOpen size={16} />
+            {updatePending(updateState) && <span className="update-dot" aria-hidden="true" />}
           </button>
         )}
         <Banners />
@@ -149,6 +185,19 @@ export function App() {
           onQuit={() => {
             setQuitBusy(null);
             void ipc.appQuit(true);
+          }}
+        />
+      )}
+      {updateBusy && (
+        <QuitDialog
+          forUpdate
+          busy={updateBusy}
+          onCancel={() => setUpdateBusy(null)}
+          onQuit={() => {
+            setUpdateBusy(null);
+            ipc.updateInstall().catch((err) =>
+              useWorkspaces.getState().addWarning(`Update failed: ${String((err as Error)?.message ?? err)}`),
+            );
           }}
         />
       )}

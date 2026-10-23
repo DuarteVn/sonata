@@ -41,7 +41,42 @@ between them live side by side, organized into as many workspaces as you need.
 - Everything is saved as readable files in `~/.sonata/`, with crash-safe writes, autosave, and
   terminal history restored after a restart.
 
-## Install (build from source)
+## Install
+
+1. Download `Sonata_<version>_universal.dmg` from the
+   [latest release](https://github.com/DuarteVn/sonata/releases/latest). It runs natively on
+   Apple Silicon and Intel Macs with macOS 15 or later.
+2. Open the disk image and drag Sonata to Applications.
+3. Open Sonata. The first time, macOS blocks it, because Sonata is signed without a paid Apple
+   developer account and is not notarized. Click **Done**, then open **System Settings →
+   Privacy & Security**, scroll to Security, and click **Open Anyway** next to the Sonata
+   message. Confirm with your password. Later launches open normally.
+
+   Or, in Terminal:
+
+   ```sh
+   xattr -dr com.apple.quarantine /Applications/Sonata.app
+   ```
+
+   This removes the "downloaded from the internet" mark that makes macOS ask. Do it only for a
+   copy you downloaded from this project's release page.
+
+The `sonata` command ships inside the app and works in every Sonata terminal; there is nothing
+else to install.
+
+### Updates
+
+Sonata checks for a newer release when it starts and once a day while it runs. When one exists,
+a banner at the bottom of the sidebar shows the version and its notes (a dot on the show-sidebar
+button when the sidebar is hidden). Nothing downloads until you click **Install and restart**.
+Sonata then downloads the update, verifies its signature, asks before closing live terminals,
+and restarts on the new version. Your data in `~/.sonata/` is not touched.
+
+Use **Sonata → Check for Updates…** to check now, and **Sonata → Check for Updates
+Automatically** to turn the automatic check off. The check downloads one small file from GitHub
+and sends nothing about you or your workspaces.
+
+### Build from source
 
 ```sh
 git clone https://github.com/DuarteVn/sonata.git
@@ -49,9 +84,9 @@ cd sonata
 scripts/install.sh        # builds Sonata.app and copies it to /Applications
 ```
 
-Run the same script again to update.
-
-An app you build yourself opens without any Gatekeeper prompt. A packaged download comes later.
+Run the same script again to update. If Rust is missing, the script offers to install it with
+the official installer (rustup) and does nothing without your "yes". An app you build yourself
+opens without any Gatekeeper prompt.
 
 ## Security notice
 
@@ -124,6 +159,34 @@ scripts/bench-terminals.sh 30    # real app with 30 streaming terminals in a tem
 | `ui` | React + TypeScript frontend (canvas, sidebar, xterm.js). |
 | `e2e` | Playwright tests with mocked IPC. |
 | `specs` | Feature specifications, plans, and task lists. |
+| `scripts/release` | Release helpers (version check, update manifest) and their shell tests. |
+
+### Releasing
+
+Releases are built by GitHub Actions (`.github/workflows/release.yml`) when a version tag is
+pushed. Nothing is paid: the app is signed ad hoc and updates are signed with the project's own
+key.
+
+One-time setup (maintainer):
+
+```sh
+npm run tauri signer generate -- -w ~/.tauri/sonata.key    # choose a password
+# Paste the printed public key into plugins.updater.pubkey in src-tauri/tauri.conf.json.
+gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.tauri/sonata.key
+gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD            # type the password at the prompt
+```
+
+Keep `~/.tauri/sonata.key` and its password backed up. If the key is lost, installed copies can
+no longer verify updates, and every user must download the next version by hand.
+
+Each release:
+
+1. Set the same version in `src-tauri/tauri.conf.json`, `Cargo.toml` (`[workspace.package]`),
+   and `package.json`; `scripts/release/check-version.sh v0.2.0` must pass.
+2. Commit, then `git tag v0.2.0 && git push origin v0.2.0`.
+3. The workflow runs the checks, builds the universal app, and publishes the release with the
+   disk image, the update archive and its signature, and `latest.json`. Installed apps see it on
+   their next check.
 
 ## License
 

@@ -1,0 +1,86 @@
+name: release
+# Builds and publishes a release when a version tag is pushed (or on demand for an existing tag).
+# See specs/005-release-distribution/contracts/release.md.
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to release, for example v0.2.0
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    needs: checks
+    # macOS is needed for the app bundle, lipo, and the disk image.
+    runs-on: macos-14
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: Check the tag matches the declared versions
+        run: sh scripts/release/check-version.sh "$TAG"
+      - name: Require the update signing key
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo 'missing secret TAURI_SIGNING_PRIVATE_KEY; see README "Releasing"'
+            exit 1
+          fi
+          if grep -q REPLACE_WITH_PUBLIC_KEY src-tauri/tauri.conf.json; then
+            echo 'plugins.updater.pubkey is still the placeholder; see README "Releasing"'
+            exit 1
+          fi
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - uses: swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build the universal app and disk image
+        env:
+          SONATA_UNIVERSAL: '1'
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run tauri build -- --target universal-apple-darwin --bundles app,dmg
+      - name: Check both architectures are present
+        run: |
+          app=target/universal-apple-darwin/release/bundle/macos/Sonata.app
+          for bin in "$app/Contents/MacOS/sonata-app" "$app/Contents/Resources/bin/sonata"; do
+            archs="$(lipo -archs "$bin")"
+            echo "$bin: $archs"
+            case "$archs" in *x86_64*arm64*|*arm64*x86_64*) ;; *) exit 1 ;; esac
+          done
+          codesign -dv "$app" 2>&1 | grep -q 'Signature=adhoc'
+      - name: Publish the release
+        run: |
+          bundle=target/universal-apple-darwin/release/bundle
+          version="${TAG#v}"
+          dmg="$bundle/dmg/Sonata_${version}_universal.dmg"
+          archive="$bundle/macos/Sonata.app.tar.gz"
+          # Draft first, so the "latest" download link never points at a half-uploaded release.
+          gh release create "$TAG" --verify-tag --draft --generate-notes --title "Sonata $version" \
+            "$dmg" "$archive" "$archive.sig"
+          gh release view "$TAG" --json body -q .body > notes.md
+          node scripts/release/latest-json.mjs --version "$TAG" --notes-file notes.md \
+            --sig-file "$archive.sig" \
+            --url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/Sonata.app.tar.gz" \
+            > latest.json
+          gh release upload "$TAG" latest.json
+          gh release edit "$TAG" --draft=false --latest

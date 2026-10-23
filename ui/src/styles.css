@@ -242,3 +242,11 @@ textarea { resize: vertical; }
 .browser-error { margin: 0; padding: 6px 10px; background: #3a1d1d; color: #ffb3b3; font-size: 12px; }
 .icon-button.spinning svg { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Update banner at the bottom of the sidebar (feature 005). */
+.update-banner { margin: 8px; padding: 10px; border-radius: 8px; background: var(--bg-elev); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.update-title { margin: 0; font-weight: 600; }
+.update-notes { margin: 0; color: var(--text-dim); white-space: pre-wrap; max-height: 160px; overflow-y: auto; }
+.update-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.sidebar-show { position: absolute; }
+.update-dot { position: absolute; top: 2px; right: 2px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }

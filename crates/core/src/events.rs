@@ -4,6 +4,7 @@ use serde::Serialize;
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::update::UpdateState;
 use crate::workspace::manager::WorkspaceSummary;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -86,6 +87,7 @@ pub enum CoreEvent {
     AskState(AskEvent),
     Notify(NotifyEvent),
     NodesChanged(NodesChangedEvent),
+    UpdateState(UpdateState),
 }
 
 impl CoreEvent {
@@ -100,6 +102,7 @@ impl CoreEvent {
             Self::AskState(_) => "messaging://ask",
             Self::Notify(_) => "messaging://notify",
             Self::NodesChanged(_) => "workspace://nodes-changed",
+            Self::UpdateState(_) => "update://state",
         }
     }
 
@@ -114,6 +117,7 @@ impl CoreEvent {
             Self::AskState(e) => serde_json::to_value(e),
             Self::Notify(e) => serde_json::to_value(e),
             Self::NodesChanged(e) => serde_json::to_value(e),
+            Self::UpdateState(s) => serde_json::to_value(s),
         };
         v.unwrap_or(Value::Null)
     }

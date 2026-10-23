@@ -29,7 +29,9 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Quitting::default())
+        .manage(commands::update::PendingUpdate::default())
         .menu(menu::build)
         .on_menu_event(|app, event| menu::on_event(app, event.id().as_ref()))
         .setup(|tauri_app| {
@@ -61,6 +63,8 @@ pub fn run() {
             spawn_autosave(core.clone());
             spawn_summary_monitor(core.clone());
             spawn_launch_window_timer(core.clone());
+            menu::set_auto_check(tauri_app.handle(), core.auto_update_check());
+            commands::update::spawn_background_checks(tauri_app.handle().clone(), core.clone());
             tauri_app.manage(core);
             Ok(())
         })
@@ -116,6 +120,12 @@ pub fn run() {
             commands::terminal::terminal_preview_subscribe,
             commands::terminal::terminal_update_settings,
             commands::terminal::exchange_log,
+            commands::update::update_state,
+            commands::update::update_check,
+            commands::update::update_dismiss,
+            commands::update::update_download,
+            commands::update::update_install,
+            commands::update::update_set_auto_check,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Sonata");

@@ -25,6 +25,8 @@ export type Preferences = {
   autosaveIntervalSeconds: number;
   terminalFontSize: number;
   historyMaxRows: number;
+  /** Omitted when on (feature 005). */
+  autoUpdateCheck?: boolean;
 };
 
 export type LoadFailureReason =
@@ -191,3 +193,14 @@ export function noteStyle(node: CanvasNode): NoteStyle {
 export function isAppError(value: unknown): value is AppError {
   return typeof value === "object" && value !== null && "code" in value && "message" in value;
 }
+
+/** What the update banner shows (feature 005, contracts/ipc.md). */
+export type UpdateState =
+  | { kind: "idle" }
+  | { kind: "available"; version: string; notes: string; date: string | null }
+  | { kind: "dismissed"; version: string }
+  | { kind: "downloading"; version: string; received: number; total: number | null }
+  | { kind: "readyToInstall"; version: string }
+  | { kind: "installing"; version: string }
+  | { kind: "failed"; version: string; reason: string }
+  | { kind: "blocked"; version: string; reason: string };

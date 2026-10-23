@@ -1,7 +1,7 @@
 {
   "name": "sonata",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -13,7 +13,7 @@
     "e2e": "playwright test",
     "tauri": "tauri",
     "dev:tauri": "cargo build -q -p sonata-cli && vite",
-    "build:tauri": "cargo build -q --release -p sonata-cli && mkdir -p src-tauri/resources/bin && cp target/release/sonata src-tauri/resources/bin/sonata && npm run build"
+    "build:tauri": "sh scripts/build-cli.sh && npm run build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",
