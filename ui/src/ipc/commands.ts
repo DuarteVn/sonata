@@ -1,4 +1,5 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
+import type { DeviceInput } from "../nodes/devicePointer";
 import type {
   ExchangeEntry,
   LaneAction,
@@ -19,6 +20,7 @@ import type {
   RefreshReason,
   CanvasNode,
   Camera,
+  DeviceStateEvent,
   Platform,
   ToolReport,
   Frame,
@@ -92,6 +94,15 @@ export const ipc = {
   deviceSelect: (nodeId: string, platform: Platform, deviceId: string, name?: string, osVersion?: string) =>
     invoke<CanvasNode>("device_select", { nodeId, platform, deviceId, name, osVersion }),
   deviceOpenHelp: (topic: "android" | "avd" | "xcode") => invoke<void>("device_open_help", { topic }),
+  deviceState: (nodeId: string) => invoke<DeviceStateEvent>("device_state", { nodeId }),
+  deviceBoot: (nodeId: string) => invoke<void>("device_boot", { nodeId }),
+  deviceStop: (nodeId: string) => invoke<void>("device_stop", { nodeId }),
+  deviceStream: (nodeId: string, width: number, height: number, channel: Channel<ArrayBuffer>) =>
+    invoke<void>("device_stream", { nodeId, width, height, channel }),
+  deviceUnstream: (nodeId: string) => invoke<string | null>("device_unstream", { nodeId }),
+  deviceFrameAck: (nodeId: string) => invoke<void>("device_frame_ack", { nodeId }),
+  deviceInput: (nodeId: string, input: DeviceInput) => invoke<void>("device_input", { nodeId, input }),
+  deviceScreenshot: (nodeId: string, out: string) => invoke<string>("device_screenshot", { nodeId, out }),
   exchangeLog: (nodeId: string) => invoke<ExchangeEntry[]>("exchange_log", { nodeId }),
   presetsDetect: () => invoke<PresetStatus[]>("presets_detect"),
   rolesList: () => invoke<Role[]>("roles_list"),

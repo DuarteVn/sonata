@@ -113,6 +113,7 @@ pub fn run() {
             commands::device::device_unstream,
             commands::device::device_frame_ack,
             commands::device::device_input,
+            commands::device::device_screenshot,
             commands::note::node_create_note,
             commands::note::note_read,
             commands::note::note_write,

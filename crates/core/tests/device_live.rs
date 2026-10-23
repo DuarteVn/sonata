@@ -155,3 +155,21 @@ fn streaming_a_device_that_is_off_fails_clearly() {
     assert_eq!(err.message, "device not running");
     app.quit();
 }
+
+#[test]
+fn screenshots_are_private_files_at_the_chosen_path_or_in_shots() {
+    let (sb, app, _world, d) = ready_device();
+    let default = app.device_screenshot(d, None).unwrap();
+    assert!(default.starts_with(sb.root.path().join("run/shots")));
+    assert_eq!(common::mode(&default), 0o600);
+    let out = sb.tmp.path().join("pixel.png");
+    assert_eq!(app.device_screenshot(d, Some(&out)).unwrap(), out);
+    assert_eq!(std::fs::read(&out).unwrap(), b"\x89PNG fake");
+    assert_eq!(common::mode(&out), 0o600);
+    app.device_stop(d).unwrap();
+    assert_eq!(
+        app.device_screenshot(d, None).unwrap_err().message,
+        "device not running"
+    );
+    app.quit();
+}

@@ -32,6 +32,7 @@ const COMMANDS: &[&str] = &[
     "device_unstream",
     "device_frame_ack",
     "device_input",
+    "device_screenshot",
     "node_create_note",
     "note_read",
     "note_write",

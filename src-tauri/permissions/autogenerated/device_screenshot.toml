@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-device-screenshot"
+description = "Enables the device_screenshot command without any pre-configured scope."
+commands.allow = ["device_screenshot"]
+
+[[permission]]
+identifier = "deny-device-screenshot"
+description = "Denies the device_screenshot command without any pre-configured scope."
+commands.deny = ["device_screenshot"]

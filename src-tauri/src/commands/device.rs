@@ -112,3 +112,12 @@ pub async fn device_input(
 ) -> Result<(), AppError> {
     app.device_input(node_id, input)
 }
+
+#[tauri::command]
+pub async fn device_screenshot(
+    app: State<'_, Arc<App>>,
+    node_id: Uuid,
+    out: PathBuf,
+) -> Result<PathBuf, AppError> {
+    app.device_screenshot(node_id, Some(&out))
+}

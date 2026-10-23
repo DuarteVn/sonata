@@ -2173,6 +2173,18 @@ impl App {
         r.map_err(AppError::internal)
     }
 
+    /// A PNG of the screen, readable only by the user, at `out` or in `run/shots` (FR-015).
+    pub fn device_screenshot(&self, node: Uuid, out: Option<&Path>) -> AppResult<PathBuf> {
+        let png = self
+            .devices
+            .driver(node)?
+            .screenshot_png()
+            .map_err(AppError::internal)?;
+        let path = out.map_or_else(|| self.screenshot_path(), Path::to_path_buf);
+        crate::persistence::atomic::write(&path, &png)?;
+        Ok(path)
+    }
+
     /// Devices still running, for the quit confirmation (FR-008).
     pub fn running_devices(&self) -> Vec<crate::device::RunningDevice> {
         self.devices.running()

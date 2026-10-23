@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CanvasNode, ToolReport } from "../src/ipc/types";
@@ -28,11 +28,23 @@ const ipc = vi.hoisted(() => ({
   deviceChooseSdk: vi.fn(),
   deviceSelect: vi.fn(),
   deviceOpenHelp: vi.fn(async () => {}),
+  deviceState: vi.fn(),
+  deviceBoot: vi.fn(async () => {}),
+  deviceStop: vi.fn(async () => {}),
+  deviceStream: vi.fn(async () => {}),
+  deviceUnstream: vi.fn(async () => "/data/run/device/d2.png"),
+  deviceFrameAck: vi.fn(async () => {}),
+  deviceInput: vi.fn(async () => {}),
 }));
 const dialog = vi.hoisted(() => ({ open: vi.fn(async () => "/chosen/sdk") }));
 vi.mock("../src/ipc/commands", () => ({ ipc }));
 vi.mock("@tauri-apps/plugin-dialog", () => dialog);
-vi.mock("@tauri-apps/api/core", () => ({ convertFileSrc: (p: string) => `asset://${p}` }));
+vi.mock("@tauri-apps/api/core", () => ({
+  convertFileSrc: (p: string) => `asset://${p}`,
+  Channel: class {
+    onmessage: ((m: unknown) => void) | null = null;
+  },
+}));
 
 import { DeviceNode } from "../src/nodes/DeviceNode";
 import { routeKey } from "../src/canvas/keyboard";
@@ -102,5 +114,71 @@ describe("device node picker (US2)", () => {
     expect(useCanvas.getState().nodes[0].content).toEqual({
       device: { platform: "android", deviceId: "Pixel_8_API_34", name: "Pixel 8", osVersion: "Android 14" },
     });
+  });
+});
+
+const chosen: CanvasNode = {
+  ...node,
+  id: "d2",
+  content: { device: { platform: "android", deviceId: "Pixel_8_API_34", name: "Pixel 8", osVersion: "Android 14" } },
+};
+const state = (kind: "off" | "booting" | "ready" | "stopped" | "error", message?: string) => ({
+  nodeId: "d2",
+  state: { kind, message },
+  startedBySonata: true,
+  reduced: false,
+  screen: [1080, 2400] as [number, number],
+});
+
+describe("device node with a chosen device (US1)", () => {
+  beforeEach(() => {
+    useCanvas.setState({ nodes: [chosen] });
+  });
+
+  it("after a restart offers Boot and does not boot by itself (AS6)", async () => {
+    ipc.deviceState.mockResolvedValue(state("off"));
+    render(<DeviceNode node={chosen} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Boot" }));
+    expect(ipc.deviceBoot).toHaveBeenCalledTimes(1);
+    expect(ipc.deviceBoot).toHaveBeenCalledWith("d2");
+  });
+
+  it("shows boot progress, errors, and a stopped device", async () => {
+    ipc.deviceState.mockResolvedValue(state("booting"));
+    render(<DeviceNode node={chosen} />);
+    expect(await screen.findByText("Booting…")).toBeInTheDocument();
+    act(() => useCanvas.getState().setDeviceState(state("error", "HVF is not available")));
+    expect(screen.getByRole("alert")).toHaveTextContent("HVF is not available");
+    act(() => useCanvas.getState().setDeviceState(state("stopped")));
+    expect(screen.getByText("Device stopped")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Boot" })).toBeInTheDocument();
+  });
+
+  it("sends Back, Home, and Recent apps, and stops", async () => {
+    ipc.deviceState.mockResolvedValue(state("ready"));
+    render(<DeviceNode node={chosen} />);
+    for (const [label, key] of [["Back", "back"], ["Home", "home"], ["Recent apps", "recents"]]) {
+      await userEvent.click(await screen.findByRole("button", { name: label }));
+      expect(ipc.deviceInput).toHaveBeenLastCalledWith("d2", { key });
+    }
+    await userEvent.click(screen.getByRole("button", { name: "Stop" }));
+    expect(ipc.deviceStop).toHaveBeenCalledWith("d2");
+  });
+
+  it("streams only while live and shows the last image as a card otherwise", async () => {
+    ipc.deviceState.mockResolvedValue(state("ready"));
+    render(<DeviceNode node={chosen} />);
+    expect(await screen.findByRole("img", { name: "Last screen of Pixel 8" })).toHaveAttribute(
+      "src",
+      expect.stringContaining("asset:///data/run/device/d2.png"),
+    );
+    expect(ipc.deviceStream).not.toHaveBeenCalled();
+    act(() => useCanvas.getState().setDeviceLive(new Set(["d2"])));
+    await vi.waitFor(() => expect(ipc.deviceStream).toHaveBeenCalled());
+    const [id, width, height] = ipc.deviceStream.mock.calls[0] as unknown as [string, number, number];
+    expect(id).toBe("d2");
+    expect(width / height).toBeCloseTo(1080 / 2400, 1);
+    act(() => useCanvas.getState().setDeviceLive(new Set()));
+    await vi.waitFor(() => expect(ipc.deviceUnstream).toHaveBeenCalledTimes(2));
   });
 });

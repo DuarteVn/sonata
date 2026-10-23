@@ -5,7 +5,7 @@ import { TerminalDialog } from "../dialogs/TerminalDialog";
 import { ipc } from "../ipc/commands";
 import { isAppError, isBrowser, isDevice, isTerminal } from "../ipc/types";
 import { BROWSER_CHROME_HEIGHT, BrowserNode } from "../nodes/BrowserNode";
-import { DEVICE_SIZE, DeviceNode } from "../nodes/DeviceNode";
+import { DEVICE_CHROME, DEVICE_SIZE, DeviceNode } from "../nodes/DeviceNode";
 import { linkDragBus } from "../nodes/LinkHandle";
 import { NoteNode } from "../nodes/NoteNode";
 import { TerminalNode } from "../nodes/TerminalNode";
@@ -18,6 +18,7 @@ import { LinkLayer, type LinkDrag } from "./LinkLayer";
 import { NodeToolbar } from "./NodeToolbar";
 import { ToolBar } from "./ToolBar";
 import { planBrowsers } from "./browserLayout";
+import { MAX_LIVE_DEVICES, planLive } from "./liveLayout";
 import { nodesInRect, rectFromPoints } from "./marquee";
 import { frameToScreen, pan, screenToCanvas, zoomAt, type ScreenRect } from "./viewport";
 import { startDrag } from "./useDrag";
@@ -29,8 +30,9 @@ const BROWSER_SIZE = { width: 1024, height: 720 };
 const COVERS = ".modal-backdrop, .menu.floating, .message-log, .node-toolbar, .tool-bar, .tool-hint, .banners, .linking-hint, .tb-palette";
 
 function hasTextFocus() {
-  const el = document.activeElement;
-  return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || (el as HTMLElement | null)?.isContentEditable === true;
+  const el = document.activeElement as HTMLElement | null;
+  // A focused device screen takes the keyboard too (007 FR-006).
+  return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el?.isContentEditable === true || el?.dataset.capturesKeys === "true";
 }
 
 export function Canvas() {
@@ -186,6 +188,18 @@ export function Canvas() {
       for (const gone of shown) if (!ids.has(gone)) items.push({ nodeId: gone, rect: null });
       shown = ids;
       void ipc.browserLayout(items).catch(() => {});
+      // Device screens follow the same rule with their own limit (007 FR-005).
+      const screens = s.nodes.filter(isDevice).map((n) => ({
+        id: n.id,
+        rect: frameToScreen(s.camera, {
+          x: n.frame.x,
+          y: n.frame.y + DEVICE_CHROME.top,
+          width: n.frame.width,
+          height: n.frame.height - DEVICE_CHROME.top - DEVICE_CHROME.bottom,
+        }),
+      }));
+      const devicePlan = planLive({ items: screens, viewport: { left: 0, top: 0, width: box.width, height: box.height }, zoom: s.camera.zoom, gesturing: s.gesturing, covers, selectedId, limit: MAX_LIVE_DEVICES });
+      s.setDeviceLive(new Set(devicePlan.filter((p) => p.rect).map((p) => p.id)));
     };
     const schedule = () => {
       clearTimeout(timer);

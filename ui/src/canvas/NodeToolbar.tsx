@@ -1,6 +1,8 @@
-import { open as openFilePicker } from "@tauri-apps/plugin-dialog";
+import { open as openFilePicker, save as saveFilePicker } from "@tauri-apps/plugin-dialog";
 import {
   AArrowDown,
+  Camera,
+  Square,
   AArrowUp,
   Bold,
   ExternalLink,
@@ -63,7 +65,7 @@ const SIZES = {
   terminal: { width: 232, height: 40 },
   note: { width: 600, height: 40 },
   browser: { width: 180, height: 40 },
-  device: { width: 120, height: 40 },
+  device: { width: 180, height: 40 },
 };
 
 function BrowserActions({ node }: { node: CanvasNode }) {
@@ -87,13 +89,28 @@ function BrowserActions({ node }: { node: CanvasNode }) {
   );
 }
 
-// Device nodes (feature 007): link and delete; screenshot and stop arrive with the live screen.
+// Device nodes (feature 007, FR-003): link, screenshot, stop, delete.
 function DeviceActions({ node }: { node: CanvasNode }) {
   const addWarning = useWorkspaces((s) => s.addWarning);
+  const running = useCanvas((s) => ["booting", "ready"].includes(s.deviceStates[node.id]?.state.kind ?? "off"));
   const report = (err: unknown) => addWarning(isAppError(err) ? err.message : String(err));
+  async function screenshot() {
+    const name = "device" in node.content ? node.content.device.name || node.content.device.deviceId : "device";
+    const out = await saveFilePicker({ defaultPath: `${name.replace(/[^\w.-]+/g, "-")}.png`, filters: [{ name: "PNG image", extensions: ["png"] }] });
+    if (typeof out === "string") await ipc.deviceScreenshot(node.id, out);
+  }
   return (
     <>
       <LinkButton node={node} />
+      <span className="tb-sep" />
+      <Btn label="Save screenshot" onClick={() => void screenshot().catch(report)}>
+        <Camera size={15} />
+      </Btn>
+      {running && (
+        <Btn label="Stop device" onClick={() => void ipc.deviceStop(node.id).catch(report)}>
+          <Square size={15} />
+        </Btn>
+      )}
       <span className="tb-sep" />
       <Btn label="Delete device" onClick={() => void useCanvas.getState().removeNode(node.id, true).catch(report)}>
         <Trash2 size={15} />
