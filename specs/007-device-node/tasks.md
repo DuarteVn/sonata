@@ -22,13 +22,13 @@ depends on it.
 
 ## Phase 2: Foundational (blocks all stories)
 
-- [ ] T004 [P] Tests `crates/core/tests/device_model.rs`: `NodeContent::Device{platform, deviceId, name?, osVersion?}` round trip (empty optionals omitted, `platform` is `"android"` | `"ios"`); `create_device` default frame 380×820, minimum 200×300; links and deletion like other nodes; loading a workspace never boots (FR-007); preference `androidSdkPath` omitted when unset
+- [X] T004 [P] Tests `crates/core/tests/device_model.rs`: `NodeContent::Device{platform, deviceId, name?, osVersion?}` round trip (empty optionals omitted, `platform` is `"android"` | `"ios"`); `create_device` default frame 380×820, minimum 200×300; links and deletion like other nodes; loading a workspace never boots (FR-007); preference `androidSdkPath` omitted when unset
 - [X] T005 Implement `NodeContent::Device` in `crates/core/src/model/node.rs`, `App::create_device` in `crates/core/src/app.rs`, `androidSdkPath` in `crates/core/src/model/preferences.rs` (drop `Copy`, fix call sites)
 - [X] T006 [P] Tests `crates/core/tests/device_grpc.rs` with a fake tonic `EmulatorController` server: `streamScreenshot` request carries format RGBA8888 + width/height and yields frames; `sendTouch` down/up, `sendKey` text and key, `getScreenshot` PNG, `setVmState`; every call sends the `authorization` token header; a wrong token is rejected
 - [X] T007 Implement `crates/core/src/device/grpc.rs`: hand-written prost messages (`ImageFormat`, `Image`, `TouchEvent`, `Touch`, `KeyboardEvent`, `WheelEvent`, `VmRunState`, field tags from the public proto, Apache 2.0 attribution comment) and an `EmulatorClient` using tonic's generic `Grpc` client (research R10)
 - [X] T008 [P] Tests `crates/core/tests/device_still.rs`: signature from a frame (64 px wide); still after 500 ms without frames; still when frames differ in < 0.5% of pixels; not still while frames change more; 5 s limit returns "not settled"
 - [X] T009 Implement `crates/core/src/device/still.rs` (research R5)
-- [ ] T010 Implement `crates/core/src/device/mod.rs`: `DeviceBackend` trait (tools, list, boot, stop, state, stream, input, read, apps, launch, install, screenshot), runtime registry keyed by node (refuse a second node for the same device with `DeviceInUse`), states `off|booting|ready|stopped|error`, `startedBySonata`, `controller`; a `FakeBackend` in `crates/core/tests/common/` for later tests
+- [X] T010 Implement `crates/core/src/device/mod.rs`: `DeviceBackend` trait (tools, list, boot, stop, state, stream, input, read, apps, launch, install, screenshot), runtime registry keyed by node (refuse a second node for the same device with `DeviceInUse`), states `off|booting|ready|stopped|error`, `startedBySonata`, `controller`; a `FakeBackend` in `crates/core/tests/common/` for later tests
 
 ## Phase 3: US2 Clear guidance when tools are missing (P1)
 

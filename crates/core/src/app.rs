@@ -285,6 +285,7 @@ pub struct App {
     socket_path: Option<PathBuf>,
     data_root: DataRoot,
     browser_host: Mutex<Option<Arc<dyn crate::browser::BrowserHost>>>,
+    devices: crate::device::DeviceManager,
     /// Update schedule and banner state (feature 005).
     updates: Mutex<(UpdateSchedule, UpdateState)>,
     /// Usage meter (feature 006).
@@ -376,6 +377,7 @@ impl App {
             socket_path,
             data_root,
             browser_host: Mutex::new(None),
+            devices: crate::device::DeviceManager::default(),
             updates: Mutex::new((
                 UpdateSchedule::new(prefs.value.auto_update_check),
                 UpdateState::default(),
@@ -390,6 +392,7 @@ impl App {
             app.spawn_activity_loop();
             app.spawn_lane_status_loop();
             app.start_messaging();
+            app.spawn_device_loop();
         })
     }
 
@@ -808,6 +811,7 @@ impl App {
         if let Some(host) = self.browser_host() {
             host.close(node);
         }
+        self.devices.forget(node);
         let _ = std::fs::remove_dir_all(self.run_dir(node));
         if is_note {
             self.note_store().delete(ws, node)?;
@@ -1418,6 +1422,7 @@ impl App {
     /// Saves everything, marks a clean shutdown, and stops all terminals.
     pub fn quit(&self) {
         self.broker.shutdown(self);
+        self.devices.stop_all();
         self.server.lock().unwrap_or_else(|e| e.into_inner()).take();
         let _ = std::fs::remove_dir_all(self.data_root.path().join("run").join("sessions"));
         let _ = std::fs::remove_dir_all(self.data_root.path().join("run").join("shots"));
@@ -2002,6 +2007,84 @@ impl App {
             d.os_version = clean(os_version);
             Ok(n.clone())
         })
+    }
+
+    pub fn set_device_launcher(&self, launcher: Arc<dyn crate::device::DeviceLauncher>) {
+        self.devices.set_launcher(launcher);
+    }
+
+    fn spawn_device_loop(&self) {
+        let this = self.this.clone();
+        std::thread::Builder::new()
+            .name("sonata-devices".into())
+            .spawn(move || {
+                loop {
+                    std::thread::sleep(crate::device::TICK);
+                    let Some(app) = this.upgrade() else { break };
+                    for e in app.devices.tick() {
+                        app.emit(CoreEvent::DeviceState(e));
+                    }
+                }
+            })
+            .expect("spawn device thread");
+    }
+
+    fn device_target(&self, node: Uuid) -> AppResult<crate::device::Target> {
+        let ws = self.workspace_of_node(node)?;
+        let m = self.workspaces();
+        let d = m
+            .workspace(ws)
+            .and_then(|w| w.node(node))
+            .and_then(Node::device)
+            .ok_or_else(|| AppError::node_not_found(node))?;
+        if d.device_id.is_empty() {
+            return Err(AppError::new(
+                ErrorCode::DeviceNotRunning,
+                "Choose a device in the node first.",
+            ));
+        }
+        Ok(crate::device::Target {
+            platform: d.platform,
+            device_id: d.device_id.clone(),
+            name: crate::messaging::commands::device_title(d),
+        })
+    }
+
+    pub fn device_state(&self, node: Uuid) -> crate::device::DeviceStateEvent {
+        self.devices.state(node)
+    }
+
+    /// Starts the node's device (or attaches to it); returns at once, readiness comes later.
+    pub fn device_boot(&self, node: Uuid) -> AppResult<()> {
+        let target = self.device_target(node)?;
+        let result = self.devices.boot(node, target);
+        match result {
+            Ok(Some(e)) => {
+                self.emit(CoreEvent::DeviceState(e));
+                Ok(())
+            }
+            Ok(None) => Ok(()),
+            Err(err) => {
+                self.emit(CoreEvent::DeviceState(self.devices.state(node)));
+                Err(err)
+            }
+        }
+    }
+
+    pub fn device_stop(&self, node: Uuid) -> AppResult<()> {
+        if let Some(e) = self.devices.stop(node) {
+            self.emit(CoreEvent::DeviceState(e));
+        }
+        Ok(())
+    }
+
+    pub fn device_driver(&self, node: Uuid) -> AppResult<Arc<dyn crate::device::DeviceDriver>> {
+        self.devices.driver(node)
+    }
+
+    /// Devices still running, for the quit confirmation (FR-008).
+    pub fn running_devices(&self) -> Vec<crate::device::RunningDevice> {
+        self.devices.running()
     }
 
     /// Where agent screenshots go when no `--out` is given (private, removed on quit).
