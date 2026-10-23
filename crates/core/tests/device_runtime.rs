@@ -153,3 +153,19 @@ fn a_node_without_a_chosen_device_cannot_boot() {
     assert!(err.message.contains("Choose a device"), "{}", err.message);
     app.quit();
 }
+
+#[test]
+fn quit_check_lists_devices_sonata_started() {
+    let (_sb, app, _, world, ws) = setup();
+    world.outside.lock().unwrap().push("Outside".into());
+    let mine = device(&app, ws, "Pixel 8");
+    let other = device(&app, ws, "Outside");
+    assert!(app.quit_check().is_empty(), "nothing running yet");
+    app.device_boot(mine).unwrap();
+    app.device_boot(other).unwrap();
+    let busy = app.quit_check();
+    assert_eq!(busy.len(), 1);
+    assert_eq!(busy[0].count, 0);
+    assert_eq!(busy[0].devices, vec!["Pixel 8".to_string()]);
+    app.quit();
+}

@@ -262,7 +262,7 @@ export type ExchangeEntry = {
   resultChars: number;
 };
 
-export type BusyWorkspace = { workspaceId: string; workspaceName: string; count: number };
+export type BusyWorkspace = { workspaceId: string; workspaceName: string; count: number; devices?: string[] };
 
 export function isTerminal(node: CanvasNode): node is CanvasNode & { content: { terminal: TerminalContent } } {
   return "terminal" in node.content;

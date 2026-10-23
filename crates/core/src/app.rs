@@ -45,6 +45,9 @@ pub struct BusyWorkspace {
     pub workspace_id: Uuid,
     pub workspace_name: String,
     pub count: usize,
+    /// Devices Sonata started that quitting stops (feature 007, FR-008).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub devices: Vec<String>,
 }
 
 /// Startup options. Tests override the shell; the app uses the user's login shell.
@@ -1410,16 +1413,23 @@ impl App {
 
     /// Workspaces with terminals running something other than an idle shell (FR-018a).
     pub fn quit_check(&self) -> Vec<BusyWorkspace> {
+        let running = self.devices.running();
         let m = self.workspaces();
         m.summaries()
             .into_iter()
             .filter_map(|s| {
                 let ws = m.workspace(s.id)?;
                 let count = self.busy_count(ws);
-                (count > 0).then_some(BusyWorkspace {
+                let devices: Vec<String> = running
+                    .iter()
+                    .filter(|d| d.started_by_sonata && ws.node(d.node_id).is_some())
+                    .map(|d| d.name.clone())
+                    .collect();
+                (count > 0 || !devices.is_empty()).then_some(BusyWorkspace {
                     workspace_id: s.id,
                     workspace_name: s.name,
                     count,
+                    devices,
                 })
             })
             .collect()
