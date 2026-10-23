@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,8 +31,8 @@
 
 ## Notes
 
-- Three [NEEDS CLARIFICATION] markers remain (land strategy, lane location, agent-requested
-  land/remove); resolve them in `/speckit-clarify`.
+- The three open questions (lane location, land strategy, agent-requested land/remove) were
+  answered on 2026-10-23 with the suggested defaults.
 - The spec names git, the `sonata` command, and the workspace file envelope. These are fixed
   product constraints from the constitution (system git, CLI, files as source of truth), not
   implementation choices, as in specs 003 and 004.

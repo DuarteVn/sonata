@@ -14,6 +14,24 @@ Then the lane is removed."
 Builds on 001–003 (workspaces with a working directory, terminal nodes, the `sonata` command with
 link-based permissions and the Orchestrator flag).
 
+## Clarifications
+
+### Session 2026-10-23
+
+- Q: Where are lane checkouts stored? → A: Under the Sonata data folder,
+  `~/.sonata/lanes/<workspace>/<lane>`.
+- Q: How does land bring the work into the base branch? → A: A merge commit; lane commits are kept.
+- Q: May agents request land and removal from the command line? → A: Yes. The app shows a
+  confirmation dialog to the human and the command waits for the answer.
+- Q: What happens to the terminal after a successful land? → A: The lane is removed and the
+  terminal's process is stopped; the node stays on the canvas marked as landed, and the user
+  restarts it in the workspace folder or deletes it.
+- Q: Can an existing terminal be moved into a lane? → A: No. A lane is chosen only when a terminal
+  is created (New terminal dialog or `sonata recruit`).
+- Q: Is the agent told it works in a lane? → A: Yes. The instructions Sonata already gives agents
+  add the lane branch, the base branch, a reminder to commit work, and how to see lane status and
+  request land.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Start a terminal in its own lane (Priority: P1)
@@ -70,8 +88,8 @@ the failed land.
 
 1. **Given** a lane with commits that the base branch does not have, and clean checkouts on both
    sides, **When** the user confirms Land, **Then** the base branch contains the lane's work using
-   the land strategy [NEEDS CLARIFICATION: land strategy — merge commit, squash into one commit, or
-   rebase then fast-forward?], and the lane is then removed as in User Story 3.
+   a merge commit (the lane's commits are kept as they are), the lane is then removed as in
+   User Story 3, and the terminal node stays on the canvas marked as landed.
 2. **Given** the land would produce conflicts, **When** the user confirms Land, **Then** the
    operation is cancelled, the base branch and the workspace folder are exactly as before, and the
    user sees the list of conflicting files.
@@ -141,10 +159,8 @@ node shows the change state and then "1 ahead" within a few seconds, without use
 ### User Story 5 - Agents ask for land and removal from the command line (Priority: P3)
 
 An agent working in a lane finishes its task and asks Sonata to land its work, or an Orchestrator
-asks to land a helper's lane. A human still confirms every land and removal.
-[NEEDS CLARIFICATION: may agents request land and remove through the `sonata` command (the app
-then shows a confirmation dialog to the human, and the command waits for the answer), or are land
-and remove available only to the human in the app UI?]
+asks to land a helper's lane. The app shows a confirmation dialog to the human, and the command
+waits for the answer. A human still confirms every land and removal.
 
 **Why this priority**: It saves clicks in long agent sessions, but the UI flow covers the need.
 
@@ -200,12 +216,14 @@ confirmation, that declining leaves everything unchanged, and that the command r
   MUST record the base branch for the lane.
 - **FR-004**: The lane branch name MUST be derived from the terminal name with a fixed `lane/`
   prefix, made safe for git, and made unique; existing branches and folders MUST NOT be reused.
-- **FR-005**: Lane checkouts MUST be created only inside one Sonata-managed lane location
-  [NEEDS CLARIFICATION: where — under the Sonata data folder (`~/.sonata/lanes/…`), or next to the
-  repository in a hidden Sonata folder?].
+- **FR-005**: Lane checkouts MUST be created only inside one Sonata-managed lane location: the
+  `lanes` folder in the Sonata data folder (`~/.sonata/lanes/<workspace>/<lane>`). The user's
+  repository folder and its parent get no extra folders.
 - **FR-006**: A terminal in a lane MUST start in the lane checkout, in the same relative subfolder
   as the workspace folder has in the repository.
 - **FR-007**: Each lane MUST belong to exactly one terminal node; one terminal has at most one lane.
+  A lane is chosen only when the terminal is created; the Edit terminal dialog does not add or
+  change a lane.
 
 **Land**
 
@@ -218,7 +236,9 @@ confirmation, that declining leaves everything unchanged, and that the command r
   the workspace folder to their exact prior state and list the conflicting files (at least the
   first 10 and the total count).
 - **FR-011**: After a successful land, Sonata MUST remove the lane as in FR-013 and keep the
-  branch.
+  branch. The terminal node MUST stay on the canvas, stopped and marked as landed, until the user
+  restarts it (it then runs in the workspace folder) or deletes it. A land requested by the lane's
+  own terminal MUST report the result to that command before the process is stopped.
 - **FR-012**: Lands into the same repository MUST run one at a time.
 
 **Removal**
@@ -246,8 +266,13 @@ confirmation, that declining leaves everything unchanged, and that the command r
   the app or be deleted automatically, and MUST offer "Forget lane", which keeps the branch.
 - **FR-021**: Any terminal in a lane MUST be able to read its own lane status through the `sonata`
   command.
-- **FR-022**: Agent-requested land and removal follow the answer to the User Story 5 question; in
-  every case a human confirms in the app before anything changes.
+- **FR-021a**: When a terminal in a lane starts an agent, the instructions Sonata gives the agent
+  MUST state the lane branch and base branch, ask the agent to commit its work in the lane and not
+  switch branches, and explain how to read lane status and request land.
+- **FR-022**: A terminal MAY request land or removal of its own lane through the `sonata` command;
+  an Orchestrator terminal MAY request it for the lane of a terminal linked to it. The app MUST
+  show the same confirmation as the UI, the command MUST wait for the answer, and a decline or a
+  timeout MUST leave everything unchanged.
 
 **Platform rules**
 
