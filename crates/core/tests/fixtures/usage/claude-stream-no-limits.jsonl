@@ -1,0 +1,3 @@
+{"type":"system","subtype":"init","session_id":"s1","model":"claude-haiku"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"."}]},"session_id":"s1"}
+{"type":"result","subtype":"success","is_error":false,"result":".","session_id":"s1"}

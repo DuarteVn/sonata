@@ -8,4 +8,5 @@ pub mod note;
 pub mod role;
 pub mod terminal;
 pub mod update;
+pub mod usage;
 pub mod workspace;

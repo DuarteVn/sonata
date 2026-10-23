@@ -204,3 +204,77 @@ export type UpdateState =
   | { kind: "installing"; version: string }
   | { kind: "failed"; version: string; reason: string }
   | { kind: "blocked"; version: string; reason: string };
+
+// Usage meter (feature 006, contracts/ipc.md). Empty optional fields are omitted by core.
+export type WindowKind = "short" | "weekly" | "other";
+
+export type UsageWindow = {
+  kind: WindowKind;
+  label: string;
+  usedPercent: number;
+  resetsAt?: string | null;
+};
+
+export type ReadingStatus = "ok" | "noPlanLimits" | "notLoggedIn" | "notInstalled" | "unavailable" | "off";
+
+export type Reading = {
+  providerId: string;
+  status: ReadingStatus;
+  plan?: string | null;
+  account?: string | null;
+  accountEmail?: string | null;
+  windows?: UsageWindow[];
+  readAt: string;
+  message?: string | null;
+};
+
+export type ProviderState = {
+  id: string;
+  name: string;
+  kind: "builtIn" | "custom";
+  color: string;
+  enabled: boolean;
+  detection: "found" | "notFound" | "unknown";
+  commandPath: string | null;
+  consent: "unasked" | "granted" | "denied";
+  command: string[];
+  definitionError: string | null;
+  reading: Reading | null;
+  stale: boolean;
+  lastError: string | null;
+  refreshing: boolean;
+};
+
+export type UsageSummary = {
+  state: "off" | "empty" | "normal" | "warning" | "full";
+  percent: number | null;
+  providerId: string | null;
+  windowKind: WindowKind | null;
+  resetsAt: string | null;
+};
+
+export type UsageState = {
+  enabled: boolean;
+  warnings: boolean;
+  summary: UsageSummary;
+  providers: ProviderState[];
+  providersFolder: string;
+};
+
+export type UsageWarning = {
+  providerId: string;
+  providerName: string;
+  windowLabel: string;
+  level: 80 | 100;
+  resetsAt: string | null;
+};
+
+export type ConsentRequest = {
+  providerId: string;
+  providerName: string;
+  kind: "builtIn" | "custom";
+  command: string[];
+  explanation: string;
+};
+
+export type RefreshReason = "panelOpen" | "manual";

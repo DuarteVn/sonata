@@ -49,6 +49,13 @@ const COMMANDS: &[&str] = &[
     "update_download",
     "update_install",
     "update_set_auto_check",
+    "usage_state",
+    "usage_refresh",
+    "usage_set_enabled",
+    "usage_set_warnings",
+    "usage_set_provider_enabled",
+    "usage_set_provider_color",
+    "usage_answer_consent",
 ];
 
 fn main() {

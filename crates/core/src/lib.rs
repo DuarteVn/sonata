@@ -19,6 +19,7 @@ pub mod presets;
 pub mod roles;
 pub mod terminal;
 pub mod update;
+pub mod usage;
 pub mod workspace;
 
 pub use app::App;

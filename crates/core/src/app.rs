@@ -33,6 +33,9 @@ use crate::terminal::history;
 use crate::terminal::manager::{SpawnSpec, TerminalManager};
 use crate::terminal::preview::{PREVIEW_INTERVAL, PreviewState};
 use crate::update::{UpdateSchedule, UpdateState};
+use crate::usage::schedule::RefreshReason;
+use crate::usage::service::{UsageService, UsageState};
+use crate::usage::system::SystemBackend;
 use crate::workspace::manager::{CreateWorkspace, SaveReport, WorkspaceManager, WorkspaceSummary};
 
 /// A workspace with programs running, listed in the quit dialog (FR-018a).
@@ -52,6 +55,9 @@ pub struct AppOptions {
     pub cli_dir: Option<PathBuf>,
     /// Start the CLI socket server (feature 003). Off in tests that do not need it.
     pub socket: bool,
+    /// Folder put first on `PATH` when looking for agent commands (feature 006). Tests point
+    /// it at fake `claude`/`codex` scripts.
+    pub usage_extra_path: Option<PathBuf>,
 }
 
 /// Input for `node_create_terminal`.
@@ -255,6 +261,8 @@ pub struct App {
     browser_host: Mutex<Option<Arc<dyn crate::browser::BrowserHost>>>,
     /// Update schedule and banner state (feature 005).
     updates: Mutex<(UpdateSchedule, UpdateState)>,
+    /// Usage meter (feature 006).
+    usage: Arc<UsageService>,
 }
 
 impl App {
@@ -291,6 +299,21 @@ impl App {
         warnings.extend(manager.take_warnings());
         warnings.extend(prefs.warning);
 
+        let usage = Arc::new(UsageService::new(
+            data_root.clone(),
+            prefs.value.usage.clone(),
+            Arc::new(SystemBackend {
+                shell: options
+                    .shell
+                    .clone()
+                    .unwrap_or_else(crate::terminal::pty::login_shell),
+                extra_path: options.usage_extra_path.clone(),
+                root: data_root.clone(),
+            }),
+            events.clone(),
+        ));
+        warnings.extend(usage.take_warnings());
+
         let tripped = crash_guard::on_launch(manager.app_state_mut());
         if let Err(e) = manager.save_app_state() {
             warnings.push(format!("Could not save app state: {e}"));
@@ -306,7 +329,7 @@ impl App {
         Ok(Arc::new_cyclic(|this| Self {
             workspaces: Mutex::new(manager),
             terminals: TerminalManager::new(events.clone()),
-            preferences: prefs.value,
+            preferences: prefs.value.clone(),
             options,
             events,
             startup_warnings: Mutex::new(warnings),
@@ -327,6 +350,7 @@ impl App {
                 UpdateSchedule::new(prefs.value.auto_update_check),
                 UpdateState::default(),
             )),
+            usage,
         }))
         .inspect(|app| {
             app.spawn_preview_loop();
@@ -336,7 +360,7 @@ impl App {
     }
 
     pub fn preferences(&self) -> Preferences {
-        self.preferences
+        self.preferences.clone()
     }
 
     fn updates(&self) -> MutexGuard<'_, (UpdateSchedule, UpdateState)> {
@@ -384,6 +408,65 @@ impl App {
         Ok(())
     }
 
+    pub fn usage_state(&self) -> UsageState {
+        self.usage.state()
+    }
+
+    /// Runs due automatic usage readings; blocks while they run (call from a worker thread).
+    pub fn usage_tick(&self) {
+        self.usage.tick();
+    }
+
+    /// Blocks while the readings run.
+    pub fn usage_refresh(&self, reason: RefreshReason, provider: Option<&str>) -> UsageState {
+        self.usage.refresh(reason, provider)
+    }
+
+    pub fn usage_set_enabled(&self, enabled: bool) -> AppResult<UsageState> {
+        let state = self.usage.set_enabled(enabled)?;
+        if enabled {
+            self.usage_refresh_in_background(RefreshReason::Auto, None);
+        }
+        Ok(state)
+    }
+
+    pub fn usage_set_warnings(&self, enabled: bool) -> AppResult<UsageState> {
+        self.usage.set_warnings(enabled)
+    }
+
+    pub fn usage_set_provider_enabled(&self, id: &str, enabled: bool) -> AppResult<UsageState> {
+        let state = self.usage.set_provider_enabled(id, enabled)?;
+        if enabled {
+            self.usage_refresh_in_background(RefreshReason::Manual, Some(id.to_string()));
+        }
+        Ok(state)
+    }
+
+    pub fn usage_set_provider_color(&self, id: &str, color: &str) -> AppResult<UsageState> {
+        self.usage.set_provider_color(id, color)
+    }
+
+    /// Records a consent answer; an allowed provider is read right away in the background.
+    pub fn usage_answer_consent(
+        &self,
+        id: &str,
+        allow: bool,
+        command: Vec<String>,
+    ) -> AppResult<UsageState> {
+        let state = self.usage.answer_consent(id, allow, command)?;
+        if allow {
+            self.usage_refresh_in_background(RefreshReason::Manual, Some(id.to_string()));
+        }
+        Ok(state)
+    }
+
+    fn usage_refresh_in_background(&self, reason: RefreshReason, provider: Option<String>) {
+        let usage = self.usage.clone();
+        std::thread::spawn(move || {
+            usage.refresh(reason, provider.as_deref());
+        });
+    }
+
     pub fn workspaces(&self) -> MutexGuard<'_, WorkspaceManager> {
         self.workspaces.lock().unwrap_or_else(|e| e.into_inner())
     }
@@ -405,7 +488,7 @@ impl App {
             active_workspace_id: active,
             crash_guard_tripped: self.crash_guard_tripped,
             recent_workspace_ids: m.app_state().recent_workspace_ids.clone(),
-            preferences: self.preferences,
+            preferences: self.preferences.clone(),
             warnings: std::mem::take(
                 &mut self
                     .startup_warnings

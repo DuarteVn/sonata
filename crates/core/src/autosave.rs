@@ -6,7 +6,9 @@ use crate::model::preferences::Preferences;
 use crate::workspace::manager::{SaveReport, WorkspaceManager};
 
 pub fn interval(prefs: &Preferences) -> Duration {
-    Duration::from_secs(u64::from(prefs.normalized().autosave_interval_seconds))
+    Duration::from_secs(u64::from(
+        prefs.clone().normalized().autosave_interval_seconds,
+    ))
 }
 
 /// One autosave pass: writes only workspaces whose revision changed since their last save.

@@ -19,6 +19,9 @@ pub enum ErrorCode {
     ImageTooLarge,
     ImageUnsupported,
     InvalidAddress,
+    UsageProviderNotFound,
+    ConsentMismatch,
+    InvalidColor,
     Io,
     Internal,
 }
