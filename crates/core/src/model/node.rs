@@ -149,7 +149,7 @@ pub struct TerminalContent {
     pub send_instructions: Option<bool>,
     /// The terminal's own git checkout and branch (feature 008); set only at creation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub lane: Option<Lane>,
+    pub lane: Option<Box<Lane>>,
 }
 
 impl TerminalContent {

@@ -58,6 +58,7 @@ const COMMANDS: &[&str] = &[
     "usage_answer_consent",
     "usage_open_settings",
     "usage_providers_folder",
+    "lane_check",
 ];
 
 fn main() {

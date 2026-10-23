@@ -642,9 +642,11 @@ fn recruit(ctx: &Ctx<'_>, rest: &[&str]) -> Reply {
     let mut role = None;
     let mut role_text = None;
     let mut folder = None;
+    let mut lane = false;
     let mut it = rest.iter();
     while let Some(a) = it.next() {
         match *a {
+            "--lane" => lane = true,
             "--name" => name = it.next().map(|s| s.to_string()),
             "--role" => role = it.next().map(|s| s.to_string()),
             "--role-text" => role_text = it.next().map(|s| s.to_string()),
@@ -667,9 +669,15 @@ fn recruit(ctx: &Ctx<'_>, rest: &[&str]) -> Reply {
     let Some(what) = what else {
         return Reply::err(
             EXIT_USAGE,
-            "Usage: sonata recruit <claude|codex|opencode|gemini|shell|\"<command>\"> [--name N] [--role R | --role-text T] [--folder F]",
+            "Usage: sonata recruit <claude|codex|opencode|gemini|shell|\"<command>\"> [--name N] [--role R | --role-text T] [--folder F | --lane]",
         );
     };
+    if lane && folder.is_some() {
+        return Reply::err(
+            EXIT_USAGE,
+            "--lane and --folder cannot be combined: a lane always starts from the workspace folder.",
+        );
+    }
     let folder = folder.map(|f| {
         let p = PathBuf::from(&f);
         if p.is_absolute() {
@@ -678,9 +686,33 @@ fn recruit(ctx: &Ctx<'_>, rest: &[&str]) -> Reply {
             PathBuf::from(&ctx.cwd).join(p)
         }
     });
-    match ctx.app.recruit(ctx.me, &what, name.as_deref(), role.as_deref(), role_text.as_deref(), folder) {
-        Ok(final_name) => Reply::ok(format!("Recruited \"{final_name}\". It is linked to you; ask it with `sonata ask \"{final_name}\" \"…\"`.")).with_data(json!({"name": final_name})),
-        Err(e) => Reply::err(if e.code == crate::ErrorCode::NodeNotFound { EXIT_NOT_FOUND } else { EXIT_ERROR }, e.message),
+    match ctx.app.recruit(
+        ctx.me,
+        &what,
+        name.as_deref(),
+        role.as_deref(),
+        role_text.as_deref(),
+        match (folder, lane) {
+            (_, true) => crate::app::RecruitPlace::Lane,
+            (Some(f), false) => crate::app::RecruitPlace::Folder(f),
+            (None, false) => crate::app::RecruitPlace::WorkspaceFolder,
+        },
+    ) {
+        Ok((final_name, lane)) => {
+            let place = lane
+                .as_ref()
+                .map(|l| format!(" in lane {} (base {})", l.branch, l.base_branch))
+                .unwrap_or_default();
+            Reply::ok(format!("Recruited \"{final_name}\"{place}. It is linked to you; ask it with `sonata ask \"{final_name}\" \"…\"`.")).with_data(json!({"name": final_name, "lane": lane.map(|l| l.branch)}))
+        }
+        Err(e) => Reply::err(
+            if e.code == crate::ErrorCode::NodeNotFound {
+                EXIT_NOT_FOUND
+            } else {
+                EXIT_ERROR
+            },
+            e.message,
+        ),
     }
 }
 

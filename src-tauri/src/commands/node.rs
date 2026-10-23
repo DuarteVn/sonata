@@ -9,6 +9,7 @@ use tauri::State;
 use uuid::Uuid;
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // one argument per field of the IPC contract
 pub fn node_create_terminal(
     app: State<'_, Arc<App>>,
     workspace_id: Uuid,
@@ -17,6 +18,7 @@ pub fn node_create_terminal(
     launch_command: Option<String>,
     working_directory: Option<PathBuf>,
     settings: Option<TerminalSettings>,
+    lane: Option<bool>,
 ) -> Result<Node, AppError> {
     app.create_terminal(
         workspace_id,
@@ -26,6 +28,7 @@ pub fn node_create_terminal(
             launch_command,
             working_directory,
             settings: settings.unwrap_or_default(),
+            lane: lane.unwrap_or(false),
         },
     )
 }

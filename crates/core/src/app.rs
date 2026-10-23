@@ -60,6 +60,14 @@ pub struct AppOptions {
     pub usage_extra_path: Option<PathBuf>,
 }
 
+/// Where a recruited terminal runs (feature 008 adds the lane).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RecruitPlace {
+    WorkspaceFolder,
+    Folder(PathBuf),
+    Lane,
+}
+
 /// Input for `node_create_terminal`.
 #[derive(Debug, Clone)]
 pub struct NewTerminal {
@@ -68,6 +76,8 @@ pub struct NewTerminal {
     pub launch_command: Option<String>,
     pub working_directory: Option<PathBuf>,
     pub settings: TerminalSettings,
+    /// Run in a new lane (feature 008); `working_directory` is then ignored.
+    pub lane: bool,
 }
 
 /// Terminal options from the New/Edit Terminal dialog. For nullable fields, `None` leaves the
@@ -186,7 +196,15 @@ impl Default for NewTerminal {
             launch_command: None,
             working_directory: None,
             settings: TerminalSettings::default(),
+            lane: false,
         }
+    }
+}
+
+fn lane_info(lane: &crate::model::node::Lane) -> crate::messaging::instructions::LaneInfo<'_> {
+    crate::messaging::instructions::LaneInfo {
+        branch: &lane.branch,
+        base_branch: &lane.base_branch,
     }
 }
 
@@ -263,6 +281,8 @@ pub struct App {
     updates: Mutex<(UpdateSchedule, UpdateState)>,
     /// Usage meter (feature 006).
     usage: Arc<UsageService>,
+    /// The system git, found on first use (feature 008, research R2).
+    git: std::sync::OnceLock<Result<crate::lanes::git::Git, String>>,
 }
 
 impl App {
@@ -351,6 +371,7 @@ impl App {
                 UpdateState::default(),
             )),
             usage,
+            git: std::sync::OnceLock::new(),
         }))
         .inspect(|app| {
             app.spawn_preview_loop();
@@ -505,6 +526,32 @@ impl App {
         }
     }
 
+    /// The system git, or why lanes are unavailable (research R2).
+    pub fn git(&self) -> Result<&crate::lanes::git::Git, &str> {
+        self.git
+            .get_or_init(|| {
+                let shell = self
+                    .options
+                    .shell
+                    .clone()
+                    .or_else(|| std::env::var_os("SHELL").map(PathBuf::from))
+                    .unwrap_or_else(|| PathBuf::from("/bin/zsh"));
+                crate::lanes::git::discover(&shell)
+            })
+            .as_ref()
+            .map_err(String::as_str)
+    }
+
+    /// Whether terminals of this workspace can run in a lane (FR-001).
+    pub fn lane_check(&self, ws: Uuid) -> AppResult<crate::lanes::ops::Availability> {
+        let folder = self
+            .workspaces()
+            .workspace(ws)
+            .map(|w| w.working_directory.clone())
+            .ok_or_else(|| AppError::workspace_not_found(ws))?;
+        Ok(crate::lanes::ops::availability(self.git(), &folder))
+    }
+
     pub fn create_workspace(&self, req: CreateWorkspace) -> AppResult<WorkspaceSummary> {
         let summary = self.workspaces().create(req)?;
         self.notify_workspaces_changed();
@@ -540,11 +587,15 @@ impl App {
             .font_size
             .unwrap_or(self.preferences.terminal_font_size);
         let (rows, cols) = grid_for_frame(&node.frame, font);
+        let lane_dir = term
+            .lane
+            .as_ref()
+            .filter(|l| !l.is_landed())
+            .map(|l| l.working_directory());
         Some(SpawnSpec {
             node_id: node.id,
-            cwd: term
-                .working_directory
-                .clone()
+            cwd: lane_dir
+                .or_else(|| term.working_directory.clone())
                 .unwrap_or_else(|| ws.working_directory.clone()),
             launch_command: term.launch_command.clone(),
             rows,
@@ -619,6 +670,24 @@ impl App {
                 format!("Terminal {}", count + 1)
             }
         };
+        let lane = if req.lane {
+            let folder = self
+                .workspaces()
+                .workspace(ws_id)
+                .map(|w| w.working_directory.clone())
+                .ok_or_else(|| AppError::workspace_not_found(ws_id))?;
+            let git = self
+                .git()
+                .map_err(|m| AppError::new(ErrorCode::LaneUnavailable, m))?;
+            Some(crate::lanes::ops::create(
+                git,
+                &self.data_root.lane_workspace_dir(ws_id),
+                &folder,
+                &name,
+            )?)
+        } else {
+            None
+        };
         let now = Utc::now();
         let (ws, node) = self.workspaces().update(ws_id, |ws| {
             let mut node = Node {
@@ -634,6 +703,10 @@ impl App {
                     let mut settings = req.settings;
                     settings.name = None;
                     apply_settings(&mut t, &settings)?;
+                    if let Some(lane) = lane {
+                        t.working_directory = None;
+                        t.lane = Some(Box::new(lane));
+                    }
                     t
                 }),
             };
@@ -1423,7 +1496,7 @@ impl App {
         hook: &str,
     ) -> AppResult<crate::messaging::instructions::SessionFiles> {
         let ws_id = self.workspace_of_node(node)?;
-        let (name, workspace, role, orchestrator) = {
+        let (name, workspace, role, orchestrator, lane) = {
             let m = self.workspaces();
             let ws = m
                 .workspace(ws_id)
@@ -1437,6 +1510,7 @@ impl App {
                 ws.name.clone(),
                 t.role.map(|r| r.text),
                 t.orchestrator,
+                t.lane.filter(|l| !l.is_landed()).map(|l| *l),
             )
         };
         let info = crate::messaging::instructions::SessionInfo {
@@ -1444,6 +1518,7 @@ impl App {
             workspace: &workspace,
             role: role.as_deref(),
             orchestrator,
+            lane: lane.as_ref().map(lane_info),
         };
         Ok(crate::messaging::instructions::write_session(
             &self.run_dir(node),
@@ -1477,6 +1552,7 @@ impl App {
             workspace: &ws.name,
             role: t.role.as_ref().map(|r| r.text.as_str()),
             orchestrator: t.orchestrator,
+            lane: t.lane.as_deref().filter(|l| !l.is_landed()).map(lane_info),
         };
         let text = crate::messaging::instructions::typed_instructions(&info);
         let this = self.this.clone();
@@ -1609,8 +1685,13 @@ impl App {
         name: Option<&str>,
         role: Option<&str>,
         role_text: Option<&str>,
-        folder: Option<PathBuf>,
-    ) -> AppResult<String> {
+        place: RecruitPlace,
+    ) -> AppResult<(String, Option<crate::model::node::Lane>)> {
+        let (folder, lane) = match place {
+            RecruitPlace::WorkspaceFolder => (None, false),
+            RecruitPlace::Folder(f) => (Some(f), false),
+            RecruitPlace::Lane => (None, true),
+        };
         let ws = self.workspace_of_node(orchestrator)?;
         let anchor = self
             .workspaces()
@@ -1682,6 +1763,7 @@ impl App {
                     role: Some(role),
                     ..Default::default()
                 },
+                lane,
             },
         )?;
         self.update_node(ws, node.id, |w, id| {
@@ -1692,7 +1774,10 @@ impl App {
         })?;
         self.create_link(ws, orchestrator, node.id)?;
         self.notify_nodes_changed(ws);
-        Ok(final_name)
+        Ok((
+            final_name,
+            node.terminal().and_then(|t| t.lane.as_deref().cloned()),
+        ))
     }
 
     /// Orchestrator: a note next to it, linked to it, starting with `# title` and `text`.
