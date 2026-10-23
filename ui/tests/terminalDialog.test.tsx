@@ -10,6 +10,7 @@ const ipc = vi.hoisted(() => ({
   roleDelete: vi.fn(async () => {}),
   nodeCreateTerminal: vi.fn(),
   terminalUpdateSettings: vi.fn(),
+  laneCheck: vi.fn(),
 }));
 vi.mock("../src/ipc/commands", () => ({ ipc }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(async () => "/picked/dir") }));
@@ -35,6 +36,7 @@ beforeEach(() => {
     { id: "gemini", found: true },
     { id: "shell", found: true },
   ]);
+  ipc.laneCheck.mockResolvedValue({ available: true, baseBranch: "main" });
   ipc.rolesList.mockResolvedValue([{ id: "r1", name: "Reviewer", text: "Review diffs.", createdAt: "" }]);
   ipc.nodeCreateTerminal.mockImplementation(async (_ws, frame, opts) => ({
     id: "t1", frame, z: 1, createdAt: "", modifiedAt: "",
@@ -116,5 +118,42 @@ describe("New Terminal dialog", () => {
     await waitFor(() => expect(ipc.terminalUpdateSettings).toHaveBeenCalledWith("t9", expect.objectContaining({ launchCommand: "codex" })));
     expect(await screen.findByRole("status")).toHaveTextContent(/restart/i);
     within(screen.getByRole("dialog"));
+  });
+});
+
+describe("Run in a lane", () => {
+  it("is offered with the base branch, locks the folder, and creates a lane terminal", async () => {
+    render(<TerminalDialog mode={{ kind: "create", at: { x: 0, y: 0 } }} onClose={() => {}} />);
+    const lane = await screen.findByRole("checkbox", { name: /Run in a lane/ });
+    await waitFor(() => expect(lane).toBeEnabled());
+    expect(screen.getByText(/from main/)).toBeInTheDocument();
+    expect(ipc.laneCheck).toHaveBeenCalledWith("w1");
+    await userEvent.click(lane);
+    expect(screen.getByLabelText("Working folder")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Browse…" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(ipc.nodeCreateTerminal).toHaveBeenCalled());
+    const [, , opts] = ipc.nodeCreateTerminal.mock.calls[0];
+    expect(opts.lane).toBe(true);
+    expect(opts.workingDirectory).toBeUndefined();
+  });
+
+  it("is disabled with the reason when the folder cannot host lanes", async () => {
+    ipc.laneCheck.mockResolvedValue({ available: false, reason: "The workspace folder is not inside a git repository." });
+    render(<TerminalDialog mode={{ kind: "create", at: { x: 0, y: 0 } }} onClose={() => {}} />);
+    expect(await screen.findByText(/not inside a git repository/)).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /Run in a lane/ })).toBeDisabled();
+  });
+
+  it("is not shown when editing a terminal", async () => {
+    const node: CanvasNode = {
+      id: "t9", frame: { x: 0, y: 0, width: 640, height: 400 }, z: 1, createdAt: "", modifiedAt: "",
+      content: { terminal: { name: "T", saveHistory: true } },
+    };
+    useCanvas.setState({ nodes: [node] });
+    render(<TerminalDialog mode={{ kind: "edit", nodeId: "t9" }} onClose={() => {}} />);
+    await screen.findByLabelText("Name");
+    expect(screen.queryByRole("checkbox", { name: /Run in a lane/ })).not.toBeInTheDocument();
+    expect(ipc.laneCheck).not.toHaveBeenCalled();
   });
 });

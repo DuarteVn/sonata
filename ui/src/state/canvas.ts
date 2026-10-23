@@ -90,7 +90,7 @@ type CanvasState = {
   bringToFront: (id: string) => Promise<void>;
   addTerminal: (
     frame: Frame,
-    opts: { name?: string; launchCommand?: string; workingDirectory?: string; settings?: TerminalSettings },
+    opts: { name?: string; launchCommand?: string; workingDirectory?: string; settings?: TerminalSettings; lane?: boolean },
   ) => Promise<CanvasNode>;
   removeNode: (id: string, confirmed: boolean) => Promise<void>;
   renameTerminal: (id: string, name: string) => Promise<void>;

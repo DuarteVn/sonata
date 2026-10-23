@@ -1,6 +1,7 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
   ExchangeEntry,
+  LaneAvailability,
   Link,
   NoteStyle,
   PresetStatus,
@@ -40,8 +41,9 @@ export const ipc = {
   nodeCreateTerminal: (
     workspaceId: string,
     frame: Frame,
-    opts: { name?: string; launchCommand?: string; workingDirectory?: string; settings?: TerminalSettings } = {},
+    opts: { name?: string; launchCommand?: string; workingDirectory?: string; settings?: TerminalSettings; lane?: boolean } = {},
   ) => invoke<CanvasNode>("node_create_terminal", { workspaceId, frame, ...opts }),
+  laneCheck: (workspaceId: string) => invoke<LaneAvailability>("lane_check", { workspaceId }),
   nodeUpdateFrame: (workspaceId: string, nodeId: string, frame: Frame) =>
     invoke<Frame>("node_update_frame", { workspaceId, nodeId, frame }),
   nodeBringToFront: (workspaceId: string, nodeId: string) =>

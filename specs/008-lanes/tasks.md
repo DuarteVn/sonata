@@ -14,22 +14,22 @@ never touches a real repository.
 
 ## Phase 1: Setup
 
-- [ ] T001 Add a temporary-repository helper (`git init -b main`, local `user.name`/`user.email`, `commit.gpgsign=false`, helpers `commit_file`, `git(args)`) to crates/core/tests/common/mod.rs
-- [ ] T002 Create the empty module tree `crates/core/src/lanes/{mod,git,naming,guard,ops,status,confirm}.rs` and register `pub mod lanes;` in crates/core/src/lib.rs
+- [x] T001 Add a temporary-repository helper (`git init -b main`, local `user.name`/`user.email`, `commit.gpgsign=false`, helpers `commit_file`, `git(args)`) to crates/core/tests/common/mod.rs
+- [x] T002 Create the empty module tree `crates/core/src/lanes/{mod,git,naming,guard,ops,status,confirm}.rs` and register `pub mod lanes;` in crates/core/src/lib.rs
 
 ## Phase 2: Foundational (blocks every story)
 
-- [ ] T003 [P] Write unit tests for slug and branch naming (ASCII folding, dashes, 40-char cap, empty → `lane`, `-2` suffix when branch or folder is taken) in crates/core/src/lanes/naming.rs (`#[cfg(test)]`)
-- [ ] T004 [P] Implement naming per research R3 in crates/core/src/lanes/naming.rs
-- [ ] T005 [P] Write tests for the git runner: env scrubbing (`GIT_DIR` set in the parent is ignored), timeout, version parse (`2.54.0 (Apple Git-157)` → 2.54, < 2.38 rejected), porcelain v2 `-z` status parse, `worktree list --porcelain -z` parse in crates/core/tests/lanes_git.rs
-- [ ] T006 Implement the runner, git discovery (research R2: login-shell PATH, `/usr/bin/git` only when `xcode-select -p` succeeds), and parsers in crates/core/src/lanes/git.rs
-- [ ] T007 [P] Write guard tests (research R7): `..`, relative path, sibling prefix `lanes/<id>-x`, nested path, wrong slug, symlink to a real folder, path not in `worktree list`, valid path passes in crates/core/tests/lanes_guard.rs
-- [ ] T008 Implement `check_removable` in crates/core/src/lanes/guard.rs and `DataRoot::lanes_dir()` / `lane_workspace_dir(id)` in crates/core/src/paths.rs
-- [ ] T009 [P] Write a test that `enforce_private_tree` fixes `lanes/` and `lanes/<id>` to 0700 but leaves a `0755` script inside `lanes/<id>/<slug>/` unchanged, in crates/core/tests/lanes_guard.rs
-- [ ] T010 Make `enforce_private_tree` skip lane checkouts (research R4) in crates/core/src/paths.rs
-- [ ] T011 [P] Write persistence tests: a terminal with `lane` round-trips with sorted keys and omitted empty fields; a v2 file migrates to v3 unchanged; a v3 file read by a build whose current is 2 is a `NewerVersion` failure, in crates/core/tests/lanes_persistence.rs
-- [ ] T012 Add `Lane` and `TerminalContent.lane` (data-model.md) in crates/core/src/model/node.rs, bump `WORKSPACE_SCHEMA_VERSION` to 3 in crates/core/src/model/workspace.rs, and register the no-op 2→3 step in crates/core/src/persistence/store.rs
-- [ ] T013 Add error codes `LaneUnavailable`, `LaneBlocked`, `LaneConflict`, `LaneUnsafePath`, `LaneHasChanges`, `ConfirmationRequired`, `LaneConfirmationNeeded` in crates/core/src/error.rs and the matching union in ui/src/ipc/types.ts
+- [x] T003 [P] Write unit tests for slug and branch naming (ASCII folding, dashes, 40-char cap, empty → `lane`, `-2` suffix when branch or folder is taken) in crates/core/src/lanes/naming.rs (`#[cfg(test)]`)
+- [x] T004 [P] Implement naming per research R3 in crates/core/src/lanes/naming.rs
+- [x] T005 [P] Write tests for the git runner: env scrubbing (`GIT_DIR` set in the parent is ignored), timeout, version parse (`2.54.0 (Apple Git-157)` → 2.54, < 2.38 rejected), porcelain v2 `-z` status parse, `worktree list --porcelain -z` parse in crates/core/tests/lanes_git.rs
+- [x] T006 Implement the runner, git discovery (research R2: login-shell PATH, `/usr/bin/git` only when `xcode-select -p` succeeds), and parsers in crates/core/src/lanes/git.rs
+- [x] T007 [P] Write guard tests (research R7): `..`, relative path, sibling prefix `lanes/<id>-x`, nested path, wrong slug, symlink to a real folder, path not in `worktree list`, valid path passes in crates/core/tests/lanes_guard.rs
+- [x] T008 Implement `check_removable` in crates/core/src/lanes/guard.rs and `DataRoot::lanes_dir()` / `lane_workspace_dir(id)` in crates/core/src/paths.rs
+- [x] T009 [P] Write a test that `enforce_private_tree` fixes `lanes/` and `lanes/<id>` to 0700 but leaves a `0755` script inside `lanes/<id>/<slug>/` unchanged, in crates/core/tests/lanes_guard.rs
+- [x] T010 Make `enforce_private_tree` skip lane checkouts (research R4) in crates/core/src/paths.rs
+- [x] T011 [P] Write persistence tests: a terminal with `lane` round-trips with sorted keys and omitted empty fields; a v2 file migrates to v3 unchanged; a v3 file read by a build whose current is 2 is a `NewerVersion` failure, in crates/core/tests/lanes_persistence.rs
+- [x] T012 Add `Lane` and `TerminalContent.lane` (data-model.md) in crates/core/src/model/node.rs, bump `WORKSPACE_SCHEMA_VERSION` to 3 in crates/core/src/model/workspace.rs, and register the no-op 2→3 step in crates/core/src/persistence/store.rs
+- [x] T013 Add error codes `LaneUnavailable`, `LaneBlocked`, `LaneConflict`, `LaneUnsafePath`, `LaneHasChanges`, `ConfirmationRequired`, `LaneConfirmationNeeded` in crates/core/src/error.rs and the matching union in ui/src/ipc/types.ts
 
 **Checkpoint**: naming, git runner, guard, model, and permission-pass fix are green.
 
@@ -39,19 +39,19 @@ never touches a real repository.
 **Independent Test**: Two lane terminals change the same file; the workspace folder and each lane
 see only their own change (quickstart A).
 
-- [ ] T014 [P] [US1] Write tests for `lanes::ops::availability(folder)`: not a repo, detached HEAD, merge in progress, git unavailable, ok with base branch, in crates/core/tests/lanes_create.rs
-- [ ] T015 [P] [US1] Write tests for `create_terminal(.., lane: true)`: branch `lane/<slug>` exists at the base commit, checkout under `lanes/<ws>/<slug>`, `subdirectory` recorded for a workspace in a subfolder, spawn cwd is `checkoutPath/subdirectory`, two lanes isolate the same file, name collision gets `-2`, failure leaves no branch, in crates/core/tests/lanes_create.rs
-- [ ] T016 [US1] Implement `availability` and `create` (research R5) in crates/core/src/lanes/ops.rs
-- [ ] T017 [US1] Add `lane: bool` to `NewTerminal`, call `lanes::ops::create`, and use the lane folder in `spawn_spec` in crates/core/src/app.rs
-- [ ] T018 [P] [US1] Write a test that a restarted app (new `App` on the same data root) starts a lane terminal in its checkout, in crates/core/tests/lanes_create.rs
-- [ ] T019 [P] [US1] Write tests that `instructions()` and `typed_instructions()` include the lane branch, base, and `sonata lane` commands only when a lane is set, in crates/core/src/messaging/instructions.rs (`#[cfg(test)]`)
-- [ ] T020 [US1] Add the lane to `SessionInfo` and the text of research R12 in crates/core/src/messaging/instructions.rs; pass it from `prepare_agent_session` and `maybe_type_instructions` in crates/core/src/app.rs
-- [ ] T021 [P] [US1] Write tests for `recruit --lane` (creates a lane terminal linked to the caller; `--lane` with `--folder` → exit 2; not a repo → exit 1) in crates/core/tests/lanes_cli.rs
-- [ ] T022 [US1] Parse `--lane` in `recruit` in crates/core/src/messaging/commands.rs and pass it through `App::recruit` in crates/core/src/app.rs; update recruit help in crates/cli/src/main.rs
-- [ ] T023 [US1] Add `lane_check` and the `lane` argument of `node_create_terminal` in src-tauri/src/commands/lane.rs and src-tauri/src/commands/node.rs; register in src-tauri/src/commands/mod.rs, src-tauri/src/lib.rs, src-tauri/build.rs, src-tauri/capabilities/default.json
-- [ ] T024 [P] [US1] Add `Lane` types and `laneCheck`, `nodeCreateTerminal({lane})` in ui/src/ipc/types.ts and ui/src/ipc/commands.ts
-- [ ] T025 [P] [US1] Write tests: the New terminal dialog shows "Run in a lane" enabled with the base branch, disabled with the reason when `laneCheck` says unavailable, locks the folder field when on, and is absent in Edit mode, in ui/tests/terminalDialog.test.tsx
-- [ ] T026 [US1] Add the checkbox to ui/src/dialogs/TerminalDialog.tsx
+- [x] T014 [P] [US1] Write tests for `lanes::ops::availability(folder)`: not a repo, detached HEAD, merge in progress, git unavailable, ok with base branch, in crates/core/tests/lanes_create.rs
+- [x] T015 [P] [US1] Write tests for `create_terminal(.., lane: true)`: branch `lane/<slug>` exists at the base commit, checkout under `lanes/<ws>/<slug>`, `subdirectory` recorded for a workspace in a subfolder, spawn cwd is `checkoutPath/subdirectory`, two lanes isolate the same file, name collision gets `-2`, failure leaves no branch, in crates/core/tests/lanes_create.rs
+- [x] T016 [US1] Implement `availability` and `create` (research R5) in crates/core/src/lanes/ops.rs
+- [x] T017 [US1] Add `lane: bool` to `NewTerminal`, call `lanes::ops::create`, and use the lane folder in `spawn_spec` in crates/core/src/app.rs
+- [x] T018 [P] [US1] Write a test that a restarted app (new `App` on the same data root) starts a lane terminal in its checkout, in crates/core/tests/lanes_create.rs
+- [x] T019 [P] [US1] Write tests that `instructions()` and `typed_instructions()` include the lane branch, base, and `sonata lane` commands only when a lane is set, in crates/core/src/messaging/instructions.rs (`#[cfg(test)]`)
+- [x] T020 [US1] Add the lane to `SessionInfo` and the text of research R12 in crates/core/src/messaging/instructions.rs; pass it from `prepare_agent_session` and `maybe_type_instructions` in crates/core/src/app.rs
+- [x] T021 [P] [US1] Write tests for `recruit --lane` (creates a lane terminal linked to the caller; `--lane` with `--folder` → exit 2; not a repo → exit 1) in crates/core/tests/lanes_cli.rs
+- [x] T022 [US1] Parse `--lane` in `recruit` in crates/core/src/messaging/commands.rs and pass it through `App::recruit` in crates/core/src/app.rs; update recruit help in crates/cli/src/main.rs
+- [x] T023 [US1] Add `lane_check` and the `lane` argument of `node_create_terminal` in src-tauri/src/commands/lane.rs and src-tauri/src/commands/node.rs; register in src-tauri/src/commands/mod.rs, src-tauri/src/lib.rs, src-tauri/build.rs, src-tauri/capabilities/default.json
+- [x] T024 [P] [US1] Add `Lane` types and `laneCheck`, `nodeCreateTerminal({lane})` in ui/src/ipc/types.ts and ui/src/ipc/commands.ts
+- [x] T025 [P] [US1] Write tests: the New terminal dialog shows "Run in a lane" enabled with the base branch, disabled with the reason when `laneCheck` says unavailable, locks the folder field when on, and is absent in Edit mode, in ui/tests/terminalDialog.test.tsx
+- [x] T026 [US1] Add the checkbox to ui/src/dialogs/TerminalDialog.tsx
 
 **Checkpoint**: US1 works alone (quickstart A steps 1–3).
 

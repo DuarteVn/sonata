@@ -86,7 +86,21 @@ export type TerminalContent = {
   orchestrator?: boolean;
   recruitedBy?: string;
   sendInstructions?: boolean;
+  lane?: Lane;
 };
+
+/** A terminal's own git checkout and branch (feature 008). */
+export type Lane = {
+  branch: string;
+  baseBranch: string;
+  mainCheckout: string;
+  checkoutPath: string;
+  subdirectory?: string;
+  createdAt: string;
+  landedAt?: string;
+};
+
+export type LaneAvailability = { available: boolean; reason?: string; baseBranch?: string };
 
 export type NoteColor = "yellow" | "blue" | "green" | "pink" | "purple" | "gray";
 export type NoteStyle = { color: NoteColor; textSize: number };

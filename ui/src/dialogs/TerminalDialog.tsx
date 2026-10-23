@@ -2,7 +2,14 @@ import { open as openFolderPicker } from "@tauri-apps/plugin-dialog";
 import { Bot, Brain, Code2, Sparkles, SquareTerminal, Trash2, type LucideIcon } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { ipc } from "../ipc/commands";
-import { isAppError, type PresetStatus, type Role, type RoleRef, type TerminalSettings } from "../ipc/types";
+import {
+  isAppError,
+  type LaneAvailability,
+  type PresetStatus,
+  type Role,
+  type RoleRef,
+  type TerminalSettings,
+} from "../ipc/types";
 import { useCanvas, type TerminalDialogMode } from "../state/canvas";
 import { useWorkspaces } from "../state/workspaces";
 import { Modal } from "./Modal";
@@ -46,11 +53,23 @@ export function TerminalDialog({ mode, onClose }: Props) {
   const [library, setLibrary] = useState<Role[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [restartNotice, setRestartNotice] = useState(false);
+  const [laneCheck, setLaneCheck] = useState<LaneAvailability | null>(null);
+  const [lane, setLane] = useState(false);
+  const workspaceId = useCanvas((s) => s.workspaceId);
 
   useEffect(() => {
     ipc.presetsDetect().then(setPresets).catch(() => setPresets([]));
     ipc.rolesList().then(setLibrary).catch(() => setLibrary([]));
   }, []);
+
+  // Lanes are chosen only when a terminal is created (feature 008).
+  useEffect(() => {
+    if (mode.kind !== "create" || !workspaceId) return;
+    ipc
+      .laneCheck(workspaceId)
+      .then(setLaneCheck)
+      .catch((err) => setLaneCheck({ available: false, reason: isAppError(err) ? err.message : String(err) }));
+  }, [mode.kind, workspaceId]);
 
   const report = (err: unknown) => setError(isAppError(err) ? err.message : String(err));
   const found = (id: string) => presets.find((p) => p.id === id)?.found;
@@ -106,7 +125,8 @@ export function TerminalDialog({ mode, onClose }: Props) {
           {
             name: name.trim() || undefined,
             launchCommand: command.trim() || undefined,
-            workingDirectory: folder && folder !== workspaceDir ? folder : undefined,
+            workingDirectory: !lane && folder && folder !== workspaceDir ? folder : undefined,
+            lane: lane || undefined,
             settings: {
               accentColor: accent,
               fontSize: font(),
@@ -191,11 +211,35 @@ export function TerminalDialog({ mode, onClose }: Props) {
             </label>
             <label htmlFor="term-folder">Working folder</label>
             <div className="row">
-              <input id="term-folder" value={folder} onChange={(e) => setFolder(e.target.value)} spellCheck={false} />
-              <button type="button" onClick={browse}>
+              <input
+                id="term-folder"
+                value={folder}
+                onChange={(e) => setFolder(e.target.value)}
+                spellCheck={false}
+                disabled={lane}
+              />
+              <button type="button" onClick={browse} disabled={lane}>
                 Browse…
               </button>
             </div>
+            {mode.kind === "create" && (
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={lane}
+                  disabled={!laneCheck?.available}
+                  onChange={(e) => setLane(e.target.checked)}
+                />
+                <span>
+                  Run in a lane
+                  <small>
+                    {laneCheck?.available
+                      ? `Its own git checkout on a new branch from ${laneCheck.baseBranch}, so it never touches other agents' files. Land merges it back.`
+                      : (laneCheck?.reason ?? "Checking the workspace folder…")}
+                  </small>
+                </span>
+              </label>
+            )}
             <label className="check">
               <input type="checkbox" checked={monitor} onChange={(e) => setMonitor(e.target.checked)} />
               <span>
