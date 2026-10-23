@@ -16,16 +16,16 @@ depends on it.
 
 ## Phase 1: Setup
 
-- [ ] T001 Add `tonic` (client, no TLS; `server` feature in dev-dependencies only), `prost`, `quick-xml`, `png` to `Cargo.toml` workspace deps and `crates/core/Cargo.toml`; record versions and why in plan Complexity Tracking
-- [ ] T002 [P] Add error codes `DeviceInUse`, `DeviceNotRunning`, `ToolMissing` in `crates/core/src/error.rs` and `ui/src/ipc/types.ts`
+- [X] T001 Add `tonic` (client, no TLS; `server` feature in dev-dependencies only), `prost`, `quick-xml`, `png` to `Cargo.toml` workspace deps and `crates/core/Cargo.toml`; record versions and why in plan Complexity Tracking
+- [X] T002 [P] Add error codes `DeviceInUse`, `DeviceNotRunning`, `ToolMissing` in `crates/core/src/error.rs` and `ui/src/ipc/types.ts`
 - [ ] T003 [P] Create fixture tree `crates/core/tests/fixtures/device/`: SDK folders (valid, missing `adb`, empty), AVD home with two AVDs (`Pixel_8_API_34.ini` + `config.ini` with `avd.ini.displayname`, `image.sysdir.1=system-images/android-34/google_apis/arm64-v8a/`, `hw.lcd.width=1080`, `hw.lcd.height=2400`), discovery `pid_123.ini`, uiautomator XML dumps (Settings home, login form with EditText/password, empty hierarchy, status-line suffix), `query-activities --brief` output, `simctl list --json` output
 
 ## Phase 2: Foundational (blocks all stories)
 
 - [ ] T004 [P] Tests `crates/core/tests/device_model.rs`: `NodeContent::Device{platform, deviceId, name?, osVersion?}` round trip (empty optionals omitted, `platform` is `"android"` | `"ios"`); `create_device` default frame 380×820, minimum 200×300; links and deletion like other nodes; loading a workspace never boots (FR-007); preference `androidSdkPath` omitted when unset
 - [ ] T005 Implement `NodeContent::Device` in `crates/core/src/model/node.rs`, `App::create_device` in `crates/core/src/app.rs`, `androidSdkPath` in `crates/core/src/model/preferences.rs` (drop `Copy`, fix call sites)
-- [ ] T006 [P] Tests `crates/core/tests/device_grpc.rs` with a fake tonic `EmulatorController` server: `streamScreenshot` request carries format RGBA8888 + width/height and yields frames; `sendTouch` down/up, `sendKey` text and key, `getScreenshot` PNG, `setVmState`; every call sends the `authorization` token header; a wrong token is rejected
-- [ ] T007 Implement `crates/core/src/device/grpc.rs`: hand-written prost messages (`ImageFormat`, `Image`, `TouchEvent`, `Touch`, `KeyboardEvent`, `WheelEvent`, `VmRunState`, field tags from the public proto, Apache 2.0 attribution comment) and an `EmulatorClient` using tonic's generic `Grpc` client (research R10)
+- [X] T006 [P] Tests `crates/core/tests/device_grpc.rs` with a fake tonic `EmulatorController` server: `streamScreenshot` request carries format RGBA8888 + width/height and yields frames; `sendTouch` down/up, `sendKey` text and key, `getScreenshot` PNG, `setVmState`; every call sends the `authorization` token header; a wrong token is rejected
+- [X] T007 Implement `crates/core/src/device/grpc.rs`: hand-written prost messages (`ImageFormat`, `Image`, `TouchEvent`, `Touch`, `KeyboardEvent`, `WheelEvent`, `VmRunState`, field tags from the public proto, Apache 2.0 attribution comment) and an `EmulatorClient` using tonic's generic `Grpc` client (research R10)
 - [ ] T008 [P] Tests `crates/core/tests/device_still.rs`: signature from a frame (64 px wide); still after 500 ms without frames; still when frames differ in < 0.5% of pixels; not still while frames change more; 5 s limit returns "not settled"
 - [ ] T009 Implement `crates/core/src/device/still.rs` (research R5)
 - [ ] T010 Implement `crates/core/src/device/mod.rs`: `DeviceBackend` trait (tools, list, boot, stop, state, stream, input, read, apps, launch, install, screenshot), runtime registry keyed by node (refuse a second node for the same device with `DeviceInUse`), states `off|booting|ready|stopped|error`, `startedBySonata`, `controller`; a `FakeBackend` in `crates/core/tests/common/` for later tests

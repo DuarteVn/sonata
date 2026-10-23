@@ -7,6 +7,7 @@ pub mod app;
 pub mod autosave;
 pub mod browser;
 pub mod crash_guard;
+pub mod device;
 pub mod error;
 pub mod events;
 pub mod lanes;

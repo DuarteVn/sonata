@@ -14,7 +14,10 @@ chrono = { version = "0.4", features = ["serde"] }
 libc = "0.2"
 notify = "8.2"
 notify-debouncer-full = "0.7"
+png = "0.18"
 portable-pty = "0.9"
+prost = { version = "0.14", default-features = false, features = ["derive", "std"] }
+quick-xml = "0.42"
 pretty_assertions = "1"
 rand = "0.9"
 serde = { version = "1", features = ["derive"] }
@@ -27,6 +30,9 @@ tauri-plugin-single-instance = "2"
 tauri-plugin-updater = "2"
 tempfile = "3"
 thiserror = "2"
+tonic = { version = "0.14", default-features = false, features = ["channel", "codegen"] }
+tonic-prost = "0.14"
+tokio-stream = "0.1"
 tokio = { version = "1.54", features = ["rt-multi-thread", "sync", "time", "macros"] }
 tracing = "0.1"
 tracing-appender = "0.2"

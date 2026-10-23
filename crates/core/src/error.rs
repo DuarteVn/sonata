@@ -29,6 +29,9 @@ pub enum ErrorCode {
     LaneHasChanges,
     ConfirmationRequired,
     LaneConfirmationNeeded,
+    DeviceInUse,
+    DeviceNotRunning,
+    ToolMissing,
     Io,
     Internal,
 }

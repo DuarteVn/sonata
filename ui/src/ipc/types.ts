@@ -23,6 +23,9 @@ export type ErrorCode =
   | "LaneHasChanges"
   | "ConfirmationRequired"
   | "LaneConfirmationNeeded"
+  | "DeviceInUse"
+  | "DeviceNotRunning"
+  | "ToolMissing"
   | "Io"
   | "Internal";
 
