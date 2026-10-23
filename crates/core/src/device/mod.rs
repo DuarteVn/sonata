@@ -2,8 +2,12 @@
 //! detection, the emulator processes, adb and gRPC calls, and agent commands; the shell only
 //! forwards frames and intents (research R12).
 
+pub mod adb;
+pub mod android;
 pub mod avd;
+pub mod emulator;
 pub mod grpc;
+pub mod process;
 pub mod still;
 pub mod tools;
 

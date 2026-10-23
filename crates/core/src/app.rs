@@ -392,6 +392,11 @@ impl App {
             app.spawn_activity_loop();
             app.spawn_lane_status_loop();
             app.start_messaging();
+            let store = Store::new(app.data_root.clone());
+            app.devices
+                .set_launcher(Arc::new(crate::device::emulator::system_launcher(
+                    move || store.load_preferences().value.android_sdk_path,
+                )));
             app.spawn_device_loop();
         })
     }

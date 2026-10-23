@@ -76,6 +76,18 @@ pub struct KeyboardEvent {
     pub text: String,
 }
 
+#[derive(Clone, PartialEq, prost::Message)]
+pub struct MouseEvent {
+    #[prost(int32, tag = "1")]
+    pub x: i32,
+    #[prost(int32, tag = "2")]
+    pub y: i32,
+    #[prost(int32, tag = "3")]
+    pub buttons: i32,
+    #[prost(int32, tag = "4")]
+    pub display: i32,
+}
+
 /// 120 units are one wheel click.
 #[derive(Clone, PartialEq, prost::Message)]
 pub struct WheelEvent {
@@ -219,6 +231,19 @@ impl EmulatorClient {
                 event_type: KEY_PRESS,
                 key: key.to_string(),
                 text: String::new(),
+            },
+        )
+    }
+
+    /// Moves the mouse pointer without pressing a button (wheel events go where it is).
+    pub fn mouse_move(&self, x: i32, y: i32) -> Result<(), String> {
+        self.unary(
+            "sendMouse",
+            MouseEvent {
+                x,
+                y,
+                buttons: 0,
+                display: 0,
             },
         )
     }
