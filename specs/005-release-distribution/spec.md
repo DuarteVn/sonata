@@ -11,6 +11,8 @@
 ### Session 2026-10-23
 
 - Q: Where are releases hosted? → A: Make the source repository public and publish releases there.
+- Q: Can the user turn off automatic update checks? → A: Yes, a "Check for Updates Automatically" toggle in the app menu, on by default and saved in preferences; manual "Check for Updates…" always works.
+- Q: Where does the update notice appear? → A: A banner at the bottom of the workspace sidebar; when the sidebar is hidden, a dot on the show-sidebar button.
 
 **Input**: User description: "Distribution for Sonata (feature 005). Friends must install Sonata without Rust or Node: a GitHub Actions release workflow on a macOS runner builds a prebuilt universal .dmg (arm64 + x86_64) with the `sonata` CLI bundled, ad-hoc signed (no paid Apple Developer account). The app auto-updates through the Tauri updater: it checks for new releases, tells the user, and installs on confirmation. Docs explain Gatekeeper \"Open Anyway\" and `xattr -dr com.apple.quarantine`. `scripts/install.sh` (build from source) stays, and may offer to install rustup when missing. Open question: the repo is private, so friends need repo access to download releases and macOS Actions minutes count 10x; consider making the repo public."
 
@@ -163,9 +165,12 @@ confirm it exits with instructions; answer "yes" and confirm it installs Rust an
 **Auto-update**
 
 - **FR-008**: Sonata MUST check for a newer release at launch and then once every 24 hours while
-  open.
-- **FR-009**: When a newer release exists, Sonata MUST show a non-blocking notice with the
-  version and release notes, and actions "Install and restart" and "Later".
+  open, unless the user turned off "Check for Updates Automatically" in the app menu. The toggle
+  is on by default and persists in the user's preferences.
+- **FR-009**: When a newer release exists, Sonata MUST show a non-blocking banner at the bottom
+  of the workspace sidebar with the version, a way to read the release notes, and actions
+  "Install and restart" and "Later". When the sidebar is hidden, the show-sidebar button MUST
+  carry a dot until the user acts on the banner.
 - **FR-010**: Sonata MUST NOT download or install an update without the user's confirmation.
 - **FR-011**: Sonata MUST verify the update signature against the public key built into the app
   and MUST refuse an update that fails verification.
