@@ -19,16 +19,16 @@ US2 (release automation) → US3 (auto-update) ; US4 (install.sh) is independent
 
 ## Phase 1: Setup
 
-- [ ] T001 Add `tauri-plugin-updater = "2"` to `[workspace.dependencies]` in `Cargo.toml` and to `src-tauri/Cargo.toml`; run `cargo build -p sonata-app` to confirm it resolves
-- [ ] T002 [P] Create `scripts/release/tests/run.sh`: a POSIX sh runner that executes every `scripts/release/tests/*.test.sh`, prints PASS/FAIL per file, and exits non-zero on any failure
-- [ ] T003 [P] Add `scripts/release/` and `scripts/release/tests/run.sh` invocation to `scripts/check.sh` so local checks run the shell tests
+- [X] T001 Add `tauri-plugin-updater = "2"` to `[workspace.dependencies]` in `Cargo.toml` and to `src-tauri/Cargo.toml`; run `cargo build -p sonata-app` to confirm it resolves
+- [X] T002 [P] Create `scripts/release/tests/run.sh`: a POSIX sh runner that executes every `scripts/release/tests/*.test.sh`, prints PASS/FAIL per file, and exits non-zero on any failure
+- [X] T003 [P] Add `scripts/release/` and `scripts/release/tests/run.sh` invocation to `scripts/check.sh` so local checks run the shell tests
 
 ---
 
 ## Phase 2: Foundational (blocks US3)
 
-- [ ] T004 Write failing tests in `crates/core/tests/preferences_update.rs`: `preferences.json` without `autoUpdateCheck` loads as `true`; `false` round-trips; `true` is omitted on write ("Missing field reads as `true` (serde default), so old files load unchanged. Written only when `false`")
-- [ ] T005 Add `auto_update_check: bool` (serde default `true`, skip when `true`) to `Preferences` in `crates/core/src/model/preferences.rs`; keep `PREFERENCES_SCHEMA_VERSION = 1`; make T004 pass
+- [X] T004 Write failing tests in `crates/core/tests/preferences_update.rs`: `preferences.json` without `autoUpdateCheck` loads as `true`; `false` round-trips; `true` is omitted on write ("Missing field reads as `true` (serde default), so old files load unchanged. Written only when `false`")
+- [X] T005 Add `auto_update_check: bool` (serde default `true`, skip when `true`) to `Preferences` in `crates/core/src/model/preferences.rs`; keep `PREFERENCES_SCHEMA_VERSION = 1`; make T004 pass
 
 ---
 

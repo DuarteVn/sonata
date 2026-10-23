@@ -7,4 +7,5 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 npm run typecheck
 npm test
+sh scripts/release/tests/run.sh
 echo "All checks passed."
