@@ -103,6 +103,7 @@ export const ipc = {
     invoke<UsageState>("usage_set_provider_color", { providerId, color }),
   usageAnswerConsent: (providerId: string, allow: boolean, command: string[]) =>
     invoke<UsageState>("usage_answer_consent", { providerId, allow, command }),
+  usageOpenSettings: () => invoke<void>("usage_open_settings"),
 };
 
 export type Ipc = typeof ipc;
