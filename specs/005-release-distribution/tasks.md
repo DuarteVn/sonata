@@ -125,8 +125,8 @@ US2 (release automation) → US3 (auto-update) ; US4 (install.sh) is independent
 
 - [X] T038 [P] Constitution PATCH 1.1.0 → 1.1.1 in `.specify/memory/constitution.md` per research R11, with Sync Impact Report entry
 - [X] T039 [P] README `## Updates` in `README.md`: automatic check at launch and daily, the menu toggle, the banner, data untouched, what the check contacts
-- [ ] T040 Bump version to `0.2.0` in `src-tauri/tauri.conf.json`, `Cargo.toml`, `package.json` (first release); run `scripts/release/check-version.sh v0.2.0`
-- [ ] T041 Run all gates: `cargo fmt --all --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`, `npm run typecheck`, `npm test`, `sh scripts/release/tests/run.sh`
+- [X] T040 Bump version to `0.2.0` in `src-tauri/tauri.conf.json`, `Cargo.toml`, `package.json` (first release); run `scripts/release/check-version.sh v0.2.0`
+- [X] T041 Run all gates: `cargo fmt --all --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`, `npm run typecheck`, `npm test`, `sh scripts/release/tests/run.sh`
 - [ ] T042 Update memory/state notes and open the PR; leave the local repo on `main`
 
 ---

@@ -30,7 +30,12 @@ fn a_found_release_becomes_available() {
 fn later_hides_until_the_next_check_finds_it_again() {
     let mut state = available("0.2.0");
     state.dismiss();
-    assert_eq!(state, UpdateState::Dismissed { version: "0.2.0".into() });
+    assert_eq!(
+        state,
+        UpdateState::Dismissed {
+            version: "0.2.0".into()
+        }
+    );
     assert!(!state.pending());
     state.found(release("0.2.0"));
     assert!(matches!(state, UpdateState::Available { .. }));
@@ -50,12 +55,26 @@ fn download_then_ready_to_install() {
     state.progress(10, Some(100));
     assert_eq!(
         state,
-        UpdateState::Downloading { version: "0.2.0".into(), received: 10, total: Some(100) }
+        UpdateState::Downloading {
+            version: "0.2.0".into(),
+            received: 10,
+            total: Some(100)
+        }
     );
     state.downloaded();
-    assert_eq!(state, UpdateState::ReadyToInstall { version: "0.2.0".into() });
+    assert_eq!(
+        state,
+        UpdateState::ReadyToInstall {
+            version: "0.2.0".into()
+        }
+    );
     state.installing();
-    assert_eq!(state, UpdateState::Installing { version: "0.2.0".into() });
+    assert_eq!(
+        state,
+        UpdateState::Installing {
+            version: "0.2.0".into()
+        }
+    );
 }
 
 #[test]
@@ -65,7 +84,10 @@ fn a_failed_download_keeps_the_version_and_can_retry() {
     state.fail("bad signature".into());
     assert_eq!(
         state,
-        UpdateState::Failed { version: "0.2.0".into(), reason: "bad signature".into() }
+        UpdateState::Failed {
+            version: "0.2.0".into(),
+            reason: "bad signature".into()
+        }
     );
     assert!(state.start_download());
 }
@@ -127,6 +149,12 @@ fn serializes_like_the_ipc_contract() {
         json,
         serde_json::json!({"kind": "downloading", "version": "0.2.0", "received": 0, "total": null})
     );
-    let json = serde_json::to_value(UpdateState::ReadyToInstall { version: "1.0.0".into() }).unwrap();
-    assert_eq!(json, serde_json::json!({"kind": "readyToInstall", "version": "1.0.0"}));
+    let json = serde_json::to_value(UpdateState::ReadyToInstall {
+        version: "1.0.0".into(),
+    })
+    .unwrap();
+    assert_eq!(
+        json,
+        serde_json::json!({"kind": "readyToInstall", "version": "1.0.0"})
+    );
 }

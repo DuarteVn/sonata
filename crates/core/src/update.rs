@@ -58,7 +58,11 @@ pub struct Release {
 
 /// What the update banner shows (contracts/ipc.md `UpdateState`).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum UpdateState {
     #[default]
     Idle,

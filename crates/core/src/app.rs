@@ -26,13 +26,13 @@ use crate::notes::store::{NoteStore, NoteView};
 use crate::notes::watcher::{self, NotesWatcher};
 use crate::paths::{self, DataRoot};
 use crate::persistence::store::{LoadFailure, Store};
-use crate::update::{UpdateSchedule, UpdateState};
 use crate::presets::{self, PresetStatus};
 use crate::roles::{Role, RoleLibrary};
 use crate::terminal::activity::ACTIVITY_INTERVAL;
 use crate::terminal::history;
 use crate::terminal::manager::{SpawnSpec, TerminalManager};
 use crate::terminal::preview::{PREVIEW_INTERVAL, PreviewState};
+use crate::update::{UpdateSchedule, UpdateState};
 use crate::workspace::manager::{CreateWorkspace, SaveReport, WorkspaceManager, WorkspaceSummary};
 
 /// A workspace with programs running, listed in the quit dialog (FR-018a).

@@ -25,7 +25,13 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         true,
         &[
             &PredefinedMenuItem::about(app, Some("About Sonata"), None)?,
-            &MenuItem::with_id(app, CHECK_UPDATES_ID, "Check for Updates…", true, None::<&str>)?,
+            &MenuItem::with_id(
+                app,
+                CHECK_UPDATES_ID,
+                "Check for Updates…",
+                true,
+                None::<&str>,
+            )?,
             // Set from preferences once core has started (see `set_auto_check`).
             &CheckMenuItem::with_id(
                 app,
