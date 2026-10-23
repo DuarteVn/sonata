@@ -11,8 +11,10 @@ use sonata_core::usage::schedule::RefreshReason;
 use sonata_core::usage::service::{Backend, ProviderInfo, UsageService};
 use sonata_core::usage::{Reading, ReadingStatus, Window, WindowKind};
 
+type Step = Box<dyn Fn(&str, DateTime<Utc>) -> Reading + Send>;
+
 /// Answers with the next queued reading builder.
-struct Scripted(Mutex<Vec<Box<dyn Fn(&str, DateTime<Utc>) -> Reading + Send>>>);
+struct Scripted(Mutex<Vec<Step>>);
 
 impl Backend for Scripted {
     fn detect(&self, names: &[&str]) -> DetectResult {
@@ -29,7 +31,7 @@ impl Backend for Scripted {
     }
 }
 
-fn ok_minutes_ago(minutes: i64) -> Box<dyn Fn(&str, DateTime<Utc>) -> Reading + Send> {
+fn ok_minutes_ago(minutes: i64) -> Step {
     Box::new(move |id, now| {
         let mut r = Reading::new(
             id,
@@ -51,10 +53,7 @@ fn granted(svc: &UsageService) {
     svc.answer_consent("claude", true, cmd).unwrap();
 }
 
-fn service(
-    sb: &Sandbox,
-    script: Vec<Box<dyn Fn(&str, DateTime<Utc>) -> Reading + Send>>,
-) -> UsageService {
+fn service(sb: &Sandbox, script: Vec<Step>) -> UsageService {
     UsageService::new(
         sb.root.clone(),
         UsagePreferences::default(),
