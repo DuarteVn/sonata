@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # The release workflow runs these same checks before it builds (feature 005).
+  workflow_call:
 
 jobs:
   core-and-ui:
@@ -24,3 +26,4 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      - run: sh scripts/release/tests/run.sh

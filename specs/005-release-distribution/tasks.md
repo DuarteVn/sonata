@@ -40,14 +40,14 @@ US2 (release automation) → US3 (auto-update) ; US4 (install.sh) is independent
 
 ### Tests
 
-- [ ] T006 [P] [US1] Write `scripts/release/tests/build-cli.test.sh`: with stub `cargo` and `lipo` on `PATH`, assert `scripts/build-cli.sh` builds host only when `TAURI_ENV_TARGET_TRIPLE` is unset, builds `aarch64-apple-darwin` and `x86_64-apple-darwin` and calls `lipo -create` when it is `universal-apple-darwin` or `SONATA_UNIVERSAL=1`, and writes `src-tauri/resources/bin/sonata`
+- [X] T006 [P] [US1] Write `scripts/release/tests/build-cli.test.sh`: with stub `cargo` and `lipo` on `PATH`, assert `scripts/build-cli.sh` builds host only when `TAURI_ENV_TARGET_TRIPLE` is unset, builds `aarch64-apple-darwin` and `x86_64-apple-darwin` and calls `lipo -create` when it is `universal-apple-darwin` or `SONATA_UNIVERSAL=1`, and writes `src-tauri/resources/bin/sonata`
 
 ### Implementation
 
-- [ ] T007 [US1] Create `scripts/build-cli.sh` per research R2 (host or universal `sonata-cli`, output `src-tauri/resources/bin/sonata`, mode 0755); make T006 pass
-- [ ] T008 [US1] Change `build:tauri` in `package.json` to `sh scripts/build-cli.sh && npm run build`; keep `dev:tauri` unchanged
-- [ ] T009 [US1] Run the universal build locally (`rustup target add aarch64-apple-darwin x86_64-apple-darwin` first); verify archs and `codesign -dv --verbose=2` ad-hoc signature for app and CLI; record the commands in `specs/005-release-distribution/quickstart.md` if they differ
-- [ ] T010 [US1] README `## Install` in `README.md`: download the `.dmg` from the latest release, drag to Applications, first launch on macOS 15 (System Settings → Privacy & Security → Open Anyway), alternative `xattr -dr com.apple.quarantine /Applications/Sonata.app` with one sentence on what it removes and why it is safe only for a download you trust; keep "Build from source" as a second section
+- [X] T007 [US1] Create `scripts/build-cli.sh` per research R2 (host or universal `sonata-cli`, output `src-tauri/resources/bin/sonata`, mode 0755); make T006 pass
+- [X] T008 [US1] Change `build:tauri` in `package.json` to `sh scripts/build-cli.sh && npm run build`; keep `dev:tauri` unchanged
+- [X] T009 [US1] Run the universal build locally (`rustup target add aarch64-apple-darwin x86_64-apple-darwin` first); verify archs and `codesign -dv --verbose=2` ad-hoc signature for app and CLI; record the commands in `specs/005-release-distribution/quickstart.md` if they differ
+- [X] T010 [US1] README `## Install` in `README.md`: download the `.dmg` from the latest release, drag to Applications, first launch on macOS 15 (System Settings → Privacy & Security → Open Anyway), alternative `xattr -dr com.apple.quarantine /Applications/Sonata.app` with one sentence on what it removes and why it is safe only for a download you trust; keep "Build from source" as a second section
 
 **Checkpoint**: a hand-built universal `.dmg` installs and runs on both architectures.
 
@@ -61,17 +61,17 @@ US2 (release automation) → US3 (auto-update) ; US4 (install.sh) is independent
 
 ### Tests
 
-- [ ] T011 [P] [US2] Write `scripts/release/tests/check-version.test.sh` with temp copies of the three version files: all match → exit 0; one differs → exit 1 and the line `version mismatch: tag 0.2.0, src-tauri/tauri.conf.json 0.1.0`; tag `0.2` or `v0.2` → exit 2 (contracts/release.md "Version gate")
-- [ ] T012 [P] [US2] Write `ui/tests/latestJson.test.ts` for `buildLatestJson({version, notes, sig, url, date})` from `scripts/release/latest-json.mjs`: strips leading `v`; both `darwin-aarch64` and `darwin-x86_64` carry the same trimmed signature and URL; `pub_date` RFC 3339 UTC; throws on empty signature and on non-https URL
+- [X] T011 [P] [US2] Write `scripts/release/tests/check-version.test.sh` with temp copies of the three version files: all match → exit 0; one differs → exit 1 and the line `version mismatch: tag 0.2.0, src-tauri/tauri.conf.json 0.1.0`; tag `0.2` or `v0.2` → exit 2 (contracts/release.md "Version gate")
+- [X] T012 [P] [US2] Write `ui/tests/latestJson.test.ts` for `buildLatestJson({version, notes, sig, url, date})` from `scripts/release/latest-json.mjs`: strips leading `v`; both `darwin-aarch64` and `darwin-x86_64` carry the same trimmed signature and URL; `pub_date` RFC 3339 UTC; throws on empty signature and on non-https URL
 
 ### Implementation
 
-- [ ] T013 [P] [US2] Create `scripts/release/check-version.sh <tag>` (reads `src-tauri/tauri.conf.json` `version`, `Cargo.toml` `[workspace.package].version`, `package.json` `version`; exit codes 0/1/2); make T011 pass
-- [ ] T014 [P] [US2] Create `scripts/release/latest-json.mjs`: export `buildLatestJson`; CLI `--version --notes-file --sig-file --url [--date]` prints JSON to stdout; make T012 pass
-- [ ] T015 [US2] Add `workflow_call:` to the `on:` block of `.github/workflows/ci.yml` (no other change)
-- [ ] T016 [US2] Create `.github/workflows/release.yml` per research R5/R6 and contracts/release.md: triggers `push.tags: ['v*.*.*']` and `workflow_dispatch` (input `tag`); job `checks` uses `./.github/workflows/ci.yml`; job `release` on `macos-14`, `needs: checks`, `permissions: contents: write`, steps: checkout tag → `check-version.sh` → fail if `TAURI_SIGNING_PRIVATE_KEY` empty (message from contract) → rust toolchain with both darwin targets + rust-cache → node 22 + `npm ci` → `npm run tauri build -- --target universal-apple-darwin --bundles app,dmg` with `SONATA_UNIVERSAL=1` and signing secrets in `env` → `lipo -archs` gate on app and CLI → `gh release create "$TAG" --verify-tag --generate-notes <dmg> <tar.gz> <sig>` → `gh release view --json body` → `latest-json.mjs` → `gh release upload "$TAG" latest.json`
+- [X] T013 [P] [US2] Create `scripts/release/check-version.sh <tag>` (reads `src-tauri/tauri.conf.json` `version`, `Cargo.toml` `[workspace.package].version`, `package.json` `version`; exit codes 0/1/2); make T011 pass
+- [X] T014 [P] [US2] Create `scripts/release/latest-json.mjs`: export `buildLatestJson`; CLI `--version --notes-file --sig-file --url [--date]` prints JSON to stdout; make T012 pass
+- [X] T015 [US2] Add `workflow_call:` to the `on:` block of `.github/workflows/ci.yml` (no other change)
+- [X] T016 [US2] Create `.github/workflows/release.yml` per research R5/R6 and contracts/release.md: triggers `push.tags: ['v*.*.*']` and `workflow_dispatch` (input `tag`); job `checks` uses `./.github/workflows/ci.yml`; job `release` on `macos-14`, `needs: checks`, `permissions: contents: write`, steps: checkout tag → `check-version.sh` → fail if `TAURI_SIGNING_PRIVATE_KEY` empty (message from contract) → rust toolchain with both darwin targets + rust-cache → node 22 + `npm ci` → `npm run tauri build -- --target universal-apple-darwin --bundles app,dmg` with `SONATA_UNIVERSAL=1` and signing secrets in `env` → `lipo -archs` gate on app and CLI → `gh release create "$TAG" --verify-tag --generate-notes <dmg> <tar.gz> <sig>` → `gh release view --json body` → `latest-json.mjs` → `gh release upload "$TAG" latest.json`
 - [ ] T017 [US2] Add `bundle.createUpdaterArtifacts: true` and `plugins.updater` (`pubkey` placeholder `REPLACE_WITH_PUBLIC_KEY`, endpoint from contracts/release.md) to `src-tauri/tauri.conf.json`
-- [ ] T018 [US2] README `## Releasing` in `README.md`: generate the key (`npm run tauri signer generate -- -w ~/.tauri/sonata.key`), paste the public key into `tauri.conf.json`, `gh secret set` both secrets via stdin, bump the three versions, tag and push; warn that losing the private key strands installed apps
+- [X] T018 [US2] README `## Releasing` in `README.md`: generate the key (`npm run tauri signer generate -- -w ~/.tauri/sonata.key`), paste the public key into `tauri.conf.json`, `gh secret set` both secrets via stdin, bump the three versions, tag and push; warn that losing the private key strands installed apps
 - [ ] T019 [US2] Maintainer step (needs the user): make the repository public, generate the key, set the secrets, replace the pubkey placeholder; then cut `v0.2.0` and run quickstart Scenario A
 
 **Checkpoint**: a pushed tag produces a complete release with no manual upload.
@@ -86,14 +86,14 @@ US2 (release automation) → US3 (auto-update) ; US4 (install.sh) is independent
 
 ### Tests
 
-- [ ] T020 [P] [US3] Write `crates/core/tests/update_schedule.rs`: `due` is true at launch, false within 24 h of `last_check`, true after 24 h, always false when disabled; a manual check does not change `last_check`
-- [ ] T021 [P] [US3] Write `crates/core/tests/update_state.rs` covering every transition in data-model.md "UpdateState": available → dismissed → available on next due check; downloading → readyToInstall; downloading → failed keeps version; newer available replaces older; background failure leaves state unchanged; `pending` true for available, downloading, readyToInstall, failed, blocked
+- [X] T020 [P] [US3] Write `crates/core/tests/update_schedule.rs`: `due` is true at launch, false within 24 h of `last_check`, true after 24 h, always false when disabled; a manual check does not change `last_check`
+- [X] T021 [P] [US3] Write `crates/core/tests/update_state.rs` covering every transition in data-model.md "UpdateState": available → dismissed → available on next due check; downloading → readyToInstall; downloading → failed keeps version; newer available replaces older; background failure leaves state unchanged; `pending` true for available, downloading, readyToInstall, failed, blocked
 - [ ] T022 [P] [US3] Write `ui/tests/updateBanner.test.tsx`: renders version and "Install and restart"/"Later" for `available`; progress for `downloading`; "Restart to update" for `readyToInstall`; reason for `failed` and `blocked`; nothing for `idle` and `dismissed`; "Later" calls `update_dismiss`
 - [ ] T023 [P] [US3] Extend `ui/tests/sidebar.test.tsx` (or the App-level test that renders the show-sidebar button): dot visible when the sidebar is hidden and update state is pending; absent otherwise
 
 ### Implementation
 
-- [ ] T024 [US3] Create `crates/core/src/update.rs` with `UpdateSchedule` and `UpdateState` (serde `kind` tag, camelCase, matching contracts/ipc.md `UpdateState`); export from `crates/core/src/lib.rs`; make T020 and T021 pass
+- [X] T024 [US3] Create `crates/core/src/update.rs` with `UpdateSchedule` and `UpdateState` (serde `kind` tag, camelCase, matching contracts/ipc.md `UpdateState`); export from `crates/core/src/lib.rs`; make T020 and T021 pass
 - [ ] T025 [US3] Hold `UpdateSchedule` and `UpdateState` in the core app facade (`crates/core/src/app.rs`), seeded from `preferences.auto_update_check`; add `set_auto_update_check(bool)` that saves preferences atomically and emits the new state
 - [ ] T026 [US3] Create `src-tauri/src/commands/update.rs`: commands `update_state`, `update_check {manual}`, `update_dismiss`, `update_download`, `update_install`, `update_set_auto_check {enabled}` using `tauri_plugin_updater::UpdaterExt`; emit `update://state` and `update://progress`; location check per research R9 (`/Volumes/` or `/AppTranslocation/` → `blocked` "Move Sonata to Applications to update"); `update_install` calls `install` then `app.restart()`; register the plugin in `src-tauri/src/lib.rs`
 - [ ] T027 [US3] Background ticker in `src-tauri/src/lib.rs`: every 10 minutes ask core `due(now)`; on due, check silently; log failures with `tracing` only (FR-014)
@@ -124,7 +124,7 @@ US2 (release automation) → US3 (auto-update) ; US4 (install.sh) is independent
 ## Phase 7: Polish & Cross-Cutting
 
 - [ ] T038 [P] Constitution PATCH 1.1.0 → 1.1.1 in `.specify/memory/constitution.md` per research R11, with Sync Impact Report entry
-- [ ] T039 [P] README `## Updates` in `README.md`: automatic check at launch and daily, the menu toggle, the banner, data untouched, what the check contacts
+- [X] T039 [P] README `## Updates` in `README.md`: automatic check at launch and daily, the menu toggle, the banner, data untouched, what the check contacts
 - [ ] T040 Bump version to `0.2.0` in `src-tauri/tauri.conf.json`, `Cargo.toml`, `package.json` (first release); run `scripts/release/check-version.sh v0.2.0`
 - [ ] T041 Run all gates: `cargo fmt --all --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`, `npm run typecheck`, `npm test`, `sh scripts/release/tests/run.sh`
 - [ ] T042 Update memory/state notes and open the PR; leave the local repo on `main`

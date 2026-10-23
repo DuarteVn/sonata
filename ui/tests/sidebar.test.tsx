@@ -9,6 +9,7 @@ const ipc = vi.hoisted(() => ({
   workspaceOpen: vi.fn(),
   terminalPreviewSubscribe: vi.fn(async () => {}),
   browserLayout: vi.fn(async () => {}),
+  updateState: vi.fn(async () => ({ kind: "idle" })),
 }));
 vi.mock("../src/ipc/commands", () => ({ ipc }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async () => () => {}) }));
@@ -105,6 +106,19 @@ describe("sidebar and create dialog", () => {
     render(<App />);
     await userEvent.click(await screen.findByRole("button", { name: "Show sidebar" }));
     expect(screen.getByRole("navigation", { name: "Workspaces" })).toBeInTheDocument();
+  });
+
+  it("marks the show-sidebar button while an update is pending", async () => {
+    localStorage.setItem("sonata.sidebarHidden", "1");
+    ipc.updateState.mockResolvedValue({ kind: "available", version: "0.2.1", notes: "", date: null });
+    render(<App />);
+    expect(await screen.findByRole("button", { name: "Show sidebar (update available)" })).toBeInTheDocument();
+  });
+
+  it("does not mark the show-sidebar button without an update", async () => {
+    localStorage.setItem("sonata.sidebarHidden", "1");
+    render(<App />);
+    expect(await screen.findByRole("button", { name: "Show sidebar" })).toBeInTheDocument();
   });
 
   it("resizes the sidebar within limits and remembers the width", async () => {
