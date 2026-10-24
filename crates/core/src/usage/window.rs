@@ -70,7 +70,11 @@ pub fn summary<'a>(
     for (id, windows) in readings {
         for w in windows {
             if out.percent.is_none_or(|p| w.used_percent > p) {
-                out.state = SummaryState::Normal;
+                out.state = match level_for(w.used_percent) {
+                    WarningLevel::Full100 => SummaryState::Full,
+                    WarningLevel::Warn80 => SummaryState::Warning,
+                    WarningLevel::None => SummaryState::Normal,
+                };
                 out.percent = Some(w.used_percent);
                 out.provider_id = Some(id.to_string());
                 out.window_kind = Some(w.kind);
@@ -91,13 +95,62 @@ impl WarningLevel {
     }
 }
 
-/// Records the levels reached by `windows` of `provider_id`; returns new crossings.
-/// Filled in by T042 (US2).
+/// Share at which a warning is sent and the meter turns amber (FR-010).
+pub const WARNING_PERCENT: f64 = 80.0;
+
+pub fn level_for(percent: f64) -> WarningLevel {
+    if percent >= 100.0 {
+        WarningLevel::Full100
+    } else if percent >= WARNING_PERCENT {
+        WarningLevel::Warn80
+    } else {
+        WarningLevel::None
+    }
+}
+
+/// Reset times within this margin name the same period: some sources derive the reset time
+/// from "seconds left", which moves a little between readings.
+const PERIOD_SLACK_SECONDS: i64 = 120;
+
+fn same_period(a: Option<DateTime<Utc>>, b: Option<DateTime<Utc>>) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(a), Some(b)) => (a - b).num_seconds().abs() <= PERIOD_SLACK_SECONDS,
+        _ => false,
+    }
+}
+
+/// Records the levels reached by `windows` of `provider_id` and returns the windows that
+/// crossed a level not yet sent in their period. Periods that ended are dropped.
 pub fn observe(
-    _entries: &mut Vec<WarningEntry>,
-    _provider_id: &str,
-    _windows: &[super::Window],
-    _now: DateTime<Utc>,
+    entries: &mut Vec<WarningEntry>,
+    provider_id: &str,
+    windows: &[super::Window],
+    now: DateTime<Utc>,
 ) -> Vec<(super::Window, WarningLevel)> {
-    Vec::new()
+    entries.retain(|e| e.resets_at.is_none_or(|t| t > now));
+    let mut crossed = Vec::new();
+    for w in windows {
+        let level = level_for(w.used_percent);
+        let entry = entries.iter_mut().find(|e| {
+            e.provider_id == provider_id
+                && e.window_kind == w.kind
+                && same_period(e.resets_at, w.resets_at)
+        });
+        let sent = entry.as_ref().map(|e| e.sent).unwrap_or_default();
+        if level <= sent {
+            continue;
+        }
+        match entry {
+            Some(e) => e.sent = level,
+            None => entries.push(WarningEntry {
+                provider_id: provider_id.to_string(),
+                window_kind: w.kind,
+                resets_at: w.resets_at,
+                sent: level,
+            }),
+        }
+        crossed.push((w.clone(), level));
+    }
+    crossed
 }

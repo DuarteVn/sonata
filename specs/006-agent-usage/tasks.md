@@ -105,16 +105,16 @@ window period; warnings switch.
 
 ### Tests
 
-- [ ] T039 [P] [US2] Write failing tests in `crates/core/tests/usage_warnings.rs` for `window::WarningLedger` (data-model "WarningLedger"): 79 → 85 emits warn80 once; 85 → 90 emits nothing; 90 → 100 emits full100; 100 → 95 → 100 emits nothing more; new `resetsAt` with 85 emits warn80 again; warnings off updates `sent` without emitting; ledger pruned of past `resetsAt`; ledger survives cache save/load (no repeat after restart, SC-003)
-- [ ] T040 [P] [US2] Write failing tests in `crates/core/tests/usage_summary.rs` for `window::summary`: highest `usedPercent` across readable providers wins; `warning` at ≥ 80, `full` at ≥ 100; stale readings still count; `off` when master switch off; `empty` with no readings
-- [ ] T041 [P] [US2] Write failing vitest `ui/tests/usageButton.test.tsx`: meter ring states `normal | warning | full | off | empty`, tinted with the provider color; title text names agent, window and reset time
+- [X] T039 [P] [US2] Write failing tests in `crates/core/tests/usage_warnings.rs` for `window::WarningLedger` (data-model "WarningLedger"): 79 → 85 emits warn80 once; 85 → 90 emits nothing; 90 → 100 emits full100; 100 → 95 → 100 emits nothing more; new `resetsAt` with 85 emits warn80 again; warnings off updates `sent` without emitting; ledger pruned of past `resetsAt`; ledger survives cache save/load (no repeat after restart, SC-003)
+- [X] T040 [P] [US2] Write failing tests in `crates/core/tests/usage_summary.rs` for `window::summary`: highest `usedPercent` across readable providers wins; `warning` at ≥ 80, `full` at ≥ 100; stale readings still count; `off` when master switch off; `empty` with no readings
+- [X] T041 [P] [US2] Write failing vitest `ui/tests/usageButton.test.tsx`: meter ring states `normal | warning | full | off | empty`, tinted with the provider color; title text names agent, window and reset time
 
 ### Implementation
 
-- [ ] T042 [US2] Implement `WarningLedger` and `summary` in `crates/core/src/usage/window.rs`; persist ledger in the cache (`warnings` array) via `crates/core/src/usage/cache.rs`; make T039–T040 pass
-- [ ] T043 [US2] Call the ledger in `UsageService` after each `ok` reading; emit `usage://warning` when it returns a new level and warnings are on; add `usage_set_warnings` to `App`, `src-tauri/src/commands/usage.rs`, `src-tauri/build.rs`, `src-tauri/capabilities/default.json`, `ui/src/ipc/commands.ts`
-- [ ] T044 [US2] In `ui/src/App.tsx`, on `usage://warning` send a notification through `@tauri-apps/plugin-notification` (same permission flow as `messaging://notify`): title "<Agent>: <window> at 80%" / "<Agent>: <window> limit reached", body with reset time
-- [ ] T045 [US2] Render the meter ring in `ui/src/usage/UsageButton.tsx` from `summary`; make T041 pass
+- [X] T042 [US2] Implement `WarningLedger` and `summary` in `crates/core/src/usage/window.rs`; persist ledger in the cache (`warnings` array) via `crates/core/src/usage/cache.rs`; make T039–T040 pass
+- [X] T043 [US2] Call the ledger in `UsageService` after each `ok` reading; emit `usage://warning` when it returns a new level and warnings are on; add `usage_set_warnings` to `App`, `src-tauri/src/commands/usage.rs`, `src-tauri/build.rs`, `src-tauri/capabilities/default.json`, `ui/src/ipc/commands.ts`
+- [X] T044 [US2] In `ui/src/App.tsx`, on `usage://warning` send a notification through `@tauri-apps/plugin-notification` (same permission flow as `messaging://notify`): title "<Agent>: <window> at 80%" / "<Agent>: <window> limit reached", body with reset time
+- [X] T045 [US2] Render the meter ring in `ui/src/usage/UsageButton.tsx` from `summary`; make T041 pass
 
 **Checkpoint**: warnings fire exactly once per level per period; meter reflects the highest usage.
 

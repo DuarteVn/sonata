@@ -15,6 +15,7 @@ import { useWorkspaces } from "./state/workspaces";
 import { UsageConsentDialog } from "./dialogs/UsageConsentDialog";
 import { useUsage } from "./state/usage";
 import { UsageButton } from "./usage/UsageButton";
+import { resetText } from "./usage/meter";
 
 const SIDEBAR_HIDDEN_KEY = "sonata.sidebarHidden";
 const SIDEBAR_WIDTH_KEY = "sonata.sidebarWidth";
@@ -96,6 +97,21 @@ export function App() {
       onEvent("update://state", (state) => useUpdate.getState().set(state)),
       onEvent("usage://state", (state) => useUsage.getState().set(state)),
       onEvent("usage://consent", (request) => useUsage.getState().askConsent(request)),
+      // 80% and 100% of a plan limit, once per level per window period (006 FR-010).
+      onEvent("usage://warning", async (w) => {
+        const title =
+          w.level === 100
+            ? `${w.providerName}: ${w.windowLabel} limit reached`
+            : `${w.providerName}: ${w.windowLabel} limit at ${w.level}%`;
+        const reset = resetText(w.resetsAt, new Date());
+        const body = reset ? `The limit ${reset}.` : "Check the Usage panel for details.";
+        try {
+          const granted = (await isPermissionGranted()) || (await requestPermission()) === "granted";
+          if (granted) sendNotification({ title, body });
+        } catch {
+          addWarning(`${title}. ${body}`);
+        }
+      }),
       // Sonata → Check for Updates…: always report the result (FR-013).
       onEvent("app://check-updates", async () => {
         try {

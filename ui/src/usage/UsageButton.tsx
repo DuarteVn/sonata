@@ -30,29 +30,60 @@ export function UsageButton() {
   const { summary } = state;
   const owner = state.providers.find((p) => p.id === summary.providerId);
   const percent = summary.percent;
+  const windowName = summary.windowKind === "weekly" ? "weekly" : "short window";
+  const reset = resetText(summary.resetsAt, new Date());
   const title =
     summary.state === "off"
       ? "Usage reading is off"
       : percent === null || !owner
         ? "Agent usage"
-        : `${owner.name}: ${percentText(percent)} of the ${
-            summary.windowKind === "weekly" ? "weekly" : "short window"
-          } limit, ${resetText(summary.resetsAt, new Date())}`;
+        : summary.state === "full"
+          ? `${owner.name}: ${windowName} limit reached${reset ? `, ${reset}` : ""}`
+          : `${owner.name}: ${percentText(percent)} of the ${windowName} limit${reset ? `, ${reset}` : ""}`;
+  const showRing = percent !== null && summary.state !== "off" && summary.state !== "empty";
 
   return (
     <div className="usage-anchor" ref={ref}>
       <button
         type="button"
         className={`usage-button ${summary.state}`}
-        aria-label="Usage"
+        aria-label={summary.state === "off" ? "Usage (off)" : "Usage"}
         aria-expanded={open}
         title={title}
         onClick={() => setOpen((v) => !v)}
       >
-        <Gauge size={15} />
-        {percent !== null && summary.state !== "off" && <span>{percentText(percent)}</span>}
+        {showRing ? (
+          <Ring percent={percent} color={summary.state === "normal" ? (owner?.color ?? "currentColor") : "currentColor"} />
+        ) : (
+          <Gauge size={15} />
+        )}
+        {showRing && <span>{percentText(percent)}</span>}
       </button>
       {open && <UsagePanel />}
     </div>
+  );
+}
+
+// Circular meter: the stroke covers the highest share used.
+function Ring({ percent, color }: { percent: number; color: string }) {
+  const r = 6;
+  const length = 2 * Math.PI * r;
+  const filled = (Math.min(100, Math.max(0, percent)) / 100) * length;
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" className="usage-ring">
+      <circle cx="8" cy="8" r={r} fill="none" stroke="var(--bg-hover)" strokeWidth="2.5" />
+      <circle
+        data-testid="usage-ring"
+        cx="8"
+        cy="8"
+        r={r}
+        fill="none"
+        stroke={color}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeDasharray={`${filled} ${length}`}
+        transform="rotate(-90 8 8)"
+      />
+    </svg>
   );
 }

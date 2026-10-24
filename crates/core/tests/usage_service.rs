@@ -241,3 +241,47 @@ fn missing_command_shows_not_installed() {
         ReadingStatus::NotInstalled
     );
 }
+
+fn warnings(sink: &RecordingSink) -> Vec<(String, u8)> {
+    sink.take()
+        .into_iter()
+        .filter_map(|e| match e {
+            CoreEvent::UsageWarning(w) => Some((w.window_label, w.level)),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn crossing_80_sends_one_warning() {
+    let sb = Sandbox::new();
+    let (svc, backend, sink) = service(&sb);
+    allow(&svc, "claude");
+    *backend.percent.lock().unwrap() = 85.0;
+    sink.take();
+    svc.refresh(RefreshReason::Manual, Some("claude"));
+    assert_eq!(warnings(&sink), [("5-hour".to_string(), 80)]);
+    svc.refresh(RefreshReason::Manual, Some("claude"));
+    assert!(warnings(&sink).is_empty());
+    assert_eq!(
+        svc.state().summary.state,
+        sonata_core::usage::window::SummaryState::Warning
+    );
+}
+
+#[test]
+fn warnings_off_sends_nothing_but_the_meter_still_changes() {
+    let sb = Sandbox::new();
+    let (svc, backend, sink) = service(&sb);
+    allow(&svc, "claude");
+    svc.set_warnings(false).unwrap();
+    *backend.percent.lock().unwrap() = 100.0;
+    sink.take();
+    let st = svc.refresh(RefreshReason::Manual, Some("claude"));
+    assert!(warnings(&sink).is_empty());
+    assert_eq!(
+        st.summary.state,
+        sonata_core::usage::window::SummaryState::Full
+    );
+    assert!(!st.warnings);
+}
