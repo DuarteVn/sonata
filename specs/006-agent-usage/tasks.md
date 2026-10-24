@@ -90,7 +90,7 @@ within 1 point and 1 minute.
 - [X] T035 [US1] Create `ui/src/usage/UsagePanel.tsx` (popover; one section per enabled provider with color bar, plan, account/email, windows as horizontal bars, reading time, refresh button); calls `usage_refresh {reason: "panelOpen"}` on open; make T029 pass. Original layout and wording (clean room)
 - [X] T036 [US1] Create `ui/src/usage/UsageButton.tsx` (top-right of the canvas area, gauge icon from `lucide-react`, opens/closes the panel, closes on Escape and outside click) and mount it in `ui/src/App.tsx`; style in `ui/src/styles.css`
 - [X] T037 [US1] Create `ui/src/dialogs/UsageConsentDialog.tsx` on top of `Modal.tsx`, shown from `usage://consent` in `ui/src/App.tsx`; make T030 pass
-- [ ] T038 [US1] Manual check with the real Claude Code: run quickstart scenarios 1–3 with a throwaway `SONATA_HOME`; record result in `specs/006-agent-usage/quickstart.md` only if steps differ
+- [X] T038 [US1] Manual check with the real Claude Code: run quickstart scenarios 1–3 with a throwaway `SONATA_HOME`; record result in `specs/006-agent-usage/quickstart.md` only if steps differ
 
 **Checkpoint**: MVP — Claude Code limits visible in the panel, gated by consent.
 
@@ -196,7 +196,7 @@ command, sandboxed 10 s run, guide file, folder actions.
 
 - [X] T067 [P] Write failing test `crates/core/tests/usage_no_secrets.rs` (SC-005): run a full service cycle with fake `claude` whose auth output includes `user@example.com` and whose stderr includes a fake token `sk-ant-oat01-FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE`; afterwards no file under the temp data root and no captured log line contains the token or the email
 - [X] T068 [P] README `## Usage meter` in `README.md`: what is shown, where data comes from (CLI probe and its cost, Codex app server), consent, master switch, custom providers folder and guide, the sandbox; constitution-required "how to run and test" pointing to `specs/006-agent-usage/quickstart.md`
-- [ ] T069 Verify reads never block terminals (SC-004): run 8 shell terminals printing output while forcing "Refresh all" with a fake provider that sleeps 9 s; terminals keep scrolling (manual check, note result in quickstart)
+- [X] T069 Verify reads never block terminals (SC-004): run 8 shell terminals printing output while forcing "Refresh all" with a fake provider that sleeps 9 s; terminals keep scrolling (manual check, note result in quickstart) (Accepted by the maintainer after the live UI check; reads run on their own thread, the 8-terminal run was not done.)
 - [X] T070 Run `sh scripts/check.sh` until it passes in full; run the "No credential check" from `specs/006-agent-usage/quickstart.md` after a dev session
 - [X] T071 `git fetch && git rebase origin/main`; resolve conflicts in shared files (`README.md`, `src-tauri/build.rs`, `src-tauri/capabilities/default.json`, `src-tauri/src/lib.rs`, `ui/src/ipc/*`, `ui/src/App.tsx`) keeping both sides; rerun `sh scripts/check.sh`
 
