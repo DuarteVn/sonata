@@ -112,6 +112,7 @@ export function App() {
           addWarning(`${title}. ${body}`);
         }
       }),
+      onEvent("lane://status", (status) => useCanvas.getState().setLaneStatus(status)),
       // Sonata → Check for Updates…: always report the result (FR-013).
       onEvent("app://check-updates", async () => {
         try {

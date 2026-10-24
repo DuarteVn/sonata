@@ -102,6 +102,19 @@ export type Lane = {
 
 export type LaneAvailability = { available: boolean; reason?: string; baseBranch?: string };
 
+export type LaneState = "ok" | "landed" | "checkoutMissing" | "branchMissing" | "mainCheckoutMissing" | "busy" | "gitUnavailable";
+
+/** `lane://status` (data-model.md). Counts are absent when the lane cannot be read. */
+export type LaneStatus = {
+  nodeId: string;
+  state: LaneState;
+  branch: string;
+  baseBranch: string;
+  changed?: number;
+  ahead?: number;
+  behind?: number;
+};
+
 export type LaneAction = "land" | "remove";
 export type LaneRemoval = { discardChanges: boolean; deleteBranch: boolean };
 

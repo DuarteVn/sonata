@@ -1,6 +1,7 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AskEvent,
+  LaneStatus,
   NodesChangedEvent,
   NotifyEvent,
   NoteChangedEvent,
@@ -33,6 +34,7 @@ export type EventMap = {
   "usage://state": UsageState;
   "usage://warning": UsageWarning;
   "usage://consent": ConsentRequest;
+  "lane://status": LaneStatus;
 };
 
 export function onEvent<K extends keyof EventMap>(

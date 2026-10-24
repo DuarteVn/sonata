@@ -9,6 +9,7 @@ import type {
   LaneAction,
   LanePreview,
   LaneRemoval,
+  LaneStatus,
   Link,
   NoteStyle,
   NoteSync,
@@ -40,6 +41,8 @@ type CanvasState = {
   /** True while a pan/zoom gesture is in progress (live terminals use a CSS transform). */
   gesturing: boolean;
   terminalStates: Record<string, TerminalStateEvent>;
+  laneStatuses: Record<string, LaneStatus>;
+  setLaneStatus: (s: LaneStatus) => void;
   tool: Tool;
   selection: Selection;
   /** Nodes selected together (two or more), from a selection rectangle or Shift+click. */
@@ -126,6 +129,7 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   focusedId: null,
   gesturing: false,
   terminalStates: {},
+  laneStatuses: {},
   notes: {},
   previews: {},
   liveIds: new Set(),
@@ -382,6 +386,8 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   },
 
   // A busy terminal that becomes idle while not focused asks for attention (FR-013).
+  setLaneStatus: (status) => set((s) => ({ laneStatuses: { ...s.laneStatuses, [status.nodeId]: status } })),
+
   setTerminalState: (e) =>
     set((s) => {
       const prev = s.terminalStates[e.nodeId];

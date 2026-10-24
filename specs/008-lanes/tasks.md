@@ -82,17 +82,17 @@ see only their own change (quickstart A).
 - [x] T038 [US3] Apply research R14 in `delete_node` and `delete_workspace` in crates/core/src/app.rs; pass `laneRemoval` through src-tauri/src/commands/node.rs
 - [x] T039 [US3] Add `lane_remove`, `lane_forget` commands and wrappers in src-tauri/src/commands/lane.rs, ui/src/ipc/commands.ts
 - [x] T040 [P] [US3] Write tests for `LaneDialog` remove mode (changed-file list, second "discard these changes" confirmation, delete-branch option with unmerged-commit warning) and for node deletion opening it, in ui/tests/laneDialog.test.tsx
-- [ ] T041 [US3] Implement remove mode in ui/src/dialogs/LaneDialog.tsx, "Remove lane…" and "Forget lane" in ui/src/nodes/TerminalMenu.tsx, and the lane path in node and workspace deletion in ui/src/state/canvas.ts, ui/src/canvas/Canvas.tsx, ui/src/canvas/NodeToolbar.tsx, and ui/src/sidebar/Sidebar.tsx
+- [x] T041 [US3] Implement remove mode in ui/src/dialogs/LaneDialog.tsx, "Remove lane…" and "Forget lane" in ui/src/nodes/TerminalMenu.tsx, and the lane path in node and workspace deletion in ui/src/state/canvas.ts, ui/src/canvas/Canvas.tsx, ui/src/canvas/NodeToolbar.tsx, and ui/src/sidebar/Sidebar.tsx
 
 ## Phase 6: User Story 4 — Lane state on the canvas (P2)
 
 **Goal**: Node shows branch, changed count, ahead/behind, broken states within 5 s.
 **Independent Test**: quickstart A step 3 and a commit observed on the badge.
 
-- [ ] T042 [P] [US4] Write tests for `status::check(lane)`: counts for changed/ahead/behind; `checkoutMissing`, `branchMissing`, `mainCheckoutMissing`, `busy`; and for the poller: emits `lane://status` once per change, not on an unchanged poll, in crates/core/tests/lanes_status.rs
-- [ ] T043 [US4] Implement `status.rs` (research R11), start the loop in `App::start_with`, and trigger immediate checks after create/land/remove/exit in crates/core/src/app.rs; add `CoreEvent::LaneStatus` in crates/core/src/events.rs
-- [ ] T044 [P] [US4] Write tests for `LaneBadge` (branch, `●N`, `↑a ↓b`, broken message) in ui/tests/laneBadge.test.tsx
-- [ ] T045 [US4] Implement ui/src/nodes/LaneBadge.tsx, subscribe to `lane://status` in ui/src/ipc/events.ts and the store in ui/src/state/workspaces.ts, render it in ui/src/nodes/TerminalNode.tsx
+- [x] T042 [P] [US4] Write tests for `status::check(lane)`: counts for changed/ahead/behind; `checkoutMissing`, `branchMissing`, `mainCheckoutMissing`, `busy`; and for the poller: emits `lane://status` once per change, not on an unchanged poll, in crates/core/tests/lanes_status.rs
+- [x] T043 [US4] Implement `status.rs` (research R11), start the loop in `App::start_with`, and trigger immediate checks after create/land/remove/exit in crates/core/src/app.rs; add `CoreEvent::LaneStatus` in crates/core/src/events.rs
+- [x] T044 [P] [US4] Write tests for `LaneBadge` (branch, `●N`, `↑a ↓b`, broken message) in ui/tests/laneBadge.test.tsx
+- [x] T045 [US4] Implement ui/src/nodes/LaneBadge.tsx, subscribe to `lane://status` in ui/src/ipc/events.ts and the store in ui/src/state/workspaces.ts, render it in ui/src/nodes/TerminalNode.tsx
 
 ## Phase 7: User Story 5 — Agents request land and removal (P3)
 

@@ -11,7 +11,9 @@ import { useWorkspaces } from "../state/workspaces";
 export function TerminalMenu({ node }: { node: CanvasNode }) {
   const initial = "terminal" in node.content ? node.content.terminal.saveHistory : true;
   const lane = "terminal" in node.content ? node.content.terminal.lane : undefined;
-  const activeLane = lane && !lane.landedAt ? lane : undefined;
+  const laneState = useCanvas((s) => s.laneStatuses[node.id]?.state);
+  const missing = laneState === "checkoutMissing";
+  const activeLane = lane && !lane.landedAt && !missing ? lane : undefined;
   const [open, setOpen] = useState(false);
   const [saveHistory, setSaveHistory] = useState(initial);
   const ref = useRef<HTMLDivElement>(null);
@@ -110,6 +112,22 @@ export function TerminalMenu({ node }: { node: CanvasNode }) {
               >
                 <span className="menu-check" aria-hidden />
                 Remove lane…
+              </button>
+            </>
+          )}
+          {lane && !lane.landedAt && missing && (
+            <>
+              <div className="menu-separator" role="separator" />
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  ipc.laneForget(node.id).catch(report);
+                }}
+              >
+                <span className="menu-check" aria-hidden />
+                Forget lane
               </button>
             </>
           )}

@@ -7,6 +7,7 @@ import { isAppError, type CanvasNode, type TerminalContent } from "../ipc/types"
 import { TITLE_HEIGHT } from "../terminal/LiveTerminalLayer";
 import { useCanvas } from "../state/canvas";
 import { useWorkspaces } from "../state/workspaces";
+import { LaneBadge } from "./LaneBadge";
 import { LinkCount, LinkHandle } from "./LinkHandle";
 import { TerminalMenu } from "./TerminalMenu";
 
@@ -29,6 +30,7 @@ export function TerminalNode({ node }: Props) {
   const attention = useCanvas((s) => s.attention.has(node.id));
   const live = useCanvas((s) => s.liveIds.has(node.id));
   const preview = useCanvas((s) => s.previews[node.id]);
+  const laneStatus = useCanvas((s) => s.laneStatuses[node.id]);
   // A string selector keeps the value stable between renders.
   const askers = useCanvas((s) =>
     Object.values(s.asks)
@@ -125,6 +127,7 @@ export function TerminalNode({ node }: Props) {
         ) : (
           <span className="node-name">{term.name}</span>
         )}
+        {term.lane && !term.lane.landedAt && <LaneBadge lane={term.lane} status={laneStatus} />}
         {term.lane?.landedAt && (
           <span className="lane-landed" title={`${term.lane.branch} was landed into ${term.lane.baseBranch}`}>
             landed into {term.lane.baseBranch}
