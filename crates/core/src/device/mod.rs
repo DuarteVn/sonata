@@ -165,6 +165,11 @@ pub trait DeviceLauncher: Send + Sync {
     fn start(&self, target: &Target) -> Result<Box<dyn Session>, String>;
 }
 
+fn next_generation() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Sends each start to the launcher of the target's platform.
 pub struct PlatformLauncher {
     pub android: Box<dyn DeviceLauncher>,
@@ -203,6 +208,8 @@ pub struct RunningDevice {
 
 struct Runtime {
     target: Target,
+    /// Bumped on each boot and stop, so a poll that ran meanwhile is discarded.
+    generation: u64,
     state: DeviceState,
     session: Option<Box<dyn Session>>,
     driver: Option<Arc<dyn DeviceDriver>>,
@@ -292,6 +299,7 @@ impl DeviceManager {
             Ok(session) => (
                 Runtime {
                     started_by_sonata: session.started_by_sonata(),
+                    generation: next_generation(),
                     target,
                     state: DeviceState::Booting,
                     session: Some(session),
@@ -303,6 +311,7 @@ impl DeviceManager {
             Err(msg) => (
                 Runtime {
                     target,
+                    generation: next_generation(),
                     state: DeviceState::Error(msg.clone()),
                     session: None,
                     driver: None,
@@ -317,25 +326,38 @@ impl DeviceManager {
         result.map(|()| Some(event))
     }
 
-    /// Polls every session once; returns the state changes to emit.
+    /// Polls every session once; returns the state changes to emit. Sessions are polled with
+    /// no lock held (a poll may run adb), then their results applied if nothing changed meanwhile.
     pub fn tick(&self) -> Vec<DeviceStateEvent> {
+        let taken: Vec<(Uuid, u64, Box<dyn Session>)> = self
+            .runtimes()
+            .iter_mut()
+            .filter_map(|(id, r)| Some((*id, r.generation, r.session.take()?)))
+            .collect();
         let mut changed = Vec::new();
-        for (id, r) in self.runtimes().iter_mut() {
-            let Some(session) = r.session.as_mut() else {
+        for (id, generation, mut session) in taken {
+            let poll = session.poll();
+            let mut rt = self.runtimes();
+            let Some(r) = rt.get_mut(&id).filter(|r| r.generation == generation) else {
+                // Stopped, rebooted, or deleted while polling: this session is no longer wanted.
+                drop(rt);
+                if session.started_by_sonata() {
+                    session.stop();
+                }
                 continue;
             };
             let before = r.state.clone();
-            match session.poll() {
-                Poll::Booting => {}
+            match poll {
+                Poll::Booting => r.session = Some(session),
                 Poll::Ready(driver) => {
                     if r.driver.is_none() {
                         r.screen = driver.screen_size().ok();
                         r.driver = Some(driver);
                     }
                     r.state = DeviceState::Ready;
+                    r.session = Some(session);
                 }
                 Poll::Exited(msg) => {
-                    r.session = None;
                     r.driver = None;
                     r.state = match msg {
                         Some(m) if before == DeviceState::Booting => DeviceState::Error(m),
@@ -344,7 +366,7 @@ impl DeviceManager {
                 }
             }
             if r.state != before {
-                changed.push(r.event(*id));
+                changed.push(r.event(id));
             }
         }
         changed
@@ -431,6 +453,7 @@ impl DeviceManager {
             .remove(&node);
         let mut rt = self.runtimes();
         let r = rt.get_mut(&node)?;
+        r.generation = next_generation();
         if let Some(mut s) = r.session.take()
             && r.started_by_sonata
         {

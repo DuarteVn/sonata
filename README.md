@@ -42,6 +42,13 @@ between them live side by side, organized into as many workspaces as you need.
   limits is used (short window and weekly, with reset times), warns once at 80% and at 100% of
   a window with a macOS notification, and has a Settings window (`Cmd+,`) to control it. See
   [Usage meter](#usage-meter).
+- Device nodes (tool `D`): an Android emulator on the canvas, with no separate emulator window.
+  Pick one of your Android virtual devices, boot it, and use its screen live in the node: click
+  to tap, drag to swipe, scroll, and type; Back, Home, and Recent apps buttons sit under the
+  screen. Linked agents test apps with `sonata device boot|stop|read|tap|swipe|type|key|launch|
+  apps|install|screenshot`; `read` prints the screen as numbered elements, like `browser read`.
+  iOS simulators (with Xcode) can be listed, booted, and viewed, and agents can take screenshots
+  and launch or install apps; taps and keys are not available for them.
 - Everything is saved as readable files in `~/.sonata/`, with crash-safe writes, autosave, and
   terminal history restored after a restart.
 
@@ -98,6 +105,20 @@ Sonata runs shells, `git`, and AI agents with your user permissions, without a s
 commands you trust. Terminal history is saved to disk in plain text, readable only by your user;
 turn it off per terminal (terminal menu → Save history) for sessions that print secrets.
 
+## Device nodes: requirements
+
+- Install [Android Studio](https://developer.android.com/studio/install) and create at least one
+  virtual device in its Device Manager (an ARM system image on Apple Silicon).
+- Sonata looks for the SDK in `ANDROID_HOME`, `ANDROID_SDK_ROOT`, `~/Library/Android/sdk`, or a
+  folder you choose in the node ("Choose SDK folder…"). Virtual devices come from
+  `~/.android/avd` (or `ANDROID_AVD_HOME`).
+- Sonata never downloads, installs, or changes SDKs, emulators, or Xcode. When something is
+  missing, the node says what, where it looked, and links to the official page.
+- The emulator's control port listens on localhost only and needs a per-device token, which
+  Sonata reads from the emulator's own files (never from a command line). Devices you start
+  from Android Studio are attached to, not copied, and Sonata never stops them.
+- Physical phones over USB are not supported yet.
+
 ## Agent messaging and safety
 
 - The `sonata` command talks to the app over a private Unix socket (`~/.sonata/run/`, readable
@@ -142,6 +163,7 @@ without credentials or emails. To test it, follow `specs/006-agent-usage/quickst
 ├── usage-providers/                    custom usage provider definitions + README.md
 ├── logs/sonata.log.<date>              kept 7 days, never contains terminal output
 ├── lanes/<workspace id>/<name>/        lane checkouts (git worktrees of your repository)
+├── run/                                sockets, screenshots, and device card images (temporary)
 └── workspaces/<id>/
     ├── workspace.json                  layout: nodes, camera, settings
     ├── notes/<node-id>.md              your notes, editable with any editor
