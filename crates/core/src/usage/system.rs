@@ -29,6 +29,10 @@ impl Backend for SystemBackend {
         )
     }
 
+    fn custom_providers(&self) -> Vec<ProviderInfo> {
+        super::custom::provider_infos(&self.root.usage_providers_dir())
+    }
+
     fn read(&self, p: &ProviderInfo, env: &[(String, String)], now: DateTime<Utc>) -> Reading {
         let Some(path) = p.command_path.as_deref() else {
             return Reading::unavailable(p.id.clone(), now, "Command not found.");
@@ -36,6 +40,12 @@ impl Backend for SystemBackend {
         match (p.kind, p.id.as_str()) {
             (ProviderKind::BuiltIn, "claude") => super::claude::read(path, env, now),
             (ProviderKind::BuiltIn, "codex") => super::codex::read(path, env, now),
+            (ProviderKind::Custom, _) => {
+                let home = std::env::var_os("HOME")
+                    .map(PathBuf::from)
+                    .unwrap_or_default();
+                super::custom::read_custom(&p.id, &p.command, env, &home, self.root.path(), now)
+            }
             _ => Reading::unavailable(p.id.clone(), now, "Not supported yet."),
         }
     }

@@ -124,7 +124,8 @@ struct Inner {
     in_flight: HashSet<String>,
     last_error: HashMap<String, String>,
     emails: HashMap<String, String>,
-    consent_asked: HashSet<String>,
+    /// Command last shown in a consent request per provider, once per app run.
+    consent_asked: HashMap<String, Vec<String>>,
 }
 
 pub struct UsageService {
@@ -212,7 +213,10 @@ impl UsageService {
                 match consent.state_for(&info.consent_key) {
                     "granted" => {}
                     "unasked" => {
-                        if inner.consent_asked.insert(info.id.clone()) {
+                        if inner.consent_asked.get(&info.id) != Some(&info.command) {
+                            inner
+                                .consent_asked
+                                .insert(info.id.clone(), info.command.clone());
                             asks.push(consent_request(&info));
                         }
                         continue;

@@ -463,7 +463,7 @@ impl App {
     /// The custom usage providers folder (feature 006), created when missing.
     pub fn usage_providers_folder(&self) -> AppResult<PathBuf> {
         let dir = self.data_root.usage_providers_dir();
-        paths::ensure_private_dir(&dir)?;
+        crate::usage::custom::ensure_folder(&dir)?;
         Ok(dir)
     }
 
