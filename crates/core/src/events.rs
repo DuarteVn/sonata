@@ -76,6 +76,18 @@ pub struct NodesChangedEvent {
     pub links: Vec<crate::model::link::Link>,
 }
 
+/// Asks the human to confirm a land or remove that an agent requested (feature 008).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LaneConfirmEvent {
+    pub request_id: Uuid,
+    pub node_id: Uuid,
+    pub action: crate::lanes::ops::Action,
+    pub requested_by: String,
+    pub preview: crate::lanes::ops::Preview,
+    pub delete_branch: bool,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum CoreEvent {
     WorkspacesChanged(Vec<WorkspaceSummary>),
@@ -92,6 +104,9 @@ pub enum CoreEvent {
     UsageWarning(crate::usage::service::UsageWarning),
     UsageConsent(crate::usage::service::ConsentRequest),
     LaneStatus(crate::lanes::status::LaneStatus),
+    LaneConfirm(LaneConfirmEvent),
+    /// The request timed out or went away; the UI closes its dialog.
+    LaneConfirmClosed(Uuid),
 }
 
 impl CoreEvent {
@@ -111,6 +126,8 @@ impl CoreEvent {
             Self::UsageWarning(_) => "usage://warning",
             Self::UsageConsent(_) => "usage://consent",
             Self::LaneStatus(_) => "lane://status",
+            Self::LaneConfirm(_) => "lane://confirm",
+            Self::LaneConfirmClosed(_) => "lane://confirm-closed",
         }
     }
 
@@ -130,6 +147,8 @@ impl CoreEvent {
             Self::UsageWarning(w) => serde_json::to_value(w),
             Self::UsageConsent(c) => serde_json::to_value(c),
             Self::LaneStatus(s) => serde_json::to_value(s),
+            Self::LaneConfirm(e) => serde_json::to_value(e),
+            Self::LaneConfirmClosed(id) => Ok(serde_json::json!({ "requestId": id })),
         };
         v.unwrap_or(Value::Null)
     }

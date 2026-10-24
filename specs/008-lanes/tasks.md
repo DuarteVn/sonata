@@ -99,10 +99,10 @@ see only their own change (quickstart A).
 **Goal**: `sonata lane status|land|remove` with a human confirmation in the app.
 **Independent Test**: quickstart D.
 
-- [ ] T046 [P] [US5] Write tests for `Confirmations`: answer accepted/declined, timeout returns declined and emits `lane://confirm-closed`, second request for the same lane refused, in crates/core/src/lanes/confirm.rs (`#[cfg(test)]`)
-- [ ] T047 [US5] Implement crates/core/src/lanes/confirm.rs and `CoreEvent::LaneConfirm`, `LaneConfirmClosed` in crates/core/src/events.rs
-- [ ] T048 [P] [US5] Write CLI tests with a fake answering sink: `lane status` own and linked; `lane land` by a non-Orchestrator for another terminal → exit 3; declined → exit 3 and no change; accepted → landed and the reply is returned before the caller stops; `lane remove --delete-branch`; `dismiss` of a lane terminal asks first, in crates/core/tests/lanes_cli.rs
-- [ ] T049 [US5] Implement `lane status|land|remove` and the dismiss confirmation in crates/core/src/messaging/commands.rs; add `lane` help in crates/cli/src/main.rs
+- [x] T046 [P] [US5] Write tests for `Confirmations`: answer accepted/declined, timeout returns declined and emits `lane://confirm-closed`, second request for the same lane refused, in crates/core/src/lanes/confirm.rs (`#[cfg(test)]`)
+- [x] T047 [US5] Implement crates/core/src/lanes/confirm.rs and `CoreEvent::LaneConfirm`, `LaneConfirmClosed` in crates/core/src/events.rs
+- [x] T048 [P] [US5] Write CLI tests with a fake answering sink: `lane status` own and linked; `lane land` by a non-Orchestrator for another terminal → exit 3; declined → exit 3 and no change; accepted → landed and the reply is returned before the caller stops; `lane remove --delete-branch`; `dismiss` of a lane terminal asks first, in crates/core/tests/lanes_cli.rs
+- [x] T049 [US5] Implement `lane status|land|remove` and the dismiss confirmation in crates/core/src/messaging/commands.rs; add `lane` help in crates/cli/src/main.rs
 - [ ] T050 [US5] Add `lane_confirm_answer` in src-tauri/src/commands/lane.rs with registrations; listen to `lane://confirm` and `lane://confirm-closed` in ui/src/ipc/events.ts and open `LaneDialog` from ui/src/App.tsx
 - [ ] T051 [P] [US5] Write a test that a `lane://confirm` event opens the dialog with "requested by <name>" and answering calls `laneConfirmAnswer`, in ui/tests/laneDialog.test.tsx
 

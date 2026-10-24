@@ -292,6 +292,7 @@ pub struct App {
     /// The system git, found on first use (feature 008, research R2).
     git: std::sync::OnceLock<Result<crate::lanes::git::Git, String>>,
     lane_statuses: Mutex<crate::lanes::status::StatusCache>,
+    confirmations: crate::lanes::confirm::Confirmations,
 }
 
 impl App {
@@ -382,6 +383,7 @@ impl App {
             usage,
             git: std::sync::OnceLock::new(),
             lane_statuses: Mutex::default(),
+            confirmations: Default::default(),
         }))
         .inspect(|app| {
             app.spawn_preview_loop();
@@ -2294,6 +2296,148 @@ impl App {
             .and_then(|t| t.lane.as_deref().cloned())
             .ok_or_else(|| AppError::new(ErrorCode::NodeNotFound, "This terminal has no lane."))?;
         Ok(crate::lanes::status::check(self.git(), node, &lane))
+    }
+
+    /// True when the terminal has a lane folder that a removal would delete.
+    pub fn terminal_has_lane_checkout(&self, node: Uuid) -> bool {
+        self.workspace_of_node(node)
+            .is_ok_and(|ws| self.has_lane_checkout(ws, node))
+    }
+
+    /// Shows the land or remove confirmation for a request from `requester` and waits for the
+    /// human (research R9). `Ok(None)`: no answer in time. Refuses before asking when the land
+    /// is blocked or has nothing to bring in.
+    pub fn request_lane_confirmation(
+        &self,
+        requester: Uuid,
+        node: Uuid,
+        action: crate::lanes::ops::Action,
+        delete_branch: bool,
+        timeout: std::time::Duration,
+        tick: &mut dyn FnMut(),
+    ) -> AppResult<Option<crate::lanes::confirm::Answer>> {
+        let preview = self.lane_preview(node, action)?;
+        if action == crate::lanes::ops::Action::Land {
+            if !preview.blockers.is_empty() {
+                return Err(AppError::new(
+                    ErrorCode::LaneBlocked,
+                    preview.blockers.join(" "),
+                ));
+            }
+            if preview.commits == 0 {
+                return Err(AppError::new(
+                    ErrorCode::LaneBlocked,
+                    format!(
+                        "Nothing to land: {} already has every commit of {}.",
+                        preview.base_branch, preview.branch
+                    ),
+                ));
+            }
+        }
+        let (request_id, rx) = self.confirmations.open(node).ok_or_else(|| {
+            AppError::new(
+                ErrorCode::LaneBlocked,
+                "A confirmation for this lane is already waiting in Sonata.",
+            )
+        })?;
+        self.emit(CoreEvent::LaneConfirm(crate::events::LaneConfirmEvent {
+            request_id,
+            node_id: node,
+            action,
+            requested_by: self.node_name(requester).unwrap_or_default(),
+            preview,
+            delete_branch,
+        }));
+        let answer = crate::lanes::confirm::wait(
+            &rx,
+            timeout,
+            crate::messaging::commands::PROGRESS_EVERY,
+            tick,
+        );
+        if answer.is_none() {
+            self.confirmations.close(request_id);
+            self.emit(CoreEvent::LaneConfirmClosed(request_id));
+        }
+        Ok(answer)
+    }
+
+    /// The human's answer from the confirmation dialog.
+    pub fn answer_lane_confirmation(
+        &self,
+        request: Uuid,
+        answer: crate::lanes::confirm::Answer,
+    ) -> AppResult<()> {
+        if self.confirmations.answer(request, answer) {
+            Ok(())
+        } else {
+            Err(AppError::new(
+                ErrorCode::LaneBlocked,
+                "This request is no longer waiting; nothing changed.",
+            ))
+        }
+    }
+
+    /// Lands after a confirmed CLI request. With `deferred`, the terminal is stopped a moment
+    /// later, so the requesting agent gets its answer first (FR-011).
+    pub fn lane_land_confirmed(&self, node: Uuid, deferred: bool) -> AppResult<u32> {
+        if !deferred {
+            return self.lane_land(node, true);
+        }
+        let (ws, lane) = self.active_lane(node)?;
+        let commits = crate::lanes::ops::land(self.lane_git()?, &lane)?;
+        self.later(move |app| app.finish_land(ws, node, &lane));
+        Ok(commits)
+    }
+
+    /// Removes after a confirmed CLI request; `deferred` as in [`App::lane_land_confirmed`].
+    pub fn lane_remove_confirmed(
+        &self,
+        node: Uuid,
+        removal: LaneRemoval,
+        deferred: bool,
+    ) -> AppResult<()> {
+        if !deferred {
+            return self.lane_remove(node, removal, true);
+        }
+        let (ws, lane) = self.active_lane(node)?;
+        crate::lanes::ops::prepare_removal(
+            self.lane_git()?,
+            &self.data_root.lane_workspace_dir(ws),
+            &lane,
+            removal.discard_changes,
+        )?;
+        self.later(move |app| {
+            let result = app
+                .remove_lane(ws, node, &lane, removal)
+                .and_then(|()| app.start_fresh(node));
+            if let Err(e) = result {
+                app.emit(CoreEvent::PersistenceWarning(format!(
+                    "Could not remove {}: {}",
+                    lane.branch, e.message
+                )));
+            }
+            app.refresh_lane_statuses_soon();
+        });
+        Ok(())
+    }
+
+    /// Dismisses a recruited terminal after its lane removal was confirmed.
+    pub fn dismiss_with_lane(&self, node: Uuid, removal: LaneRemoval) -> AppResult<()> {
+        let ws = self.workspace_of_node(node)?;
+        self.delete_node_with_lane(ws, node, true, removal)?;
+        self.notify_nodes_changed(ws);
+        Ok(())
+    }
+
+    /// Runs `f` shortly after the current CLI reply has been sent.
+    fn later(&self, f: impl FnOnce(&App) + Send + 'static) {
+        let this = self.this.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            if let Some(app) = this.upgrade() {
+                f(&app);
+            }
+        });
     }
 
     /// After a land: stop the terminal, remove the checkout, mark the lane landed (FR-011).
