@@ -157,7 +157,9 @@ pub fn discover(shell: &Path) -> Result<Git, String> {
     candidates.push("/usr/local/bin/git".into());
     let chosen = candidates
         .into_iter()
-        .find(|p| p.is_absolute() && p != shim && p.is_file())
+        // On macOS `/usr/bin/git` is a shim that may open an install prompt; elsewhere (CI on
+        // Linux) it is the real binary.
+        .find(|p| p.is_absolute() && (p != shim || !cfg!(target_os = "macos")) && p.is_file())
         .or_else(|| {
             let tools = Command::new("/usr/bin/xcode-select")
                 .arg("-p")
