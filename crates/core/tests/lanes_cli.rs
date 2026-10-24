@@ -133,6 +133,7 @@ fn world() -> World {
         shell: Some("/bin/sh".into()),
         cli_dir: Some(cli_bin().parent().unwrap().to_path_buf()),
         socket: true,
+        ..AppOptions::default()
     };
     let app = App::start_with(sb.root.clone(), human.clone(), opts).unwrap();
     human.app.set(Arc::downgrade(&app)).unwrap();
