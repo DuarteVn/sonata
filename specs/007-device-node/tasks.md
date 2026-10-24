@@ -76,7 +76,7 @@ depends on it.
 
 ## Phase 7: Polish
 
-- [ ] T035 README section: device node, requirements (Android Studio + AVD), what Sonata never installs, `sonata device` commands; update `scripts/check.sh` if new suites need it
+- [X] T035 README section: device node, requirements (Android Studio + AVD), what Sonata never installs, `sonata device` commands; update `scripts/check.sh` if new suites need it
 - [ ] T036 Run `sh scripts/check.sh`; quickstart without SDK (steps 1–2) and record in `quickstart-results.md`
 - [ ] T037 ⛔ Full quickstart with a real AVD, including SC-005 pan test; record results
 
