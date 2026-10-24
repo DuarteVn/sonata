@@ -12,7 +12,7 @@ const missing: ToolReport = {
     helpUrl: "https://developer.android.com/studio/install",
     avdHelpUrl: "https://developer.android.com/studio/run/managing-avds",
   },
-  ios: { developerDir: null, helpUrl: "https://developer.apple.com/xcode/" },
+  ios: { developerDir: null, simulators: [], helpUrl: "https://developer.apple.com/xcode/" },
 };
 const noAvd: ToolReport = { ...missing, android: { ...missing.android, sdk: "/sdk", looked: ["/sdk"] } };
 const ready: ToolReport = {
@@ -128,6 +128,34 @@ const state = (kind: "off" | "booting" | "ready" | "stopped" | "error", message?
   startedBySonata: true,
   reduced: false,
   screen: [1080, 2400] as [number, number],
+});
+
+describe("iOS simulators (US4)", () => {
+  it("lists simulators apart from Android and binds the node to one", async () => {
+    ipc.deviceTools.mockResolvedValue({
+      ...ready,
+      ios: {
+        developerDir: "/Applications/Xcode.app/Contents/Developer",
+        simulators: [{ udid: "AAAA-1111", name: "iPhone 16", osVersion: "iOS 18.2", booted: false }],
+        helpUrl: missing.ios.helpUrl,
+      },
+    });
+    ipc.deviceSelect.mockResolvedValue({ ...node, content: { device: { platform: "ios", deviceId: "AAAA-1111", name: "iPhone 16" } } });
+    render(<DeviceNode node={node} />);
+    const ios = await screen.findByRole("region", { name: "iOS" });
+    await userEvent.click(within(ios).getByRole("button", { name: "iPhone 16 iOS 18.2" }));
+    expect(ipc.deviceSelect).toHaveBeenCalledWith("d1", "ios", "AAAA-1111", "iPhone 16", "iOS 18.2");
+    expect(within(screen.getByRole("region", { name: "Android" })).getByRole("button", { name: /Pixel 8/ })).toBeInTheDocument();
+  });
+
+  it("is view only: keys are disabled and a note explains why", async () => {
+    const sim: CanvasNode = { ...node, id: "d3", content: { device: { platform: "ios", deviceId: "AAAA-1111", name: "iPhone 16" } } };
+    useCanvas.setState({ nodes: [sim] });
+    ipc.deviceState.mockResolvedValue({ nodeId: "d3", state: { kind: "ready" }, startedBySonata: true, reduced: true, screen: [1179, 2556] });
+    render(<DeviceNode node={sim} />);
+    expect(await screen.findByText(/View only/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back" })).toBeDisabled();
+  });
 });
 
 describe("device node with a chosen device (US1)", () => {

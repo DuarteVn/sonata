@@ -8,6 +8,7 @@ pub mod avd;
 pub mod control;
 pub mod emulator;
 pub mod grpc;
+pub mod ios;
 pub mod live;
 pub mod process;
 pub mod still;
@@ -162,6 +163,21 @@ pub trait Session: Send {
 /// Starts devices, or attaches to ones already running (research R1, R7).
 pub trait DeviceLauncher: Send + Sync {
     fn start(&self, target: &Target) -> Result<Box<dyn Session>, String>;
+}
+
+/// Sends each start to the launcher of the target's platform.
+pub struct PlatformLauncher {
+    pub android: Box<dyn DeviceLauncher>,
+    pub ios: Box<dyn DeviceLauncher>,
+}
+
+impl DeviceLauncher for PlatformLauncher {
+    fn start(&self, target: &Target) -> Result<Box<dyn Session>, String> {
+        match target.platform {
+            Platform::Android => self.android.start(target),
+            Platform::Ios => self.ios.start(target),
+        }
+    }
 }
 
 /// `device://state` (data-model.md).

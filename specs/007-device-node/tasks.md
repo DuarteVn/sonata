@@ -18,7 +18,7 @@ depends on it.
 
 - [X] T001 Add `tonic` (client, no TLS; `server` feature in dev-dependencies only), `prost`, `quick-xml`, `png` to `Cargo.toml` workspace deps and `crates/core/Cargo.toml`; record versions and why in plan Complexity Tracking
 - [X] T002 [P] Add error codes `DeviceInUse`, `DeviceNotRunning`, `ToolMissing` in `crates/core/src/error.rs` and `ui/src/ipc/types.ts`
-- [ ] T003 [P] Create fixture tree `crates/core/tests/fixtures/device/`: SDK folders (valid, missing `adb`, empty), AVD home with two AVDs (`Pixel_8_API_34.ini` + `config.ini` with `avd.ini.displayname`, `image.sysdir.1=system-images/android-34/google_apis/arm64-v8a/`, `hw.lcd.width=1080`, `hw.lcd.height=2400`), discovery `pid_123.ini`, uiautomator XML dumps (Settings home, login form with EditText/password, empty hierarchy, status-line suffix), `query-activities --brief` output, `simctl list --json` output
+- [X] T003 [P] Create fixture tree `crates/core/tests/fixtures/device/`: SDK folders (valid, missing `adb`, empty), AVD home with two AVDs (`Pixel_8_API_34.ini` + `config.ini` with `avd.ini.displayname`, `image.sysdir.1=system-images/android-34/google_apis/arm64-v8a/`, `hw.lcd.width=1080`, `hw.lcd.height=2400`), discovery `pid_123.ini`, uiautomator XML dumps (Settings home, login form with EditText/password, empty hierarchy, status-line suffix), `query-activities --brief` output, `simctl list --json` output
 
 ## Phase 2: Foundational (blocks all stories)
 
@@ -71,8 +71,8 @@ depends on it.
 
 **Goal**: decided 2026-10-23: list simulators; boot/stop/screenshot/launch/apps/install via simctl; other commands "not supported on iOS simulator". **Independent test**: needs Xcode (not on this Mac); unit tests only until then.
 
-- [ ] T033 [P] [US4] Tests `crates/core/tests/device_ios.rs` (fake runner + fixture JSON): list available simulators with iOS version; boot/shutdown/screenshot/launch/listapps/install argv; tap/swipe/type/key/read → "not supported on iOS simulator" with no runner call; `.app` must be a directory
-- [ ] T034 [US4] Implement `crates/core/src/device/ios.rs` and wire iOS into the picker (separate section) and the node (screenshot poll 2–4 fps, input disabled with a note)
+- [X] T033 [P] [US4] Tests `crates/core/tests/device_ios.rs` (fake runner + fixture JSON): list available simulators with iOS version; boot/shutdown/screenshot/launch/listapps/install argv; tap/swipe/type/key/read → "not supported on iOS simulator" with no runner call; `.app` must be a directory
+- [X] T034 [US4] Implement `crates/core/src/device/ios.rs` and wire iOS into the picker (separate section) and the node (screenshot poll 2–4 fps, input disabled with a note)
 
 ## Phase 7: Polish
 

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { ResizeHandles } from "../canvas/ResizeHandles";
 import { startNodeDrag } from "../canvas/nodeDrag";
 import { ipc } from "../ipc/commands";
-import { isAppError, type CanvasNode, type DeviceContent, type ToolReport } from "../ipc/types";
+import { isAppError, type CanvasNode, type DeviceContent, type Platform, type ToolReport } from "../ipc/types";
 import { useCanvas } from "../state/canvas";
 import { fitScreen, keyToInput, streamSize, toDevice, TouchTracker, wheelToDevice, type DeviceInput, type Size } from "./devicePointer";
 import { LinkCount, LinkHandle } from "./LinkHandle";
@@ -39,6 +39,8 @@ export function DeviceNode({ node }: { node: CanvasNode }) {
   );
   const [error, setError] = useState<string | null>(null);
   const chosen = device.deviceId !== "";
+  /** iOS simulators take no input without third-party tools (research R11). */
+  const interactive = kind === "ready" && device.platform !== "ios";
 
   useEffect(() => {
     if (!chosen) return;
@@ -108,15 +110,21 @@ export function DeviceNode({ node }: { node: CanvasNode }) {
         {!chosen ? (
           <DevicePicker nodeId={node.id} />
         ) : (
-          <DeviceScreen nodeId={node.id} title={title} kind={kind} screen={state?.screen} onInput={send} />
+          <DeviceScreen nodeId={node.id} title={title} kind={kind} screen={state?.screen} onInput={interactive ? send : undefined} />
         )}
       </div>
+      {chosen && device.platform === "ios" && kind === "ready" && (
+        <p className="device-note">View only: Sonata cannot send taps or keys to iOS simulators without extra tools.</p>
+      )}
+      {chosen && state?.reduced && device.platform === "android" && kind === "ready" && (
+        <p className="device-note">Started outside Sonata: reduced frame rate.</p>
+      )}
       {chosen && (
         <div className="device-nav" style={{ height: DEVICE_NAV_HEIGHT }}>
-          <button type="button" className="icon-button" aria-label="Back" title="Back" disabled={kind !== "ready"} onClick={() => send({ key: "back" })}>
+          <button type="button" className="icon-button" aria-label="Back" title="Back" disabled={!interactive} onClick={() => send({ key: "back" })}>
             <ChevronLeft size={16} />
           </button>
-          <button type="button" className="icon-button" aria-label="Home" title="Home" disabled={kind !== "ready"} onClick={() => send({ key: "home" })}>
+          <button type="button" className="icon-button" aria-label="Home" title="Home" disabled={!interactive} onClick={() => send({ key: "home" })}>
             <Circle size={14} />
           </button>
           <button
@@ -124,7 +132,7 @@ export function DeviceNode({ node }: { node: CanvasNode }) {
             className="icon-button"
             aria-label="Recent apps"
             title="Recent apps"
-            disabled={kind !== "ready"}
+            disabled={!interactive}
             onClick={() => send({ key: "recents" })}
           >
             <SquareStack size={14} />
@@ -153,13 +161,14 @@ function DeviceScreen({
   title,
   kind,
   screen,
-  onInput,
+  onInput = ignore,
 }: {
   nodeId: string;
   title: string;
   kind: string;
   screen?: [number, number];
-  onInput: (input: DeviceInput) => void;
+  /** Absent when the device takes no input (iOS simulators). */
+  onInput?: (input: DeviceInput) => void;
 }) {
   const live = useCanvas((s) => s.deviceLive.has(nodeId)) && kind === "ready";
   const device: Size = screen ? { width: screen[0], height: screen[1] } : FALLBACK_SCREEN;
@@ -278,6 +287,8 @@ function DeviceScreen({
   );
 }
 
+function ignore() {}
+
 function imageSrc(path: string, version: number) {
   try {
     return `${convertFileSrc(path)}?v=${version}`;
@@ -331,9 +342,9 @@ function DevicePicker({ nodeId }: { nodeId: string }) {
     }
   }
 
-  async function pick(deviceId: string, name: string, osVersion?: string) {
+  async function pick(platform: Platform, deviceId: string, name: string, osVersion?: string) {
     try {
-      const updated = await ipc.deviceSelect(nodeId, "android", deviceId, name, osVersion);
+      const updated = await ipc.deviceSelect(nodeId, platform, deviceId, name, osVersion);
       useCanvas.getState().replaceNode(updated);
     } catch (e) {
       setError(message(e));
@@ -387,7 +398,7 @@ function DevicePicker({ nodeId }: { nodeId: string }) {
           <ul className="device-list">
             {android.avds.map((a) => (
               <li key={a.name}>
-                <button type="button" onClick={() => void pick(a.name, a.displayName, a.osVersion)}>
+                <button type="button" onClick={() => void pick("android", a.name, a.displayName, a.osVersion)}>
                   <strong>{a.displayName}</strong> <span>{a.osVersion ?? a.name}</span>
                 </button>
               </li>
@@ -407,8 +418,20 @@ function DevicePicker({ nodeId }: { nodeId: string }) {
               </button>
             </div>
           </>
+        ) : report && report.ios.simulators.length === 0 ? (
+          <p className="device-dim">Xcode found, but it has no simulators. Add one in Xcode's Devices and Simulators window.</p>
         ) : (
-          report && <p className="device-dim">Xcode found.</p>
+          report && (
+            <ul className="device-list">
+              {report.ios.simulators.map((sim) => (
+                <li key={sim.udid}>
+                  <button type="button" onClick={() => void pick("ios", sim.udid, sim.name, sim.osVersion)}>
+                    <strong>{sim.name}</strong> <span>{sim.osVersion}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )
         )}
       </section>
       <button type="button" className="device-recheck" onClick={() => void check()} disabled={checking}>

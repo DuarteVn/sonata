@@ -1,0 +1,27 @@
+{
+  "devices" : {
+    "com.apple.CoreSimulator.SimRuntime.iOS-18-2" : [
+      {
+        "lastBootedAt" : "2026-10-01T12:00:00Z",
+        "dataPath" : "/Users/me/Library/Developer/CoreSimulator/Devices/AAAA-1111/data",
+        "udid" : "AAAA-1111",
+        "isAvailable" : true,
+        "deviceTypeIdentifier" : "com.apple.CoreSimulator.SimDeviceType.iPhone-16",
+        "state" : "Shutdown",
+        "name" : "iPhone 16"
+      },
+      {
+        "udid" : "BBBB-2222",
+        "isAvailable" : true,
+        "state" : "Booted",
+        "name" : "iPad Air"
+      }
+    ],
+    "com.apple.CoreSimulator.SimRuntime.watchOS-11-1" : [
+      { "udid" : "CCCC-3333", "isAvailable" : true, "state" : "Shutdown", "name" : "Apple Watch" }
+    ],
+    "com.apple.CoreSimulator.SimRuntime.iOS-17-5" : [
+      { "udid" : "DDDD-4444", "isAvailable" : false, "state" : "Shutdown", "name" : "Broken" }
+    ]
+  }
+}

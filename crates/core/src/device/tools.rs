@@ -60,6 +60,8 @@ pub struct AndroidReport {
 pub struct IosReport {
     /// Xcode's `Developer` folder when it holds `simctl`.
     pub developer_dir: Option<PathBuf>,
+    /// Filled by the app with `simctl` when Xcode is present (research R11).
+    pub simulators: Vec<super::ios::Simulator>,
     pub help_url: &'static str,
 }
 
@@ -114,7 +116,7 @@ pub fn avd_home(env: &Env) -> PathBuf {
 }
 
 /// `DEVELOPER_DIR`, the folder chosen with `xcode-select`, then `/Applications/Xcode.app`.
-fn developer_dir(env: &Env) -> Option<PathBuf> {
+pub fn developer_dir(env: &Env) -> Option<PathBuf> {
     [
         env.path("DEVELOPER_DIR"),
         std::fs::read_link("/var/db/xcode_select_link").ok(),
@@ -151,6 +153,7 @@ pub fn detect(env: &Env, preference: Option<&Path>) -> ToolReport {
         },
         ios: IosReport {
             developer_dir: developer_dir(env),
+            simulators: Vec::new(),
             help_url: XCODE_HELP_URL,
         },
     }

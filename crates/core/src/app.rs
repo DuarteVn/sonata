@@ -396,10 +396,21 @@ impl App {
             app.spawn_lane_status_loop();
             app.start_messaging();
             let store = Store::new(app.data_root.clone());
+            let android = crate::device::emulator::system_launcher(move || {
+                store.load_preferences().value.android_sdk_path
+            });
+            let ios = crate::device::ios::IosLauncher::new(
+                Box::new(|| {
+                    crate::device::tools::developer_dir(&crate::device::tools::Env::current())
+                        .ok_or_else(|| "Xcode not found".to_string())
+                }),
+                Arc::new(crate::device::process::SystemProcesses),
+            );
             app.devices
-                .set_launcher(Arc::new(crate::device::emulator::system_launcher(
-                    move || store.load_preferences().value.android_sdk_path,
-                )));
+                .set_launcher(Arc::new(crate::device::PlatformLauncher {
+                    android: Box::new(android),
+                    ios: Box::new(ios),
+                }));
             app.spawn_device_loop();
         })
     }
@@ -2031,13 +2042,31 @@ impl App {
             .load_preferences()
             .value
             .android_sdk_path;
-        crate::device::tools::detect(&crate::device::tools::Env::current(), pref.as_deref())
+        Self::with_simulators(crate::device::tools::detect(
+            &crate::device::tools::Env::current(),
+            pref.as_deref(),
+        ))
+    }
+
+    /// Adds the iOS simulators when Xcode is present (research R11).
+    fn with_simulators(
+        mut report: crate::device::tools::ToolReport,
+    ) -> crate::device::tools::ToolReport {
+        if let Some(dev) = &report.ios.developer_dir {
+            report.ios.simulators = crate::device::ios::list_simulators(
+                Arc::new(crate::device::process::SystemProcesses),
+                dev,
+            );
+        }
+        report
     }
 
     /// "Choose SDK folder…": saved in preferences only when it holds the emulator and adb.
     pub fn device_choose_sdk(&self, path: &Path) -> crate::device::tools::ToolReport {
-        let report =
-            crate::device::tools::detect(&crate::device::tools::Env::current(), Some(path));
+        let report = Self::with_simulators(crate::device::tools::detect(
+            &crate::device::tools::Env::current(),
+            Some(path),
+        ));
         if report.android.sdk.as_deref() == Some(path) {
             let store = Store::new(self.data_root.clone());
             let mut prefs = store.load_preferences().value;

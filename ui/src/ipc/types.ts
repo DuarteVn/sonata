@@ -156,6 +156,7 @@ export type NodeContent =
 
 /** Installed tools and virtual devices (feature 007, data-model.md). */
 export type Avd = { name: string; displayName: string; apiLevel?: number; osVersion?: string; screen?: [number, number] };
+export type Simulator = { udid: string; name: string; osVersion: string; booted: boolean };
 export type ToolReport = {
   android: {
     sdk: string | null;
@@ -165,7 +166,7 @@ export type ToolReport = {
     helpUrl: string;
     avdHelpUrl: string;
   };
-  ios: { developerDir: string | null; helpUrl: string };
+  ios: { developerDir: string | null; simulators: Simulator[]; helpUrl: string };
 };
 
 export type DeviceStateName = "off" | "booting" | "ready" | "stopped" | "error";

@@ -363,7 +363,14 @@ impl DeviceDriver for AndroidDriver {
     }
 }
 
-struct StopOnDrop(Arc<std::sync::atomic::AtomicBool>);
+/// Stops a polling thread when dropped.
+pub struct StopOnDrop(Arc<std::sync::atomic::AtomicBool>);
+
+impl StopOnDrop {
+    pub fn new(flag: Arc<std::sync::atomic::AtomicBool>) -> Self {
+        Self(flag)
+    }
+}
 
 impl Drop for StopOnDrop {
     fn drop(&mut self) {
