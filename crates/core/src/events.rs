@@ -91,6 +91,7 @@ pub enum CoreEvent {
     UsageState(crate::usage::service::UsageState),
     UsageWarning(crate::usage::service::UsageWarning),
     UsageConsent(crate::usage::service::ConsentRequest),
+    LaneStatus(crate::lanes::status::LaneStatus),
 }
 
 impl CoreEvent {
@@ -109,6 +110,7 @@ impl CoreEvent {
             Self::UsageState(_) => "usage://state",
             Self::UsageWarning(_) => "usage://warning",
             Self::UsageConsent(_) => "usage://consent",
+            Self::LaneStatus(_) => "lane://status",
         }
     }
 
@@ -127,6 +129,7 @@ impl CoreEvent {
             Self::UsageState(s) => serde_json::to_value(s),
             Self::UsageWarning(w) => serde_json::to_value(w),
             Self::UsageConsent(c) => serde_json::to_value(c),
+            Self::LaneStatus(s) => serde_json::to_value(s),
         };
         v.unwrap_or(Value::Null)
     }

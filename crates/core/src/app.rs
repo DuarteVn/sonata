@@ -291,6 +291,7 @@ pub struct App {
     usage: Arc<UsageService>,
     /// The system git, found on first use (feature 008, research R2).
     git: std::sync::OnceLock<Result<crate::lanes::git::Git, String>>,
+    lane_statuses: Mutex<crate::lanes::status::StatusCache>,
 }
 
 impl App {
@@ -380,10 +381,12 @@ impl App {
             )),
             usage,
             git: std::sync::OnceLock::new(),
+            lane_statuses: Mutex::default(),
         }))
         .inspect(|app| {
             app.spawn_preview_loop();
             app.spawn_activity_loop();
+            app.spawn_lane_status_loop();
             app.start_messaging();
         })
     }
@@ -577,6 +580,12 @@ impl App {
             let first_open = !m.is_loaded(id);
             (m.open(id)?.clone(), first_open)
         };
+        let ids: Vec<Uuid> = ws.nodes.iter().map(|n| n.id).collect();
+        self.lane_statuses
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .forget(&ids);
+        self.refresh_lane_statuses_soon();
         if first_open {
             for node in &ws.nodes {
                 if node.terminal().is_some() && !self.terminals.contains(node.id) {
@@ -730,6 +739,9 @@ impl App {
             Ok((ws.clone(), node))
         })?;
         self.start_terminal(&ws, &node);
+        if req.lane {
+            self.refresh_lane_statuses_soon();
+        }
         Ok(node)
     }
 
@@ -2061,6 +2073,7 @@ impl App {
         }
         let (ws, lane) = self.active_lane(node)?;
         self.remove_lane(ws, node, &lane, removal)?;
+        self.refresh_lane_statuses_soon();
         self.start_fresh(node)
     }
 
@@ -2107,6 +2120,7 @@ impl App {
         }
         self.set_lane(ws, node, None)?;
         self.notify_nodes_changed(ws);
+        self.refresh_lane_statuses_soon();
         Ok(())
     }
 
@@ -2209,6 +2223,79 @@ impl App {
         Ok(())
     }
 
+    fn spawn_lane_status_loop(&self) {
+        let this = self.this.clone();
+        std::thread::Builder::new()
+            .name("sonata-lanes".into())
+            .spawn(move || {
+                loop {
+                    std::thread::sleep(crate::lanes::status::POLL_INTERVAL);
+                    let Some(app) = this.upgrade() else { break };
+                    app.check_lane_statuses();
+                }
+            })
+            .expect("spawn lane status thread");
+    }
+
+    /// Checks every lane of the loaded workspaces and sends the ones that changed (FR-018).
+    pub fn check_lane_statuses(&self) {
+        let lanes: Vec<(Uuid, crate::model::node::Lane)> = {
+            let m = self.workspaces();
+            m.ids()
+                .into_iter()
+                .filter(|id| m.is_loaded(*id))
+                .filter_map(|id| m.workspace(id))
+                .flat_map(|w| w.nodes.iter())
+                .filter_map(|n| Some((n.id, n.terminal()?.lane.as_deref()?.clone())))
+                .collect()
+        };
+        if lanes.is_empty()
+            && self
+                .lane_statuses
+                .lock()
+                .map(|c| c.is_empty())
+                .unwrap_or(true)
+        {
+            return;
+        }
+        let git = self.git();
+        let statuses = lanes
+            .iter()
+            .map(|(id, lane)| crate::lanes::status::check(git, *id, lane))
+            .collect();
+        let changed = self
+            .lane_statuses
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .update(statuses);
+        for s in changed {
+            self.emit(CoreEvent::LaneStatus(s));
+        }
+    }
+
+    /// Checks lanes now on a background thread, after a lane was created, landed, or removed.
+    fn refresh_lane_statuses_soon(&self) {
+        let this = self.this.clone();
+        std::thread::spawn(move || {
+            if let Some(app) = this.upgrade() {
+                app.check_lane_statuses();
+            }
+        });
+    }
+
+    /// The last known status of a terminal's lane, checked now.
+    pub fn lane_status(&self, node: Uuid) -> AppResult<crate::lanes::status::LaneStatus> {
+        let ws = self.workspace_of_node(node)?;
+        let lane = self
+            .workspaces()
+            .workspace(ws)
+            .and_then(|w| w.node(node))
+            .and_then(Node::terminal)
+            .and_then(|t| t.lane.as_deref().cloned())
+            .ok_or_else(|| AppError::new(ErrorCode::NodeNotFound, "This terminal has no lane."))?;
+        Ok(crate::lanes::status::check(self.git(), node, &lane))
+    }
+
     /// After a land: stop the terminal, remove the checkout, mark the lane landed (FR-011).
     fn finish_land(&self, ws: Uuid, node: Uuid, lane: &crate::model::node::Lane) {
         self.stop_for_lane(node);
@@ -2235,6 +2322,7 @@ impl App {
             ))),
         }
         self.notify_nodes_changed(ws);
+        self.refresh_lane_statuses_soon();
     }
 }
 
