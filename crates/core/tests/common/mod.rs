@@ -1,6 +1,8 @@
 //! Shared helpers for core integration tests.
 #![allow(dead_code)]
 
+pub mod fake_bin;
+
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
@@ -100,6 +102,7 @@ pub fn messaging_app(sb: &Sandbox) -> (Arc<App>, Arc<RecordingSink>) {
         shell: Some("/bin/sh".into()),
         cli_dir: Some(cli_dir),
         socket: true,
+        ..AppOptions::default()
     };
     let app = App::start_with(sb.root.clone(), sink.clone(), opts).expect("app");
     (app, sink)

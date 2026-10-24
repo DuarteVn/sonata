@@ -202,7 +202,7 @@ impl Store {
         )
     }
 
-    fn save_settings<T: Serialize>(
+    pub(crate) fn save_settings<T: Serialize>(
         &self,
         path: &Path,
         kind: &str,
@@ -215,7 +215,7 @@ impl Store {
 
     /// Missing file → defaults. Invalid file → renamed to `<name>.invalid-<timestamp>`, defaults,
     /// and a warning.
-    fn load_settings<T: DeserializeOwned + Default>(
+    pub(crate) fn load_settings<T: DeserializeOwned + Default>(
         &self,
         path: &Path,
         kind: &str,

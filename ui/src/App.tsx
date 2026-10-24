@@ -12,6 +12,10 @@ import { clampSidebarWidth, Sidebar, SIDEBAR_DEFAULT_WIDTH } from "./sidebar/Sid
 import { useCanvas } from "./state/canvas";
 import { updatePending, useUpdate } from "./state/update";
 import { useWorkspaces } from "./state/workspaces";
+import { UsageConsentDialog } from "./dialogs/UsageConsentDialog";
+import { useUsage } from "./state/usage";
+import { UsageButton } from "./usage/UsageButton";
+import { resetText } from "./usage/meter";
 
 const SIDEBAR_HIDDEN_KEY = "sonata.sidebarHidden";
 const SIDEBAR_WIDTH_KEY = "sonata.sidebarWidth";
@@ -45,6 +49,7 @@ export function App() {
   const updateState = useUpdate((s) => s.state);
   const [sidebarHidden, setSidebarHidden] = useState(readSidebarHidden);
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
+  const consent = useUsage((s) => s.consents[0]);
 
   useEffect(() => {
     try {
@@ -59,6 +64,7 @@ export function App() {
     const { init, setSummaries, addWarning } = useWorkspaces.getState();
     init().catch((err) => addWarning(String(err?.message ?? err)));
     void useUpdate.getState().load();
+    void useUsage.getState().load();
     const unlisten = [
       onEvent("workspaces://changed", setSummaries),
       onEvent("persistence://warning", (p) => addWarning(p.message)),
@@ -89,6 +95,23 @@ export function App() {
       // View → Toggle Sidebar (Ctrl+Cmd+S).
       onEvent("app://toggle-sidebar", () => setSidebarHidden((h) => !h)),
       onEvent("update://state", (state) => useUpdate.getState().set(state)),
+      onEvent("usage://state", (state) => useUsage.getState().set(state)),
+      onEvent("usage://consent", (request) => useUsage.getState().askConsent(request)),
+      // 80% and 100% of a plan limit, once per level per window period (006 FR-010).
+      onEvent("usage://warning", async (w) => {
+        const title =
+          w.level === 100
+            ? `${w.providerName}: ${w.windowLabel} limit reached`
+            : `${w.providerName}: ${w.windowLabel} limit at ${w.level}%`;
+        const reset = resetText(w.resetsAt, new Date());
+        const body = reset ? `The limit ${reset}.` : "Check the Usage panel for details.";
+        try {
+          const granted = (await isPermissionGranted()) || (await requestPermission()) === "granted";
+          if (granted) sendNotification({ title, body });
+        } catch {
+          addWarning(`${title}. ${body}`);
+        }
+      }),
       // Sonata → Check for Updates…: always report the result (FR-013).
       onEvent("app://check-updates", async () => {
         try {
@@ -167,6 +190,7 @@ export function App() {
           </button>
         )}
         <Banners />
+        <UsageButton />
         {ready && workspaces.length === 0 && (
           <div className="empty-state">
             <p>No workspaces yet. A workspace is a canvas for one project folder.</p>
@@ -178,6 +202,13 @@ export function App() {
         {active && <Canvas key={active.id} />}
       </main>
       {creating && <CreateWorkspaceDialog onClose={() => setCreating(false)} />}
+      {consent && (
+        <UsageConsentDialog
+          key={consent.providerId}
+          request={consent}
+          onDone={() => useUsage.getState().dropConsent(consent.providerId)}
+        />
+      )}
       {quitBusy && (
         <QuitDialog
           busy={quitBusy}

@@ -11,6 +11,8 @@ import type {
   Bootstrap,
   BusyWorkspace,
   UpdateState,
+  UsageState,
+  RefreshReason,
   CanvasNode,
   Camera,
   Frame,
@@ -90,6 +92,19 @@ export const ipc = {
   updateDownload: () => invoke<UpdateState>("update_download"),
   updateInstall: () => invoke<void>("update_install"),
   updateSetAutoCheck: (enabled: boolean) => invoke<void>("update_set_auto_check", { enabled }),
+  usageState: () => invoke<UsageState>("usage_state"),
+  usageRefresh: (reason: RefreshReason, providerId?: string) =>
+    invoke<UsageState>("usage_refresh", { reason, providerId: providerId ?? null }),
+  usageSetEnabled: (enabled: boolean) => invoke<UsageState>("usage_set_enabled", { enabled }),
+  usageSetWarnings: (enabled: boolean) => invoke<UsageState>("usage_set_warnings", { enabled }),
+  usageSetProviderEnabled: (providerId: string, enabled: boolean) =>
+    invoke<UsageState>("usage_set_provider_enabled", { providerId, enabled }),
+  usageSetProviderColor: (providerId: string, color: string) =>
+    invoke<UsageState>("usage_set_provider_color", { providerId, color }),
+  usageAnswerConsent: (providerId: string, allow: boolean, command: string[]) =>
+    invoke<UsageState>("usage_answer_consent", { providerId, allow, command }),
+  usageOpenSettings: () => invoke<void>("usage_open_settings"),
+  usageProvidersFolder: () => invoke<{ path: string }>("usage_providers_folder"),
 };
 
 export type Ipc = typeof ipc;

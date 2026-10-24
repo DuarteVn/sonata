@@ -36,6 +36,7 @@ fn hand_typed_agents_are_wrapped_and_user_rc_still_loads() {
         shell: Some("/bin/zsh".into()),
         cli_dir: Some(cli_bin().parent().unwrap().to_path_buf()),
         socket: true,
+        ..AppOptions::default()
     };
     let app = App::start_with(sb.root.clone(), Arc::new(RecordingSink::default()), opts).unwrap();
     let ws = app

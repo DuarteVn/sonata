@@ -113,6 +113,15 @@ impl DataRoot {
         self.root.join("preferences.json")
     }
 
+    pub fn usage_cache_file(&self) -> PathBuf {
+        self.root.join("usage-cache.json")
+    }
+
+    /// Custom usage provider definitions (feature 006). Created on demand.
+    pub fn usage_providers_dir(&self) -> PathBuf {
+        self.root.join("usage-providers")
+    }
+
     pub fn logs_dir(&self) -> PathBuf {
         self.root.join("logs")
     }

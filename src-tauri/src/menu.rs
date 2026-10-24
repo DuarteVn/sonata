@@ -1,7 +1,7 @@
 //! App menu. Replaces the default "Close Window" (Cmd+W) with "Close Item", which closes the
 //! selected terminal or note instead of the window. Cmd+Q stays Quit. View → Toggle Sidebar
 //! (Ctrl+Cmd+S) hides or shows the workspace list. The app menu holds the update items
-//! (feature 005).
+//! (feature 005) and Settings… (Cmd+,, feature 006).
 
 use std::sync::Arc;
 
@@ -16,6 +16,7 @@ pub const TOGGLE_SIDEBAR_EVENT: &str = "app://toggle-sidebar";
 pub const CHECK_UPDATES_ID: &str = "check-updates";
 pub const CHECK_UPDATES_EVENT: &str = "app://check-updates";
 pub const AUTO_CHECK_ID: &str = "auto-check-updates";
+pub const SETTINGS_ID: &str = "settings";
 
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let sep = || PredefinedMenuItem::separator(app);
@@ -25,6 +26,8 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         true,
         &[
             &PredefinedMenuItem::about(app, Some("About Sonata"), None)?,
+            &sep()?,
+            &MenuItem::with_id(app, SETTINGS_ID, "Settings…", true, Some("Cmd+,"))?,
             &MenuItem::with_id(
                 app,
                 CHECK_UPDATES_ID,
@@ -114,6 +117,11 @@ pub fn on_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
         }
         CHECK_UPDATES_ID => {
             let _ = app.emit(CHECK_UPDATES_EVENT, ());
+        }
+        SETTINGS_ID => {
+            if let Err(err) = crate::settings::open(app) {
+                tracing::warn!(error = %err, "could not open the settings window");
+            }
         }
         AUTO_CHECK_ID => {
             // The menu toggles the check mark itself; save what it now shows.

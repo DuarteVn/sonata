@@ -1,0 +1,23 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "settings",
+  "description": "Settings window (feature 006): only the usage commands and revealing the providers folder.",
+  "windows": [
+    "settings"
+  ],
+  "permissions": [
+    "core:default",
+    "allow-app-reveal-path",
+    "allow-usage-state",
+    "allow-usage-refresh",
+    "allow-usage-set-enabled",
+    "allow-usage-set-warnings",
+    "allow-usage-set-provider-enabled",
+    "allow-usage-set-provider-color",
+    "allow-usage-answer-consent",
+    "allow-usage-providers-folder"
+  ],
+  "webviews": [
+    "settings"
+  ]
+}

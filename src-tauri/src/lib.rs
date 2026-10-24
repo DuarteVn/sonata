@@ -4,6 +4,7 @@ mod browser;
 mod commands;
 mod events;
 mod menu;
+mod settings;
 
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -49,6 +50,7 @@ pub fn run() {
                 shell: None,
                 cli_dir: cli_dir(tauri_app.handle()),
                 socket: true,
+                usage_extra_path: None,
             };
             let data_root = root.path().to_path_buf();
             let core = App::start_with(root, sink, options)?;
@@ -63,6 +65,7 @@ pub fn run() {
             spawn_autosave(core.clone());
             spawn_summary_monitor(core.clone());
             spawn_launch_window_timer(core.clone());
+            spawn_usage_loop(core.clone());
             menu::set_auto_check(tauri_app.handle(), core.auto_update_check());
             commands::update::spawn_background_checks(tauri_app.handle().clone(), core.clone());
             tauri_app.manage(core);
@@ -71,6 +74,7 @@ pub fn run() {
         .on_window_event(|window, event| {
             // Closing the only window quits the app; ask the UI first (FR-018a).
             if let WindowEvent::CloseRequested { api, .. } = event
+                && window.label() == "main"
                 && !window.state::<Quitting>().0.load(Ordering::SeqCst)
             {
                 api.prevent_close();
@@ -126,6 +130,15 @@ pub fn run() {
             commands::update::update_download,
             commands::update::update_install,
             commands::update::update_set_auto_check,
+            commands::usage::usage_state,
+            commands::usage::usage_refresh,
+            commands::usage::usage_set_enabled,
+            commands::usage::usage_set_warnings,
+            commands::usage::usage_set_provider_enabled,
+            commands::usage::usage_set_provider_color,
+            commands::usage::usage_answer_consent,
+            commands::usage::usage_open_settings,
+            commands::usage::usage_providers_folder,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Sonata");
@@ -174,6 +187,20 @@ fn spawn_summary_monitor(core: Arc<App>) {
             }
         })
         .expect("spawn summary monitor");
+}
+
+/// Runs due usage readings (feature 006) on its own thread, so slow agent commands never
+/// hold up terminals or the UI (SC-004).
+fn spawn_usage_loop(core: Arc<App>) {
+    std::thread::Builder::new()
+        .name("sonata-usage".into())
+        .spawn(move || {
+            loop {
+                core.usage_tick();
+                std::thread::sleep(Duration::from_secs(15));
+            }
+        })
+        .expect("spawn usage loop");
 }
 
 /// Marks the launch as healthy once it outlives the early-crash window (FR-027).

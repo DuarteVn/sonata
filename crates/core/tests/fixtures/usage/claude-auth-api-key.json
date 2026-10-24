@@ -1,0 +1,8 @@
+{
+  "loggedIn": true,
+  "authMethod": "api_key",
+  "apiProvider": "firstParty",
+  "email": null,
+  "orgName": null,
+  "subscriptionType": null
+}

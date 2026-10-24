@@ -38,6 +38,10 @@ between them live side by side, organized into as many workspaces as you need.
   card with the last image otherwise. Browsers in the same workspace share logins. Linked agents
   drive them with `sonata browser open|read|click|fill|press|screenshot|back|forward|reload`
   (and `eval` for the Orchestrator).
+- A usage meter at the top right of the canvas shows how much of each agent account's plan
+  limits is used (short window and weekly, with reset times), warns once at 80% and at 100% of
+  a window with a macOS notification, and has a Settings window (`Cmd+,`) to control it. See
+  [Usage meter](#usage-meter).
 - Everything is saved as readable files in `~/.sonata/`, with crash-safe writes, autosave, and
   terminal history restored after a restart.
 
@@ -103,11 +107,39 @@ turn it off per terminal (terminal menu → Save history) for sessions that prin
 - Waiting loops (A waits on B while B asks A) are refused; asks time out after 10 minutes by
   default (`--timeout`, up to 60 minutes) and are never sent twice.
 
+## Usage meter
+
+The Usage button (top right of the canvas) shows the highest share used across your agent
+accounts; click it for the panel. Settings → Usage (`Cmd+,`) has a master switch, the warning
+switch, and one row per agent with its color, command path, status, switch, and refresh.
+
+Where the numbers come from. Sonata never reads your logins: each agent's own command uses
+its login to answer.
+
+- **Claude Code**: `claude auth status --json` (plan and account), then one tiny print-mode
+  request on Haiku (about 600 tokens) whose `stream-json` output reports the 5-hour and weekly
+  limits. It runs every 5 minutes while usage reading is on, when you open the panel and the
+  value is older than a minute, and when you press refresh. Accounts that pay per use (API key,
+  Bedrock, Vertex) have no plan limits and are not probed.
+- **Codex**: `codex app-server`, asked for its rate limits (no model request), or, with older
+  versions, the last limits Codex recorded in its newest session file.
+- **Other agents**: add a definition file to `~/.sonata/usage-providers/` (Settings → Usage →
+  Show folder). The `README.md` in that folder explains the format and has a prompt you can give
+  an agent to write one.
+
+Sonata asks before it first runs an agent's usage command and shows the exact command; it asks
+again when a custom command changes. Custom commands run without a shell, stop after 10
+seconds, and run inside a macOS sandbox that blocks the keychain, the Claude Code and Codex
+login files, and Sonata's data folder. The last readings are kept in `usage-cache.json`
+without credentials or emails. To test it, follow `specs/006-agent-usage/quickstart.md`.
+
 ## Your data
 
 ```text
 ~/.sonata/
 ├── app-state.json, preferences.json, roles.json
+├── usage-cache.json                    last usage readings (no credentials)
+├── usage-providers/                    custom usage provider definitions + README.md
 ├── logs/sonata.log.<date>              kept 7 days, never contains terminal output
 └── workspaces/<id>/
     ├── workspace.json                  layout: nodes, camera, settings

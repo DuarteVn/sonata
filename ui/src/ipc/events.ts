@@ -8,6 +8,9 @@ import type {
   PreviewEvent,
   TerminalStateEvent,
   UpdateState,
+  UsageState,
+  UsageWarning,
+  ConsentRequest,
   WorkspaceSummary,
 } from "./types";
 
@@ -27,6 +30,9 @@ export type EventMap = {
   "workspace://nodes-changed": NodesChangedEvent;
   "update://state": UpdateState;
   "app://check-updates": null;
+  "usage://state": UsageState;
+  "usage://warning": UsageWarning;
+  "usage://consent": ConsentRequest;
 };
 
 export function onEvent<K extends keyof EventMap>(

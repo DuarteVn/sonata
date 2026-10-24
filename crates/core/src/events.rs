@@ -88,6 +88,9 @@ pub enum CoreEvent {
     Notify(NotifyEvent),
     NodesChanged(NodesChangedEvent),
     UpdateState(UpdateState),
+    UsageState(crate::usage::service::UsageState),
+    UsageWarning(crate::usage::service::UsageWarning),
+    UsageConsent(crate::usage::service::ConsentRequest),
 }
 
 impl CoreEvent {
@@ -103,6 +106,9 @@ impl CoreEvent {
             Self::Notify(_) => "messaging://notify",
             Self::NodesChanged(_) => "workspace://nodes-changed",
             Self::UpdateState(_) => "update://state",
+            Self::UsageState(_) => "usage://state",
+            Self::UsageWarning(_) => "usage://warning",
+            Self::UsageConsent(_) => "usage://consent",
         }
     }
 
@@ -118,6 +124,9 @@ impl CoreEvent {
             Self::Notify(e) => serde_json::to_value(e),
             Self::NodesChanged(e) => serde_json::to_value(e),
             Self::UpdateState(s) => serde_json::to_value(s),
+            Self::UsageState(s) => serde_json::to_value(s),
+            Self::UsageWarning(w) => serde_json::to_value(w),
+            Self::UsageConsent(c) => serde_json::to_value(c),
         };
         v.unwrap_or(Value::Null)
     }

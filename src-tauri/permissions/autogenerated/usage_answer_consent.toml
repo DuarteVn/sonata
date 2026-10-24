@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-usage-answer-consent"
+description = "Enables the usage_answer_consent command without any pre-configured scope."
+commands.allow = ["usage_answer_consent"]
+
+[[permission]]
+identifier = "deny-usage-answer-consent"
+description = "Denies the usage_answer_consent command without any pre-configured scope."
+commands.deny = ["usage_answer_consent"]
