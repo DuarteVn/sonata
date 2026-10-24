@@ -5,7 +5,7 @@ use std::sync::Arc;
 use sonata_core::usage::schedule::RefreshReason;
 use sonata_core::usage::service::UsageState;
 use sonata_core::{App, AppError};
-use tauri::State;
+use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub fn usage_state(app: State<'_, Arc<App>>) -> UsageState {
@@ -60,4 +60,23 @@ pub fn usage_answer_consent(
     command: Vec<String>,
 ) -> Result<UsageState, AppError> {
     app.usage_answer_consent(&provider_id, allow, command)
+}
+
+#[tauri::command]
+pub fn usage_open_settings(handle: AppHandle) -> Result<(), AppError> {
+    crate::settings::open(&handle).map_err(|e| AppError::internal(e.to_string()))
+}
+
+#[derive(serde::Serialize)]
+pub struct Folder {
+    path: String,
+}
+
+/// The custom providers folder, created (with its guide) when missing.
+#[tauri::command]
+pub fn usage_providers_folder(app: State<'_, Arc<App>>) -> Result<Folder, AppError> {
+    let path = app.usage_providers_folder()?;
+    Ok(Folder {
+        path: path.display().to_string(),
+    })
 }

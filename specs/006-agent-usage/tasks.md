@@ -130,17 +130,17 @@ agent off stops only that agent.
 
 ### Tests
 
-- [ ] T046 [P] [US4] Write failing tests in `crates/core/tests/usage_settings.rs`: master off → `usage_tick` runs no reader and `summary.state = off` (fake reader counts calls); provider off → skipped and omitted from panel providers; `notFound` provider switch has no effect on reads until detection finds it (US4-3); color change validated (`#rrggbb`) and reflected in state; "Refresh all" runs every readable provider once
-- [ ] T047 [P] [US4] Write failing vitest `ui/tests/usageSettings.test.tsx`: master switch, warnings switch, a row per provider with name, "Built-in"/"Custom" tag, color input, path or "Command not found", status ("Read 3 min ago", "Not logged in", error), switch, refresh; "Refresh all" calls `usage_refresh` without `providerId`
+- [X] T046 [P] [US4] Write failing tests in `crates/core/tests/usage_settings.rs`: master off → `usage_tick` runs no reader and `summary.state = off` (fake reader counts calls); provider off → skipped and omitted from panel providers; `notFound` provider switch has no effect on reads until detection finds it (US4-3); color change validated (`#rrggbb`) and reflected in state; "Refresh all" runs every readable provider once
+- [X] T047 [P] [US4] Write failing vitest `ui/tests/usageSettings.test.tsx`: master switch, warnings switch, a row per provider with name, "Built-in"/"Custom" tag, color input, path or "Command not found", status ("Read 3 min ago", "Not logged in", error), switch, refresh; "Refresh all" calls `usage_refresh` without `providerId`
 
 ### Implementation
 
-- [ ] T048 [US4] Make T046 pass in `crates/core/src/usage/service.rs` (re-detect commands on "Refresh all" and on a `notFound` read)
-- [ ] T049 [US4] Add commands `usage_set_provider_enabled`, `usage_set_provider_color`, `usage_open_settings` to `src-tauri/src/commands/usage.rs`, `src-tauri/build.rs`, capabilities, and `ui/src/ipc/commands.ts`
-- [ ] T050 [US4] Add menu item "Settings…" with accelerator `Cmd+,` to the app menu in `src-tauri/src/menu.rs`; handler opens or focuses a `WebviewWindow` with label `settings` (`index.html?view=settings`, 640×520, resizable) in `src-tauri/src/lib.rs`
-- [ ] T051 [US4] Create `src-tauri/capabilities/settings.json` (window `settings`: `core:default`, every `allow-usage-*`, `allow-app-reveal-path`)
-- [ ] T052 [US4] Route `?view=settings` in `ui/src/main.tsx` to `ui/src/settings/SettingsApp.tsx` (left section list with only "Usage", right content); create `ui/src/settings/UsageSettings.tsx`; the consent dialog also mounts here when this window is focused; make T047 pass
-- [ ] T053 [US4] Panel footer link "Usage settings…" in `ui/src/usage/UsagePanel.tsx` calls `usage_open_settings`
+- [X] T048 [US4] Make T046 pass in `crates/core/src/usage/service.rs` (re-detect commands on "Refresh all" and on a `notFound` read)
+- [X] T049 [US4] Add commands `usage_set_provider_enabled`, `usage_set_provider_color`, `usage_open_settings` to `src-tauri/src/commands/usage.rs`, `src-tauri/build.rs`, capabilities, and `ui/src/ipc/commands.ts`
+- [X] T050 [US4] Add menu item "Settings…" with accelerator `Cmd+,` to the app menu in `src-tauri/src/menu.rs`; handler opens or focuses a `WebviewWindow` with label `settings` (`index.html?view=settings`, 640×520, resizable) in `src-tauri/src/lib.rs`
+- [X] T051 [US4] Create `src-tauri/capabilities/settings.json` (window `settings`: `core:default`, every `allow-usage-*`, `allow-app-reveal-path`)
+- [X] T052 [US4] Route `?view=settings` in `ui/src/main.tsx` to `ui/src/settings/SettingsApp.tsx` (left section list with only "Usage", right content); create `ui/src/settings/UsageSettings.tsx`; the consent dialog also mounts here when this window is focused; make T047 pass
+- [X] T053 [US4] Panel footer link "Usage settings…" in `ui/src/usage/UsagePanel.tsx` calls `usage_open_settings`
 
 **Checkpoint**: Settings controls every read; master switch off means zero probe processes.
 

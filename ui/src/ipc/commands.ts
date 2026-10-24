@@ -104,6 +104,7 @@ export const ipc = {
   usageAnswerConsent: (providerId: string, allow: boolean, command: string[]) =>
     invoke<UsageState>("usage_answer_consent", { providerId, allow, command }),
   usageOpenSettings: () => invoke<void>("usage_open_settings"),
+  usageProvidersFolder: () => invoke<{ path: string }>("usage_providers_folder"),
 };
 
 export type Ipc = typeof ipc;

@@ -460,6 +460,13 @@ impl App {
         Ok(state)
     }
 
+    /// The custom usage providers folder (feature 006), created when missing.
+    pub fn usage_providers_folder(&self) -> AppResult<PathBuf> {
+        let dir = self.data_root.usage_providers_dir();
+        paths::ensure_private_dir(&dir)?;
+        Ok(dir)
+    }
+
     fn usage_refresh_in_background(&self, reason: RefreshReason, provider: Option<String>) {
         let usage = self.usage.clone();
         std::thread::spawn(move || {

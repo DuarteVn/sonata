@@ -16,7 +16,12 @@ type UsageStore = {
 export const useUsage = create<UsageStore>((set) => ({
   state: null,
   consents: [],
-  set: (state) => set({ state }),
+  // An answer given in another window settles the request here too.
+  set: (state) =>
+    set((s) => ({
+      state,
+      consents: s.consents.filter((c) => state.providers.some((p) => p.id === c.providerId && p.consent === "unasked")),
+    })),
   load: async () => {
     try {
       set({ state: await ipc.usageState() });

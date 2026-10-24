@@ -4,6 +4,7 @@ mod browser;
 mod commands;
 mod events;
 mod menu;
+mod settings;
 
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -73,6 +74,7 @@ pub fn run() {
         .on_window_event(|window, event| {
             // Closing the only window quits the app; ask the UI first (FR-018a).
             if let WindowEvent::CloseRequested { api, .. } = event
+                && window.label() == "main"
                 && !window.state::<Quitting>().0.load(Ordering::SeqCst)
             {
                 api.prevent_close();
@@ -135,6 +137,8 @@ pub fn run() {
             commands::usage::usage_set_provider_enabled,
             commands::usage::usage_set_provider_color,
             commands::usage::usage_answer_consent,
+            commands::usage::usage_open_settings,
+            commands::usage::usage_providers_folder,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Sonata");

@@ -56,6 +56,8 @@ const COMMANDS: &[&str] = &[
     "usage_set_provider_enabled",
     "usage_set_provider_color",
     "usage_answer_consent",
+    "usage_open_settings",
+    "usage_providers_folder",
 ];
 
 fn main() {

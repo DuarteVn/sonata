@@ -63,7 +63,8 @@
     "allow-usage-set-warnings",
     "allow-usage-set-provider-enabled",
     "allow-usage-set-provider-color",
-    "allow-usage-answer-consent"
+    "allow-usage-answer-consent",
+    "allow-usage-open-settings"
   ],
   "webviews": [
     "main"
