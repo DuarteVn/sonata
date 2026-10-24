@@ -61,3 +61,11 @@ sh scripts/check.sh
 ## Scenario E — Not a repository
 
 Create a workspace on an empty folder. Expect the lane checkbox disabled with the reason.
+
+## Results (2026-10-23)
+
+- Scenario A: passed in the real app (`npm run tauri dev` with a throwaway `SONATA_HOME` and a
+  separate identifier, `-- --config '{"identifier":"dev.sonata.app.lanetest"}'`, because the
+  installed Sonata was running and the single-instance plugin hands over to it otherwise).
+- Scenarios B–E: covered by the automated tests (`lanes_land`, `lanes_remove`, `lanes_cli`,
+  `lanes_create`, `laneDialog`, `laneBadge`); not yet clicked through in the real app.
