@@ -108,7 +108,7 @@ see only their own change (quickstart A).
 
 ## Phase 8: Polish
 
-- [ ] T052 [P] Add a Lanes section to README.md (how to create, land, remove; where checkouts live; that only git-tracked work moves; manual cleanup of old hand-made worktrees)
+- [x] T052 [P] Add a Lanes section to README.md (how to create, land, remove; where checkouts live; that only git-tracked work moves; manual cleanup of old hand-made worktrees)
 - [ ] T053 Run quickstart scenarios A–E with `SONATA_HOME="$(mktemp -d)/sonata" npm run tauri dev` and note results in specs/008-lanes/quickstart.md
 - [ ] T054 Run `sh scripts/check.sh` and fix every failure
 
