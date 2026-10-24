@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ConfirmDialog } from "../dialogs/ConfirmDialog";
+import { LaneDialog } from "../dialogs/LaneDialog";
 import { TerminalDialog } from "../dialogs/TerminalDialog";
 import { ipc } from "../ipc/commands";
 import { isAppError, isBrowser, isTerminal } from "../ipc/types";
@@ -38,6 +39,7 @@ export function Canvas() {
   const tool = useCanvas((s) => s.tool);
   const linkingFrom = useCanvas((s) => s.linkingFrom);
   const dialog = useCanvas((s) => s.terminalDialog);
+  const laneDialog = useCanvas((s) => s.laneDialog);
   const confirmClose = useCanvas((s) => s.confirmClose);
   const [viewport, setViewport] = useState<ScreenRect>({ left: 0, top: 0, width: 0, height: 0 });
   const [linkDrag, setLinkDrag] = useState<LinkDrag>(null);
@@ -300,6 +302,7 @@ export function Canvas() {
       <ToolBar onPlaceAtCenter={placeTerminalAtCenter} />
       {linkingFrom && <div className="linking-hint">Click another item to link it · Esc to cancel</div>}
       {dialog && <TerminalDialog mode={dialog} onClose={() => useCanvas.getState().openTerminalDialog(null)} />}
+      {laneDialog && <LaneDialog state={laneDialog} onClose={() => useCanvas.getState().openLaneDialog(null)} />}
       {closing && (
         <ConfirmDialog
           title="Close terminal?"

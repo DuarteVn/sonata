@@ -60,14 +60,14 @@ see only their own change (quickstart A).
 **Goal**: Confirmed land merges the lane into the base branch; conflicts change nothing.
 **Independent Test**: quickstart B.
 
-- [ ] T027 [P] [US2] Write tests for `preview(.., Land)`: commit count, changed files of the lane (untracked included), blockers for dirty lane, dirty main (tracked only; untracked main file is not a blocker), wrong branch checked out, merge in progress, missing branch, in crates/core/tests/lanes_land.rs
-- [ ] T028 [P] [US2] Write tests for `land`: merge commit with message `Merge lane <branch> into <base>` and two parents; zero commits → nothing to land; conflict → `LaneConflict` listing files, and a hash of every file in both checkouts plus `HEAD` is identical before and after; untracked file in main that the merge would overwrite → error and `HEAD` unchanged; two concurrent lands on one repo run one after the other, in crates/core/tests/lanes_land.rs
-- [ ] T029 [US2] Implement `preview` and `land` with the per-repository lock and `merge-tree` dry run (research R6, R10) in crates/core/src/lanes/ops.rs
-- [ ] T030 [P] [US2] Write tests for `App::lane_land`: `confirmed: false` → `ConfirmationRequired` and no change; success stops the terminal, removes the checkout through the guard, keeps the branch, sets `landedAt`; restarting a landed terminal clears `lane` and starts in the workspace folder, in crates/core/tests/lanes_land.rs
-- [ ] T031 [US2] Implement `lane_preview`, `lane_land`, and the landed restart rule in crates/core/src/app.rs
-- [ ] T032 [US2] Add `lane_preview` and `lane_land` commands in src-tauri/src/commands/lane.rs and their registrations; add wrappers in ui/src/ipc/commands.ts
-- [ ] T033 [P] [US2] Write tests for `LaneDialog` in land mode: shows branch, base, commit count; disables Land and lists blockers; shows the conflict file list on `LaneConflict`; Cancel calls nothing, in ui/tests/laneDialog.test.tsx
-- [ ] T034 [US2] Implement ui/src/dialogs/LaneDialog.tsx (land mode) and the "Land…" item in ui/src/nodes/TerminalMenu.tsx; show the landed mark in ui/src/nodes/TerminalNode.tsx
+- [x] T027 [P] [US2] Write tests for `preview(.., Land)`: commit count, changed files of the lane (untracked included), blockers for dirty lane, dirty main (tracked only; untracked main file is not a blocker), wrong branch checked out, merge in progress, missing branch, in crates/core/tests/lanes_land.rs
+- [x] T028 [P] [US2] Write tests for `land`: merge commit with message `Merge lane <branch> into <base>` and two parents; zero commits → nothing to land; conflict → `LaneConflict` listing files, and a hash of every file in both checkouts plus `HEAD` is identical before and after; untracked file in main that the merge would overwrite → error and `HEAD` unchanged; two concurrent lands on one repo run one after the other, in crates/core/tests/lanes_land.rs
+- [x] T029 [US2] Implement `preview` and `land` with the per-repository lock and `merge-tree` dry run (research R6, R10) in crates/core/src/lanes/ops.rs
+- [x] T030 [P] [US2] Write tests for `App::lane_land`: `confirmed: false` → `ConfirmationRequired` and no change; success stops the terminal, removes the checkout through the guard, keeps the branch, sets `landedAt`; restarting a landed terminal clears `lane` and starts in the workspace folder, in crates/core/tests/lanes_land.rs
+- [x] T031 [US2] Implement `lane_preview`, `lane_land`, and the landed restart rule in crates/core/src/app.rs
+- [x] T032 [US2] Add `lane_preview` and `lane_land` commands in src-tauri/src/commands/lane.rs and their registrations; add wrappers in ui/src/ipc/commands.ts
+- [x] T033 [P] [US2] Write tests for `LaneDialog` in land mode: shows branch, base, commit count; disables Land and lists blockers; shows the conflict file list on `LaneConflict`; Cancel calls nothing, in ui/tests/laneDialog.test.tsx
+- [x] T034 [US2] Implement ui/src/dialogs/LaneDialog.tsx (land mode) and the "Land…" item in ui/src/nodes/TerminalMenu.tsx; show the landed mark in ui/src/nodes/TerminalNode.tsx
 
 **Checkpoint**: US1 + US2 = MVP.
 

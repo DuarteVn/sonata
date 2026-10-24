@@ -59,6 +59,8 @@ const COMMANDS: &[&str] = &[
     "usage_open_settings",
     "usage_providers_folder",
     "lane_check",
+    "lane_preview",
+    "lane_land",
 ];
 
 fn main() {

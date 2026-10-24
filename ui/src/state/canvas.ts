@@ -5,6 +5,8 @@ import type {
   Camera,
   CanvasNode,
   Frame,
+  LaneAction,
+  LanePreview,
   Link,
   NoteStyle,
   NoteSync,
@@ -15,6 +17,13 @@ import type {
 
 export type Tool = "select" | "terminal" | "note" | "browser";
 export type Selection = { kind: "node" | "link"; id: string } | null;
+/** A land or remove confirmation (feature 008); `request` is set when an agent asked for it. */
+export type LaneDialogState = {
+  nodeId: string;
+  action: LaneAction;
+  request?: { requestId: string; requestedBy: string; preview: LanePreview; deleteBranch: boolean };
+};
+
 export type TerminalDialogMode = { kind: "create"; at?: { x: number; y: number } } | { kind: "edit"; nodeId: string };
 
 export type NoteState = { text: string; sync: NoteSync; conflictPath?: string; assetBase?: string; loaded: boolean };
@@ -46,6 +55,8 @@ type CanvasState = {
   cancelLinking: () => void;
   toggleRaw: (id: string) => void;
   openTerminalDialog: (mode: TerminalDialogMode | null) => void;
+  laneDialog: LaneDialogState | null;
+  openLaneDialog: (state: LaneDialogState | null) => void;
   replaceNode: (node: CanvasNode) => void;
   setNoteStyle: (id: string, style: NoteStyle) => Promise<void>;
   /** Terminal waiting for "close anyway?" confirmation. */
@@ -163,6 +174,7 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   rawNotes: new Set(),
   linkingFrom: null,
   terminalDialog: null,
+  laneDialog: null,
 
   group: [],
 
@@ -200,6 +212,7 @@ export const useCanvas = create<CanvasState>((set, get) => ({
       return { rawNotes: next };
     }),
   openTerminalDialog: (terminalDialog) => set({ terminalDialog }),
+  openLaneDialog: (laneDialog) => set({ laneDialog }),
   confirmClose: null,
   asks: {},
   browserStates: {},

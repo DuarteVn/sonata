@@ -102,6 +102,19 @@ export type Lane = {
 
 export type LaneAvailability = { available: boolean; reason?: string; baseBranch?: string };
 
+export type LaneAction = "land" | "remove";
+
+/** What a land or remove confirmation shows (contracts/ipc.md). */
+export type LanePreview = {
+  branch: string;
+  baseBranch: string;
+  commits: number;
+  changedFiles: string[];
+  changedTotal: number;
+  unmergedCommits: number;
+  blockers: string[];
+};
+
 export type NoteColor = "yellow" | "blue" | "green" | "pink" | "purple" | "gray";
 export type NoteStyle = { color: NoteColor; textSize: number };
 

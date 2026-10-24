@@ -65,7 +65,9 @@
     "allow-usage-set-provider-color",
     "allow-usage-answer-consent",
     "allow-usage-open-settings",
-    "allow-lane-check"
+    "allow-lane-check",
+    "allow-lane-preview",
+    "allow-lane-land"
   ],
   "webviews": [
     "main"

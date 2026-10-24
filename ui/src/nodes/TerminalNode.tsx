@@ -125,6 +125,11 @@ export function TerminalNode({ node }: Props) {
         ) : (
           <span className="node-name">{term.name}</span>
         )}
+        {term.lane?.landedAt && (
+          <span className="lane-landed" title={`${term.lane.branch} was landed into ${term.lane.baseBranch}`}>
+            landed into {term.lane.baseBranch}
+          </span>
+        )}
         {role && <span className="role-chip" title={term.role?.text}>{role}</span>}
         {!role && term.launchCommand && <span className="node-sub">{term.launchCommand}</span>}
         {exited && (

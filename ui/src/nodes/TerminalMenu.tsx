@@ -3,12 +3,15 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ipc } from "../ipc/commands";
 import { isAppError, type CanvasNode } from "../ipc/types";
+import { useCanvas } from "../state/canvas";
 import { useWorkspaces } from "../state/workspaces";
 
 // Per-terminal options: history saving (FR-015a). The menu is rendered in a portal on top of
 // everything: inside the scaled canvas it would sit under the live terminal layer.
 export function TerminalMenu({ node }: { node: CanvasNode }) {
   const initial = "terminal" in node.content ? node.content.terminal.saveHistory : true;
+  const lane = "terminal" in node.content ? node.content.terminal.lane : undefined;
+  const activeLane = lane && !lane.landedAt ? lane : undefined;
   const [open, setOpen] = useState(false);
   const [saveHistory, setSaveHistory] = useState(initial);
   const ref = useRef<HTMLDivElement>(null);
@@ -83,6 +86,22 @@ export function TerminalMenu({ node }: { node: CanvasNode }) {
             <span className="menu-check" aria-hidden />
             Clear saved history
           </button>
+          {activeLane && (
+            <>
+              <div className="menu-separator" role="separator" />
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  useCanvas.getState().openLaneDialog({ nodeId: node.id, action: "land" });
+                }}
+              >
+                <span className="menu-check" aria-hidden />
+                Land into {activeLane.baseBranch}…
+              </button>
+            </>
+          )}
         </div>,
           document.body,
         )}
