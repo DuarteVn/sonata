@@ -2,7 +2,7 @@
 //! identity was checked by the server; every target must be linked to it (FR-004).
 
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::json;
 use uuid::Uuid;
@@ -15,7 +15,7 @@ use super::{
 use crate::App;
 use crate::lanes::confirm::Answer;
 use crate::lanes::ops::Action;
-use crate::model::node::{BrowserContent, Node, NodeContent};
+use crate::model::node::{BrowserContent, DeviceContent, Node, NodeContent};
 use crate::terminal::manager::RunStatus;
 
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10 * 60);
@@ -62,6 +62,8 @@ pub fn handle(app: &App, req: &Request, progress: &mut dyn FnMut(&str)) -> Reply
         ["lane", "status", rest @ ..] => lane_status(&ctx, rest),
         ["lane", "land", rest @ ..] => lane_request(&ctx, Action::Land, rest, progress),
         ["lane", "remove", rest @ ..] => lane_request(&ctx, Action::Remove, rest, progress),
+        ["device", "list"] => device_list(&ctx),
+        ["device", rest @ ..] => device(&ctx, rest),
         ["notify", rest @ ..] if !rest.is_empty() || stdin.is_some() => {
             notify(&ctx, &stdin.unwrap_or_else(|| rest.join(" ")))
         }
@@ -134,6 +136,7 @@ fn display_name(ctx: &Ctx<'_>, n: &Node) -> String {
     match &n.content {
         NodeContent::Terminal(t) => t.name.clone(),
         NodeContent::Browser(b) => browser_title(b),
+        NodeContent::Device(d) => device_title(d),
         NodeContent::Note(_) => {
             note_title(&ctx.app.note_read(n.id).map(|v| v.text).unwrap_or_default())
         }
@@ -152,11 +155,28 @@ pub fn browser_title(b: &BrowserContent) -> String {
         .unwrap_or_else(fallback)
 }
 
+/// A device is named by its display name, else its device id.
+pub fn device_title(d: &DeviceContent) -> String {
+    d.name
+        .as_deref()
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+        .unwrap_or(if d.device_id.is_empty() {
+            "device"
+        } else {
+            &d.device_id
+        })
+        .chars()
+        .take(60)
+        .collect()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     Terminal,
     Note,
     Browser,
+    Device,
 }
 
 fn kind_of(n: &Node) -> Kind {
@@ -164,6 +184,7 @@ fn kind_of(n: &Node) -> Kind {
         NodeContent::Terminal(_) => Kind::Terminal,
         NodeContent::Note(_) => Kind::Note,
         NodeContent::Browser(_) => Kind::Browser,
+        NodeContent::Device(_) => Kind::Device,
     }
 }
 
@@ -172,6 +193,7 @@ fn item_id(n: &Node) -> Option<String> {
     match kind_of(n) {
         Kind::Note => Some(short_id(n.id)),
         Kind::Browser => Some(crate::browser::short_id(n.id)),
+        Kind::Device => Some(crate::device::short_id(n.id)),
         Kind::Terminal => None,
     }
 }
@@ -190,6 +212,7 @@ fn resolve(ctx: &Ctx<'_>, name: &str, kind: Kind) -> Result<Node, Reply> {
         Kind::Terminal => "terminal",
         Kind::Note => "note",
         Kind::Browser => "browser",
+        Kind::Device => "device",
     };
     match matches.len() {
         1 => Ok(matches.into_iter().next().expect("one")),
@@ -293,6 +316,13 @@ fn list(ctx: &Ctx<'_>) -> Reply {
                         data.push(
                             json!({"kind": "browser", "name": title, "id": id, "url": b.url}),
                         );
+                    } else if let Some(d) = n.device() {
+                        let (platform, state) = device_summary(ctx, n.id, d);
+                        text.push_str(&format!(
+                            "  device    {:<16} ({id})  {platform}  {state}\n",
+                            title
+                        ));
+                        data.push(json!({"kind": "device", "name": title, "id": id, "platform": platform, "state": state}));
                     } else {
                         text.push_str(&format!("  note      {:<16} ({id})\n", title));
                         data.push(json!({"kind": "note", "name": title, "id": id}));
@@ -1097,6 +1127,277 @@ fn browser(ctx: &Ctx<'_>, rest: &[&str]) -> Reply {
     };
     ctx.app.end_browser_control(marker);
     reply
+}
+
+fn device_summary(ctx: &Ctx<'_>, id: Uuid, d: &DeviceContent) -> (&'static str, &'static str) {
+    let platform = match d.platform {
+        crate::model::node::Platform::Android => "android",
+        crate::model::node::Platform::Ios => "ios",
+    };
+    (platform, ctx.app.device_state(id).state.label())
+}
+
+/// `sonata device list`: linked devices with platform and state (US3 AS1).
+fn device_list(ctx: &Ctx<'_>) -> Reply {
+    let mut text = String::new();
+    let mut data = Vec::new();
+    for n in linked(ctx) {
+        let Some(d) = n.device() else { continue };
+        let (platform, state) = device_summary(ctx, n.id, d);
+        let id = crate::device::short_id(n.id);
+        let name = device_title(d);
+        text.push_str(&format!("{name:<16} ({id})  {platform}  {state}\n"));
+        data.push(json!({"name": name, "id": id, "platform": platform, "state": state}));
+    }
+    if data.is_empty() {
+        return Reply::ok("No linked devices. Ask the user to link you to a device node.");
+    }
+    Reply::ok(text.trim_end()).with_data(json!(data))
+}
+
+/// `100ms`, `2s`, `3m`.
+fn parse_millis(s: &str) -> Option<Duration> {
+    match s.strip_suffix("ms") {
+        Some(ms) => ms.parse().ok().map(Duration::from_millis),
+        None => parse_duration(s),
+    }
+}
+
+fn device(ctx: &Ctx<'_>, rest: &[&str]) -> Reply {
+    use crate::device::control::{self, Direction, Target};
+    let usage = "Usage: sonata device <list|boot|stop|read|tap|swipe|type|key|launch|apps|install|screenshot> <device> …";
+    let (sub, name, args) = match rest {
+        [sub, name, args @ ..] => (*sub, *name, args),
+        _ => return Reply::err(EXIT_USAGE, usage),
+    };
+    let mut timeout = None;
+    let mut duration = None;
+    let mut out = None;
+    let mut into = None;
+    let mut positional: Vec<&str> = Vec::new();
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match *a {
+            "--timeout" => match it.next().and_then(|v| parse_duration(v)) {
+                Some(d) if d >= Duration::from_secs(1) && d <= Duration::from_secs(600) => {
+                    timeout = Some(d)
+                }
+                _ => return Reply::err(EXIT_USAGE, "--timeout takes 1s to 10m."),
+            },
+            "--duration" => match it.next().and_then(|v| parse_millis(v)) {
+                Some(d) if d >= Duration::from_millis(16) && d <= Duration::from_secs(10) => {
+                    duration = Some(d)
+                }
+                _ => return Reply::err(EXIT_USAGE, "--duration takes 16ms to 10s."),
+            },
+            "--into" => match it.next().and_then(|v| v.parse::<usize>().ok()) {
+                Some(n) => into = Some(n),
+                None => return Reply::err(EXIT_USAGE, "--into takes an element number."),
+            },
+            "--out" => out = it.next().copied(),
+            other => positional.push(other),
+        }
+    }
+    let node = match resolve(ctx, name, Kind::Device) {
+        Ok(n) => n,
+        Err(r) => return r,
+    };
+    let app = ctx.app;
+    let fail = |e: crate::AppError| Reply::err(EXIT_ERROR, e.message);
+    let path_arg = |p: &str| {
+        let p = PathBuf::from(p);
+        if p.is_absolute() {
+            p
+        } else {
+            PathBuf::from(&ctx.cwd).join(p)
+        }
+    };
+    let marker = app.mark_browser_control(ctx.me, node.id);
+    let reply = (|| {
+        match (sub, positional.as_slice()) {
+            ("boot", []) => {
+                return match app
+                    .device_boot_and_wait(node.id, timeout.unwrap_or(crate::device::BOOT_TIMEOUT))
+                {
+                    Ok(()) => Reply::ok(format!(
+                        "{} is ready.",
+                        device_title(node.device().expect("device"))
+                    )),
+                    Err(e) => fail(e),
+                };
+            }
+            ("stop", []) => {
+                return match app.device_stop(node.id) {
+                    Ok(()) => Reply::ok("Stopped."),
+                    Err(e) => fail(e),
+                };
+            }
+            ("screenshot", []) => {
+                let path = out.map(path_arg);
+                return match app.device_screenshot(node.id, path.as_deref()) {
+                    Ok(p) => Reply::ok(p.display().to_string()).with_data(json!({"path": p})),
+                    Err(e) => fail(e),
+                };
+            }
+            _ => {}
+        }
+        // Everything else needs a running device and validated arguments.
+        let parsed: Result<DeviceAction, &str> = match (sub, positional.as_slice()) {
+            ("read", []) => Ok(DeviceAction::Read),
+            ("apps", []) => Ok(DeviceAction::Apps),
+            ("tap", [n]) => n
+                .parse()
+                .map(|n| DeviceAction::Tap(Target::Element(n)))
+                .map_err(|_| usage),
+            ("tap", [x, y]) => match (x.parse(), y.parse()) {
+                (Ok(x), Ok(y)) => Ok(DeviceAction::Tap(Target::Point(x, y))),
+                _ => Err("Usage: sonata device tap <device> <number | x y>"),
+            },
+            ("tap", _) => Err("Usage: sonata device tap <device> <number | x y>"),
+            ("swipe", [dir]) => Direction::parse(dir)
+                .map(DeviceAction::SwipeDir)
+                .ok_or("Swipe up, down, left, right, or x1 y1 x2 y2."),
+            ("swipe", [x1, y1, x2, y2]) => match (x1.parse(), y1.parse(), x2.parse(), y2.parse()) {
+                (Ok(a), Ok(b), Ok(c), Ok(d)) => Ok(DeviceAction::Swipe((a, b), (c, d))),
+                _ => Err("Swipe up, down, left, right, or x1 y1 x2 y2."),
+            },
+            ("swipe", _) => Err("Swipe up, down, left, right, or x1 y1 x2 y2."),
+            ("type", text) if !text.is_empty() => Ok(DeviceAction::Type(text.join(" "))),
+            ("key", [k]) if crate::device::Key::parse(k).is_some() => {
+                Ok(DeviceAction::Key(k.to_string()))
+            }
+            ("key", _) => Err("Keys: back, home, recents, enter, delete."),
+            ("launch", [id]) => Ok(DeviceAction::Launch(id.to_string())),
+            ("install", [file]) => {
+                let path = path_arg(file);
+                let platform = node.device().map(|d| d.platform);
+                match install_file(&path, platform) {
+                    Ok(()) => Ok(DeviceAction::Install(path)),
+                    Err(e) => return Reply::err(EXIT_USAGE, e),
+                }
+            }
+            _ => Err(usage),
+        };
+        let action = match parsed {
+            Ok(a) => a,
+            Err(e) => return Reply::err(EXIT_USAGE, e),
+        };
+        let d = match app.device_driver(node.id) {
+            Ok(d) => d,
+            Err(e) => return fail(e),
+        };
+        let devices = app.devices();
+        let since = Instant::now();
+        let changes = |r: Result<(), String>, msg: &str| match r {
+            Ok(()) => {
+                if control::settle(d.as_ref(), since) {
+                    Reply::ok(msg)
+                } else {
+                    Reply::ok(format!("{msg} The screen was still changing after 5s."))
+                }
+            }
+            Err(e) => Reply::err(EXIT_ERROR, e),
+        };
+        match action {
+            DeviceAction::Read => match control::read(d.as_ref()) {
+                Ok((text, map)) => {
+                    devices.set_element_map(node.id, map);
+                    Reply::ok(text)
+                }
+                Err(e) => Reply::err(EXIT_ERROR, e),
+            },
+            DeviceAction::Apps => match d.apps() {
+                Ok(apps) if apps.is_empty() => Reply::ok("No launchable apps."),
+                Ok(apps) => Reply::ok(apps.join("\n")).with_data(json!(apps)),
+                Err(e) => Reply::err(EXIT_ERROR, e),
+            },
+            DeviceAction::Tap(t) => {
+                let map = devices.element_map(node.id);
+                match control::point(d.as_ref(), map.as_ref(), t) {
+                    Ok(p) => changes(control::tap(d.as_ref(), p), "Tapped."),
+                    Err(e) => Reply::err(EXIT_ERROR, e),
+                }
+            }
+            DeviceAction::SwipeDir(dir) => match d.screen_size() {
+                Ok(size) => {
+                    let (from, to) = control::direction_points(size, dir);
+                    changes(
+                        control::swipe(
+                            d.as_ref(),
+                            from,
+                            to,
+                            duration.unwrap_or(control::DEFAULT_SWIPE),
+                        ),
+                        "Swiped.",
+                    )
+                }
+                Err(e) => Reply::err(EXIT_ERROR, e),
+            },
+            DeviceAction::Swipe(from, to) => changes(
+                control::swipe(
+                    d.as_ref(),
+                    from,
+                    to,
+                    duration.unwrap_or(control::DEFAULT_SWIPE),
+                ),
+                "Swiped.",
+            ),
+            DeviceAction::Type(text) => {
+                if let Some(n) = into {
+                    let map = devices.element_map(node.id);
+                    let tapped = control::point(d.as_ref(), map.as_ref(), Target::Element(n))
+                        .and_then(|p| control::tap(d.as_ref(), p));
+                    if let Err(e) = tapped {
+                        return Reply::err(EXIT_ERROR, e);
+                    }
+                    control::settle(d.as_ref(), Instant::now());
+                }
+                changes(d.text(&text), "Typed.")
+            }
+            DeviceAction::Key(k) => changes(control::key(d.as_ref(), &k), "Pressed."),
+            DeviceAction::Launch(id) => changes(d.launch(&id), "Launched."),
+            DeviceAction::Install(path) => match d.install(&path) {
+                Ok(id) => Reply::ok(id.clone()).with_data(json!({"app": id})),
+                Err(e) => Reply::err(EXIT_ERROR, e),
+            },
+        }
+    })();
+    app.end_browser_control(marker);
+    reply
+}
+
+enum DeviceAction {
+    Read,
+    Apps,
+    Tap(crate::device::control::Target),
+    SwipeDir(crate::device::control::Direction),
+    Swipe((i32, i32), (i32, i32)),
+    Type(String),
+    Key(String),
+    Launch(String),
+    Install(PathBuf),
+}
+
+/// An app package Sonata may install: a `.apk` file (Android) or a `.app` folder (iOS).
+fn install_file(
+    path: &std::path::Path,
+    platform: Option<crate::model::node::Platform>,
+) -> Result<(), String> {
+    use crate::model::node::Platform;
+    if crate::paths::reject_parent_components(path).is_err() {
+        return Err("Give the package path without \"..\".".into());
+    }
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or_default();
+    match platform {
+        Some(Platform::Ios) if ext == "app" && path.is_dir() => Ok(()),
+        Some(Platform::Ios) => Err(format!("{} is not an .app folder.", path.display())),
+        _ if ext == "apk" && path.is_file() => Ok(()),
+        _ if !path.exists() => Err(format!("{} does not exist.", path.display())),
+        _ => Err(format!("{} is not an .apk file.", path.display())),
+    }
 }
 
 fn note_new(ctx: &Ctx<'_>, rest: &[&str], stdin: Option<String>) -> Reply {

@@ -2,6 +2,7 @@
 
 pub mod app;
 pub mod browser;
+pub mod device;
 pub mod lane;
 pub mod link;
 pub mod node;

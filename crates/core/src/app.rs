@@ -1,7 +1,7 @@
 //! The facade the desktop shell talks to. Owns workspaces, preferences, and the event sink.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use std::time::Instant;
 
@@ -45,6 +45,9 @@ pub struct BusyWorkspace {
     pub workspace_id: Uuid,
     pub workspace_name: String,
     pub count: usize,
+    /// Devices Sonata started that quitting stops (feature 007, FR-008).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub devices: Vec<String>,
 }
 
 /// Startup options. Tests override the shell; the app uses the user's login shell.
@@ -285,6 +288,7 @@ pub struct App {
     socket_path: Option<PathBuf>,
     data_root: DataRoot,
     browser_host: Mutex<Option<Arc<dyn crate::browser::BrowserHost>>>,
+    devices: crate::device::DeviceManager,
     /// Update schedule and banner state (feature 005).
     updates: Mutex<(UpdateSchedule, UpdateState)>,
     /// Usage meter (feature 006).
@@ -376,6 +380,7 @@ impl App {
             socket_path,
             data_root,
             browser_host: Mutex::new(None),
+            devices: crate::device::DeviceManager::default(),
             updates: Mutex::new((
                 UpdateSchedule::new(prefs.value.auto_update_check),
                 UpdateState::default(),
@@ -390,6 +395,23 @@ impl App {
             app.spawn_activity_loop();
             app.spawn_lane_status_loop();
             app.start_messaging();
+            let store = Store::new(app.data_root.clone());
+            let android = crate::device::emulator::system_launcher(move || {
+                store.load_preferences().value.android_sdk_path
+            });
+            let ios = crate::device::ios::IosLauncher::new(
+                Box::new(|| {
+                    crate::device::tools::developer_dir(&crate::device::tools::Env::current())
+                        .ok_or_else(|| "Xcode not found".to_string())
+                }),
+                Arc::new(crate::device::process::SystemProcesses),
+            );
+            app.devices
+                .set_launcher(Arc::new(crate::device::PlatformLauncher {
+                    android: Box::new(android),
+                    ios: Box::new(ios),
+                }));
+            app.spawn_device_loop();
         })
     }
 
@@ -808,6 +830,8 @@ impl App {
         if let Some(host) = self.browser_host() {
             host.close(node);
         }
+        self.devices.forget(node);
+        let _ = std::fs::remove_file(self.device_card_path(node));
         let _ = std::fs::remove_dir_all(self.run_dir(node));
         if is_note {
             self.note_store().delete(ws, node)?;
@@ -1400,16 +1424,23 @@ impl App {
 
     /// Workspaces with terminals running something other than an idle shell (FR-018a).
     pub fn quit_check(&self) -> Vec<BusyWorkspace> {
+        let running = self.devices.running();
         let m = self.workspaces();
         m.summaries()
             .into_iter()
             .filter_map(|s| {
                 let ws = m.workspace(s.id)?;
                 let count = self.busy_count(ws);
-                (count > 0).then_some(BusyWorkspace {
+                let devices: Vec<String> = running
+                    .iter()
+                    .filter(|d| d.started_by_sonata && ws.node(d.node_id).is_some())
+                    .map(|d| d.name.clone())
+                    .collect();
+                (count > 0 || !devices.is_empty()).then_some(BusyWorkspace {
                     workspace_id: s.id,
                     workspace_name: s.name,
                     count,
+                    devices,
                 })
             })
             .collect()
@@ -1418,6 +1449,7 @@ impl App {
     /// Saves everything, marks a clean shutdown, and stops all terminals.
     pub fn quit(&self) {
         self.broker.shutdown(self);
+        self.devices.stop_all();
         self.server.lock().unwrap_or_else(|e| e.into_inner()).take();
         let _ = std::fs::remove_dir_all(self.data_root.path().join("run").join("sessions"));
         let _ = std::fs::remove_dir_all(self.data_root.path().join("run").join("shots"));
@@ -1489,6 +1521,7 @@ impl App {
         Some(match &n.content {
             NodeContent::Terminal(t) => t.name.clone(),
             NodeContent::Browser(b) => crate::messaging::commands::browser_title(b),
+            NodeContent::Device(d) => crate::messaging::commands::device_title(d),
             NodeContent::Note(_) => crate::messaging::commands::note_title(
                 &self.note_read(id).map(|v| v.text).unwrap_or_default(),
             ),
@@ -1934,6 +1967,296 @@ impl App {
             }
             Ok(())
         })
+    }
+
+    // ---- Device nodes (feature 007) ----
+
+    pub fn create_device(&self, ws_id: Uuid, frame: Frame) -> AppResult<Node> {
+        self.require_loaded(ws_id)?;
+        let now = Utc::now();
+        self.workspaces().update(ws_id, |ws| {
+            let mut node = Node {
+                id: Uuid::new_v4(),
+                frame,
+                z: ws.max_z() + 1,
+                created_at: now,
+                modified_at: now,
+                content: NodeContent::Device(crate::model::node::DeviceContent {
+                    platform: crate::model::node::Platform::Android,
+                    device_id: String::new(),
+                    name: None,
+                    os_version: None,
+                }),
+            };
+            node.frame = node.frame.clamped(node.min_size());
+            ws.nodes.push(node.clone());
+            Ok(node)
+        })
+    }
+
+    /// Binds a device node to a virtual device chosen in the picker. A device already bound to
+    /// another node is refused (spec edge case).
+    pub fn select_device(
+        &self,
+        node: Uuid,
+        platform: crate::model::node::Platform,
+        device_id: &str,
+        name: Option<&str>,
+        os_version: Option<&str>,
+    ) -> AppResult<Node> {
+        let ws = self.workspace_of_node(node)?;
+        let taken = {
+            let m = self.workspaces();
+            m.ids()
+                .into_iter()
+                .filter_map(|id| m.workspace(id))
+                .any(|w| {
+                    w.nodes.iter().any(|n| {
+                        n.id != node
+                            && n.device()
+                                .is_some_and(|d| d.platform == platform && d.device_id == device_id)
+                    })
+                })
+        };
+        if taken {
+            return Err(AppError::new(
+                ErrorCode::DeviceInUse,
+                "Another device node already uses this device.",
+            ));
+        }
+        let clean = |v: Option<&str>| v.map(str::trim).filter(|v| !v.is_empty()).map(String::from);
+        self.update_node(ws, node, |w, id| {
+            let n = w.node_mut(id).ok_or_else(|| AppError::node_not_found(id))?;
+            let d = n.device_mut().ok_or_else(|| AppError::node_not_found(id))?;
+            d.platform = platform;
+            d.device_id = device_id.to_string();
+            d.name = clean(name);
+            d.os_version = clean(os_version);
+            Ok(n.clone())
+        })
+    }
+
+    /// SDK, virtual devices, and Xcode as found now (FR-009, FR-010). Reads files only.
+    pub fn device_tools(&self) -> crate::device::tools::ToolReport {
+        let pref = Store::new(self.data_root.clone())
+            .load_preferences()
+            .value
+            .android_sdk_path;
+        Self::with_simulators(crate::device::tools::detect(
+            &crate::device::tools::Env::current(),
+            pref.as_deref(),
+        ))
+    }
+
+    /// Adds the iOS simulators when Xcode is present (research R11).
+    fn with_simulators(
+        mut report: crate::device::tools::ToolReport,
+    ) -> crate::device::tools::ToolReport {
+        if let Some(dev) = &report.ios.developer_dir {
+            report.ios.simulators = crate::device::ios::list_simulators(
+                Arc::new(crate::device::process::SystemProcesses),
+                dev,
+            );
+        }
+        report
+    }
+
+    /// "Choose SDK folder…": saved in preferences only when it holds the emulator and adb.
+    pub fn device_choose_sdk(&self, path: &Path) -> crate::device::tools::ToolReport {
+        let report = Self::with_simulators(crate::device::tools::detect(
+            &crate::device::tools::Env::current(),
+            Some(path),
+        ));
+        if report.android.sdk.as_deref() == Some(path) {
+            let store = Store::new(self.data_root.clone());
+            let mut prefs = store.load_preferences().value;
+            prefs.android_sdk_path = Some(path.to_path_buf());
+            if let Err(e) = store.save_preferences(&prefs) {
+                tracing::warn!(error = %e, "could not save the Android SDK folder");
+            }
+        }
+        report
+    }
+
+    /// Opens one of the official install pages in the default browser (FR-010). Only these fixed
+    /// addresses can be opened, never one sent by the page.
+    pub fn device_open_help(&self, topic: &str) -> AppResult<()> {
+        use crate::device::tools::{ANDROID_HELP_URL, AVD_HELP_URL, XCODE_HELP_URL};
+        let url = match topic {
+            "android" => ANDROID_HELP_URL,
+            "avd" => AVD_HELP_URL,
+            "xcode" => XCODE_HELP_URL,
+            _ => return Err(AppError::internal(format!("No help page named {topic}."))),
+        };
+        std::process::Command::new("/usr/bin/open")
+            .arg(url)
+            .spawn()?;
+        Ok(())
+    }
+
+    pub fn set_device_launcher(&self, launcher: Arc<dyn crate::device::DeviceLauncher>) {
+        self.devices.set_launcher(launcher);
+    }
+
+    fn spawn_device_loop(&self) {
+        let this = self.this.clone();
+        std::thread::Builder::new()
+            .name("sonata-devices".into())
+            .spawn(move || {
+                loop {
+                    std::thread::sleep(crate::device::TICK);
+                    let Some(app) = this.upgrade() else { break };
+                    for e in app.devices.tick() {
+                        app.emit(CoreEvent::DeviceState(e));
+                    }
+                }
+            })
+            .expect("spawn device thread");
+    }
+
+    fn device_target(&self, node: Uuid) -> AppResult<crate::device::Target> {
+        let ws = self.workspace_of_node(node)?;
+        let m = self.workspaces();
+        let d = m
+            .workspace(ws)
+            .and_then(|w| w.node(node))
+            .and_then(Node::device)
+            .ok_or_else(|| AppError::node_not_found(node))?;
+        if d.device_id.is_empty() {
+            return Err(AppError::new(
+                ErrorCode::DeviceNotRunning,
+                "Choose a device in the node first.",
+            ));
+        }
+        Ok(crate::device::Target {
+            platform: d.platform,
+            device_id: d.device_id.clone(),
+            name: crate::messaging::commands::device_title(d),
+        })
+    }
+
+    pub fn devices(&self) -> &crate::device::DeviceManager {
+        &self.devices
+    }
+
+    /// Boots and waits until the device is ready, failed, or `timeout` passed (US3 AS9).
+    pub fn device_boot_and_wait(&self, node: Uuid, timeout: std::time::Duration) -> AppResult<()> {
+        use crate::device::DeviceState;
+        self.device_boot(node)?;
+        let start = Instant::now();
+        loop {
+            match self.devices.state(node).state {
+                DeviceState::Ready => return Ok(()),
+                DeviceState::Error(m) => return Err(AppError::new(ErrorCode::DeviceNotRunning, m)),
+                DeviceState::Stopped | DeviceState::Off => {
+                    return Err(AppError::new(
+                        ErrorCode::DeviceNotRunning,
+                        "the device stopped while booting",
+                    ));
+                }
+                DeviceState::Booting if start.elapsed() >= timeout => {
+                    return Err(AppError::new(
+                        ErrorCode::DeviceNotRunning,
+                        format!("timed out after {}", crate::device::human(timeout)),
+                    ));
+                }
+                DeviceState::Booting => std::thread::sleep(crate::device::TICK),
+            }
+        }
+    }
+
+    pub fn device_state(&self, node: Uuid) -> crate::device::DeviceStateEvent {
+        self.devices.state(node)
+    }
+
+    /// Starts the node's device (or attaches to it); returns at once, readiness comes later.
+    pub fn device_boot(&self, node: Uuid) -> AppResult<()> {
+        let target = self.device_target(node)?;
+        let result = self.devices.boot(node, target);
+        match result {
+            Ok(Some(e)) => {
+                self.emit(CoreEvent::DeviceState(e));
+                Ok(())
+            }
+            Ok(None) => Ok(()),
+            Err(err) => {
+                self.emit(CoreEvent::DeviceState(self.devices.state(node)));
+                Err(err)
+            }
+        }
+    }
+
+    pub fn device_stop(&self, node: Uuid) -> AppResult<()> {
+        if let Some(e) = self.devices.stop(node) {
+            self.emit(CoreEvent::DeviceState(e));
+        }
+        Ok(())
+    }
+
+    pub fn device_driver(&self, node: Uuid) -> AppResult<Arc<dyn crate::device::DeviceDriver>> {
+        self.devices.driver(node)
+    }
+
+    /// Starts or resizes the node's live screen; frames go to `send` (research R2).
+    pub fn device_stream(
+        &self,
+        node: Uuid,
+        width: u32,
+        height: u32,
+        send: crate::device::live::FrameSink,
+    ) -> AppResult<()> {
+        self.devices.stream(node, width, height, send)
+    }
+
+    fn device_card_path(&self, node: Uuid) -> PathBuf {
+        self.data_root
+            .path()
+            .join("run")
+            .join("device")
+            .join(format!("{node}.png"))
+    }
+
+    pub fn device_frame_ack(&self, node: Uuid) {
+        self.devices.frame_ack(node);
+    }
+
+    /// Ends the live screen and writes the card image (0600); returns its path when there is one.
+    pub fn device_unstream(&self, node: Uuid) -> AppResult<Option<PathBuf>> {
+        let path = self.device_card_path(node);
+        if let Some(frame) = self.devices.unstream(node) {
+            paths::ensure_private_dir(path.parent().expect("parent"))?;
+            crate::device::live::write_png(&path, &frame)?;
+        }
+        Ok(path.is_file().then_some(path))
+    }
+
+    pub fn device_input(&self, node: Uuid, input: crate::device::live::LiveInput) -> AppResult<()> {
+        use crate::device::live::LiveInput;
+        let d = self.devices.driver(node)?;
+        let r = match input {
+            LiveInput::Touch { x, y, down } => d.touch(x, y, down),
+            LiveInput::Wheel { x, y, dx, dy } => d.wheel(x, y, dx, dy),
+            LiveInput::Text(t) => d.text(&t),
+            LiveInput::Key(k) => d.key(&LiveInput::key(&k)),
+        };
+        r.map_err(AppError::internal)
+    }
+
+    /// A PNG of the screen, readable only by the user, at `out` or in `run/shots` (FR-015).
+    pub fn device_screenshot(&self, node: Uuid, out: Option<&Path>) -> AppResult<PathBuf> {
+        let png = self
+            .devices
+            .driver(node)?
+            .screenshot_png()
+            .map_err(AppError::internal)?;
+        let path = out.map_or_else(|| self.screenshot_path(), Path::to_path_buf);
+        crate::persistence::atomic::write(&path, &png)?;
+        Ok(path)
+    }
+
+    /// Devices still running, for the quit confirmation (FR-008).
+    pub fn running_devices(&self) -> Vec<crate::device::RunningDevice> {
+        self.devices.running()
     }
 
     /// Where agent screenshots go when no `--out` is given (private, removed on quit).

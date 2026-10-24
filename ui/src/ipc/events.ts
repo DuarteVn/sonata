@@ -27,6 +27,7 @@ export type EventMap = {
   "app://toggle-sidebar": null;
   "messaging://ask": AskEvent;
   "browser://state": import("./types").BrowserState;
+  "device://state": import("./types").DeviceStateEvent;
   "messaging://notify": NotifyEvent;
   "workspace://nodes-changed": NodesChangedEvent;
   "update://state": UpdateState;

@@ -11,16 +11,30 @@ type Props = {
 
 export function QuitDialog({ busy, onQuit, onCancel, forUpdate = false }: Props) {
   const total = busy.reduce((n, b) => n + b.count, 0);
+  const devices = busy.reduce((n, b) => n + (b.devices?.length ?? 0), 0);
+  const verb = forUpdate ? "Restarting" : "Quitting";
   return (
     <Modal title={forUpdate ? "Restart to update?" : "Quit Sonata?"} onClose={onCancel}>
-      <p className="dialog-body">
-        {total === 1 ? "A program is" : `${total} programs are`} still running.{" "}
-        {forUpdate ? "Restarting" : "Quitting"} stops {total === 1 ? "it" : "them"}.
-      </p>
+      {total > 0 && (
+        <p className="dialog-body">
+          {total === 1 ? "A program is" : `${total} programs are`} still running. {verb} stops {total === 1 ? "it" : "them"}.
+        </p>
+      )}
+      {devices > 0 && (
+        <p className="dialog-body">
+          {devices === 1 ? "1 device is" : `${devices} devices are`} still running. {verb} stops {devices === 1 ? "it" : "them"}.
+        </p>
+      )}
       <ul className="quit-list">
         {busy.map((b) => (
           <li key={b.workspaceId}>
-            <strong>{b.workspaceName}</strong>: {b.count} {b.count === 1 ? "terminal" : "terminals"}
+            <strong>{b.workspaceName}</strong>:{" "}
+            {[
+              b.count > 0 ? `${b.count} ${b.count === 1 ? "terminal" : "terminals"}` : null,
+              b.devices?.length ? b.devices.join(", ") : null,
+            ]
+              .filter(Boolean)
+              .join("; ")}
           </li>
         ))}
       </ul>

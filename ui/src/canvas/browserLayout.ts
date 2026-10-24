@@ -1,35 +1,20 @@
-import { intersects, type ScreenRect } from "./viewport";
+import { MIN_LIVE_ZOOM, planLive } from "./liveLayout";
+import type { ScreenRect } from "./viewport";
 
 /** At most this many pages are live at once (004 FR-007). */
 export const MAX_LIVE_BROWSERS = 4;
-/** Below this zoom browser pages show cards (pages cannot scale with the canvas). */
-export const MIN_LIVE_ZOOM = 0.55;
+export { MIN_LIVE_ZOOM };
 
 type Input = {
-  /** Page areas in canvas-container coordinates. */
   pages: { id: string; rect: ScreenRect }[];
   viewport: ScreenRect;
   zoom: number;
   gesturing: boolean;
-  /** Interface elements (dialogs, menus, toolbars) in the same coordinates. */
   covers: ScreenRect[];
   selectedId: string | null;
 };
 
 /** Which browser pages are live and where; `rect: null` means "show the card". */
-export function planBrowsers({ pages, viewport, zoom, gesturing, covers, selectedId }: Input) {
-  const view = { left: 0, top: 0, width: viewport.width, height: viewport.height };
-  const inside = (r: ScreenRect) =>
-    r.left >= 0 && r.top >= 0 && r.left + r.width <= view.width && r.top + r.height <= view.height;
-  const eligible =
-    gesturing || zoom < MIN_LIVE_ZOOM
-      ? []
-      : pages.filter((p) => intersects(p.rect, view) && inside(p.rect) && !covers.some((c) => intersects(c, p.rect)));
-  const ranked = [...eligible].sort((a, b) => {
-    if (a.id === selectedId) return -1;
-    if (b.id === selectedId) return 1;
-    return b.rect.width * b.rect.height - a.rect.width * a.rect.height;
-  });
-  const live = new Set(ranked.slice(0, MAX_LIVE_BROWSERS).map((p) => p.id));
-  return pages.map((p) => ({ id: p.id, rect: live.has(p.id) ? p.rect : null }));
+export function planBrowsers({ pages, ...rest }: Input) {
+  return planLive({ items: pages, ...rest, limit: MAX_LIVE_BROWSERS });
 }

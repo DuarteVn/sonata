@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-device-frame-ack"
+description = "Enables the device_frame_ack command without any pre-configured scope."
+commands.allow = ["device_frame_ack"]
+
+[[permission]]
+identifier = "deny-device-frame-ack"
+description = "Denies the device_frame_ack command without any pre-configured scope."
+commands.deny = ["device_frame_ack"]

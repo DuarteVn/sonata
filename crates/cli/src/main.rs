@@ -28,6 +28,14 @@ Everyone:
   sonata lane status                           your lane: branch, changed files, ahead/behind
   sonata lane land [--timeout 5m]              ask the user to merge your lane into its base
   sonata lane remove [--delete-branch]         ask the user to remove your lane
+  sonata device list                           linked devices with platform and state
+  sonata device boot|stop|read|apps|screenshot <device> [--timeout 3m] [--out file.png]
+  sonata device tap <device> <number | x y>
+  sonata device swipe <device> <up|down|left|right | x1 y1 x2 y2> [--duration 300ms]
+  sonata device type <device> \"<text>\" [--into <number>]
+  sonata device key <device> <back|home|recents|enter|delete>
+  sonata device launch <device> <app id>
+  sonata device install <device> <file.apk | file.app>
 
 Orchestrator only:
   sonata recruit <claude|codex|opencode|gemini|shell|\"<command>\"> [--name N] [--role R | --role-text T] [--folder F | --lane]
@@ -38,7 +46,7 @@ Orchestrator only:
   sonata link <a> <b>
   sonata unlink <a> <b>
 
-Options: --timeout 10m (ask), --timeout 5m (lane land/remove), --json (any command).
+Options: --timeout 10m (ask), --timeout 5m (lane land/remove), --timeout 3m (device boot), --json (any command).
 Exit codes: 0 ok, 1 error, 2 usage, 3 not allowed, 4 not found, 5 timed out, 6 Sonata not reachable.";
 
 /// Prints the help lines for one command (or everything for unknown ones).

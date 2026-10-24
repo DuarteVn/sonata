@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 pub mod fake_bin;
+pub mod fake_device;
 
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

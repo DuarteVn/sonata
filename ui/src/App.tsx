@@ -71,6 +71,7 @@ export function App() {
       onEvent("terminal://state", (e) => useCanvas.getState().setTerminalState(e)),
       onEvent("messaging://ask", (e) => useCanvas.getState().setAsk(e)),
       onEvent("browser://state", (e) => useCanvas.getState().setBrowserState(e)),
+      onEvent("device://state", (e) => useCanvas.getState().setDeviceState(e)),
       onEvent("workspace://nodes-changed", (e) => useCanvas.getState().applyNodesChanged(e.workspaceId, e.nodes, e.links)),
       // `sonata notify` (003 FR-026): system notification; focusing Sonata soon after selects the terminal.
       onEvent("messaging://notify", async (e) => {

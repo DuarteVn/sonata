@@ -1,6 +1,8 @@
-import { open as openFilePicker } from "@tauri-apps/plugin-dialog";
+import { open as openFilePicker, save as saveFilePicker } from "@tauri-apps/plugin-dialog";
 import {
   AArrowDown,
+  Camera,
+  Square,
   AArrowUp,
   Bold,
   ExternalLink,
@@ -59,7 +61,12 @@ export const NOTE_COLORS: { id: NoteColor; swatch: string }[] = [
   { id: "gray", swatch: "#cfd2d8" },
 ];
 
-const SIZES = { terminal: { width: 232, height: 40 }, note: { width: 600, height: 40 }, browser: { width: 180, height: 40 } };
+const SIZES = {
+  terminal: { width: 232, height: 40 },
+  note: { width: 600, height: 40 },
+  browser: { width: 180, height: 40 },
+  device: { width: 180, height: 40 },
+};
 
 function BrowserActions({ node }: { node: CanvasNode }) {
   const addWarning = useWorkspaces((s) => s.addWarning);
@@ -76,6 +83,36 @@ function BrowserActions({ node }: { node: CanvasNode }) {
       </Btn>
       <span className="tb-sep" />
       <Btn label="Delete browser" onClick={() => void useCanvas.getState().removeNode(node.id, true).catch(report)}>
+        <Trash2 size={15} />
+      </Btn>
+    </>
+  );
+}
+
+// Device nodes (feature 007, FR-003): link, screenshot, stop, delete.
+function DeviceActions({ node }: { node: CanvasNode }) {
+  const addWarning = useWorkspaces((s) => s.addWarning);
+  const running = useCanvas((s) => ["booting", "ready"].includes(s.deviceStates[node.id]?.state.kind ?? "off"));
+  const report = (err: unknown) => addWarning(isAppError(err) ? err.message : String(err));
+  async function screenshot() {
+    const name = "device" in node.content ? node.content.device.name || node.content.device.deviceId : "device";
+    const out = await saveFilePicker({ defaultPath: `${name.replace(/[^\w.-]+/g, "-")}.png`, filters: [{ name: "PNG image", extensions: ["png"] }] });
+    if (typeof out === "string") await ipc.deviceScreenshot(node.id, out);
+  }
+  return (
+    <>
+      <LinkButton node={node} />
+      <span className="tb-sep" />
+      <Btn label="Save screenshot" onClick={() => void screenshot().catch(report)}>
+        <Camera size={15} />
+      </Btn>
+      {running && (
+        <Btn label="Stop device" onClick={() => void ipc.deviceStop(node.id).catch(report)}>
+          <Square size={15} />
+        </Btn>
+      )}
+      <span className="tb-sep" />
+      <Btn label="Delete device" onClick={() => void useCanvas.getState().removeNode(node.id, true).catch(report)}>
         <Trash2 size={15} />
       </Btn>
     </>
@@ -116,17 +153,26 @@ export function NodeToolbar({ viewport }: { viewport: ScreenRect }) {
   const camera = useCanvas((s) => s.camera);
   const gesturing = useCanvas((s) => s.gesturing);
   if (!selection || !node || gesturing) return null;
-  const kind = isTerminal(node) ? "terminal" : "browser" in node.content ? "browser" : "note";
+  const kind = isTerminal(node) ? "terminal" : "browser" in node.content ? "browser" : "device" in node.content ? "device" : "note";
+  const labels = { terminal: "Terminal actions", browser: "Browser actions", device: "Device actions", note: "Note actions" };
   const pos = placeToolbar(frameToScreen(camera, node.frame), viewport, SIZES[kind]);
   if (!pos) return null;
   return (
     <div
       className="node-toolbar"
       role="toolbar"
-      aria-label={kind === "terminal" ? "Terminal actions" : kind === "browser" ? "Browser actions" : "Note actions"}
+      aria-label={labels[kind]}
       style={{ left: pos.left, top: pos.top }}
     >
-      {kind === "terminal" ? <TerminalActions node={node} /> : kind === "browser" ? <BrowserActions node={node} /> : <NoteActions node={node} />}
+      {kind === "terminal" ? (
+        <TerminalActions node={node} />
+      ) : kind === "browser" ? (
+        <BrowserActions node={node} />
+      ) : kind === "device" ? (
+        <DeviceActions node={node} />
+      ) : (
+        <NoteActions node={node} />
+      )}
     </div>
   );
 }

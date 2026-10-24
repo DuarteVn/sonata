@@ -19,7 +19,7 @@ import type {
   Workspace,
 } from "../ipc/types";
 
-export type Tool = "select" | "terminal" | "note" | "browser";
+export type Tool = "select" | "terminal" | "note" | "browser" | "device";
 export type Selection = { kind: "node" | "link"; id: string } | null;
 /** A land or remove confirmation (feature 008); `request` is set when an agent asked for it. */
 export type LaneDialogState = {
@@ -88,6 +88,12 @@ type CanvasState = {
   browserStates: Record<string, import("../ipc/types").BrowserState>;
   setBrowserState: (s: import("../ipc/types").BrowserState) => void;
   addBrowser: (frame: Frame) => Promise<CanvasNode>;
+  addDevice: (frame: Frame) => Promise<CanvasNode>;
+  deviceStates: Record<string, import("../ipc/types").DeviceStateEvent>;
+  setDeviceState: (s: import("../ipc/types").DeviceStateEvent) => void;
+  /** Device nodes whose screen streams now (007 FR-005); decided by the canvas. */
+  deviceLive: Set<string>;
+  setDeviceLive: (ids: Set<string>) => void;
   setAsk: (e: AskEvent) => void;
   applyNodesChanged: (workspaceId: string, nodes: CanvasNode[], links: Link[]) => void;
   notes: Record<string, NoteState>;
@@ -242,6 +248,18 @@ export const useCanvas = create<CanvasState>((set, get) => ({
     const ws = get().workspaceId;
     if (!ws) throw new Error("No workspace open.");
     const node = await ipc.nodeCreateBrowser(ws, frame);
+    set((s) => ({ nodes: [...s.nodes, node], selection: { kind: "node", id: node.id }, focusedId: null }));
+    return node;
+  },
+  deviceStates: {},
+  setDeviceState: (d) => set((s) => ({ deviceStates: { ...s.deviceStates, [d.nodeId]: d } })),
+  deviceLive: new Set(),
+  setDeviceLive: (ids) =>
+    set((s) => (ids.size === s.deviceLive.size && [...ids].every((id) => s.deviceLive.has(id)) ? s : { deviceLive: ids })),
+  addDevice: async (frame) => {
+    const ws = get().workspaceId;
+    if (!ws) throw new Error("No workspace open.");
+    const node = await ipc.nodeCreateDevice(ws, frame);
     set((s) => ({ nodes: [...s.nodes, node], selection: { kind: "node", id: node.id }, focusedId: null }));
     return node;
   },

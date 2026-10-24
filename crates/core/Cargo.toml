@@ -10,13 +10,20 @@ chrono.workspace = true
 libc.workspace = true
 notify.workspace = true
 notify-debouncer-full.workspace = true
+png.workspace = true
 portable-pty.workspace = true
+prost.workspace = true
+quick-xml.workspace = true
 rand.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+# Emulator control over its localhost gRPC port (feature 007, research R10).
+tonic.workspace = true
+tonic-prost.workspace = true
+tokio-stream.workspace = true
 tracing.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber.workspace = true
@@ -26,3 +33,6 @@ vt100.workspace = true
 [dev-dependencies]
 pretty_assertions.workspace = true
 tempfile.workspace = true
+# A fake emulator gRPC server in tests only.
+tonic = { workspace = true, features = ["server", "router"] }
+tokio-stream = { workspace = true, features = ["net"] }

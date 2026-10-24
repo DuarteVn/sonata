@@ -23,6 +23,9 @@ export type ErrorCode =
   | "LaneHasChanges"
   | "ConfirmationRequired"
   | "LaneConfirmationNeeded"
+  | "DeviceInUse"
+  | "DeviceNotRunning"
+  | "ToolMissing"
   | "Io"
   | "Internal";
 
@@ -143,7 +146,38 @@ export type NoteColor = "yellow" | "blue" | "green" | "pink" | "purple" | "gray"
 export type NoteStyle = { color: NoteColor; textSize: number };
 
 export type BrowserContent = { url: string; title?: string };
-export type NodeContent = { terminal: TerminalContent } | { note: Partial<NoteStyle> } | { browser: BrowserContent };
+export type Platform = "android" | "ios";
+export type DeviceContent = { platform: Platform; deviceId: string; name?: string; osVersion?: string };
+export type NodeContent =
+  | { terminal: TerminalContent }
+  | { note: Partial<NoteStyle> }
+  | { browser: BrowserContent }
+  | { device: DeviceContent };
+
+/** Installed tools and virtual devices (feature 007, data-model.md). */
+export type Avd = { name: string; displayName: string; apiLevel?: number; osVersion?: string; screen?: [number, number] };
+export type Simulator = { udid: string; name: string; osVersion: string; booted: boolean };
+export type ToolReport = {
+  android: {
+    sdk: string | null;
+    looked: string[];
+    avdHome: string;
+    avds: Avd[];
+    helpUrl: string;
+    avdHelpUrl: string;
+  };
+  ios: { developerDir: string | null; simulators: Simulator[]; helpUrl: string };
+};
+
+export type DeviceStateName = "off" | "booting" | "ready" | "stopped" | "error";
+/** `device://state` (feature 007). */
+export type DeviceStateEvent = {
+  nodeId: string;
+  state: { kind: DeviceStateName; message?: string };
+  startedBySonata: boolean;
+  reduced: boolean;
+  screen?: [number, number];
+};
 
 /** `browser://state` from the shell (feature 004). */
 export type BrowserState = {
@@ -229,7 +263,7 @@ export type ExchangeEntry = {
   resultChars: number;
 };
 
-export type BusyWorkspace = { workspaceId: string; workspaceName: string; count: number };
+export type BusyWorkspace = { workspaceId: string; workspaceName: string; count: number; devices?: string[] };
 
 export function isTerminal(node: CanvasNode): node is CanvasNode & { content: { terminal: TerminalContent } } {
   return "terminal" in node.content;
@@ -241,6 +275,10 @@ export function isNote(node: CanvasNode): node is CanvasNode & { content: { note
 
 export function isBrowser(node: CanvasNode): node is CanvasNode & { content: { browser: BrowserContent } } {
   return "browser" in node.content;
+}
+
+export function isDevice(node: CanvasNode): node is CanvasNode & { content: { device: DeviceContent } } {
+  return "device" in node.content;
 }
 
 export function noteStyle(node: CanvasNode): NoteStyle {

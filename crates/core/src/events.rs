@@ -107,6 +107,7 @@ pub enum CoreEvent {
     LaneConfirm(LaneConfirmEvent),
     /// The request timed out or went away; the UI closes its dialog.
     LaneConfirmClosed(Uuid),
+    DeviceState(crate::device::DeviceStateEvent),
 }
 
 impl CoreEvent {
@@ -128,6 +129,7 @@ impl CoreEvent {
             Self::LaneStatus(_) => "lane://status",
             Self::LaneConfirm(_) => "lane://confirm",
             Self::LaneConfirmClosed(_) => "lane://confirm-closed",
+            Self::DeviceState(_) => "device://state",
         }
     }
 
@@ -149,6 +151,7 @@ impl CoreEvent {
             Self::LaneStatus(s) => serde_json::to_value(s),
             Self::LaneConfirm(e) => serde_json::to_value(e),
             Self::LaneConfirmClosed(id) => Ok(serde_json::json!({ "requestId": id })),
+            Self::DeviceState(e) => serde_json::to_value(e),
         };
         v.unwrap_or(Value::Null)
     }

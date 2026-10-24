@@ -7,6 +7,7 @@ use uuid::Uuid;
 pub const TERMINAL_MIN_SIZE: (f64, f64) = (240.0, 120.0);
 pub const NOTE_MIN_SIZE: (f64, f64) = (120.0, 80.0);
 pub const BROWSER_MIN_SIZE: (f64, f64) = (320.0, 240.0);
+pub const DEVICE_MIN_SIZE: (f64, f64) = (200.0, 300.0);
 pub const TERMINAL_NAME_MAX_CHARS: usize = 60;
 pub const FONT_SIZE_RANGE: std::ops::RangeInclusive<u32> = 9..=24;
 pub const NOTE_TEXT_SIZES: std::ops::RangeInclusive<u8> = 1..=5;
@@ -29,6 +30,7 @@ impl Node {
             NodeContent::Terminal(_) => TERMINAL_MIN_SIZE,
             NodeContent::Note(_) => NOTE_MIN_SIZE,
             NodeContent::Browser(_) => BROWSER_MIN_SIZE,
+            NodeContent::Device(_) => DEVICE_MIN_SIZE,
         }
     }
 
@@ -60,6 +62,20 @@ impl Node {
     pub fn browser_mut(&mut self) -> Option<&mut BrowserContent> {
         match &mut self.content {
             NodeContent::Browser(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    pub fn device(&self) -> Option<&DeviceContent> {
+        match &self.content {
+            NodeContent::Device(d) => Some(d),
+            _ => None,
+        }
+    }
+
+    pub fn device_mut(&mut self) -> Option<&mut DeviceContent> {
+        match &mut self.content {
+            NodeContent::Device(d) => Some(d),
             _ => None,
         }
     }
@@ -108,6 +124,28 @@ pub enum NodeContent {
     Terminal(TerminalContent),
     Note(NoteContent),
     Browser(BrowserContent),
+    Device(DeviceContent),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Platform {
+    Android,
+    Ios,
+}
+
+/// A virtual device on the canvas (feature 007). The running device lives in `core::device`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceContent {
+    pub platform: Platform,
+    /// AVD name (Android) or simulator UDID (iOS); empty until the user picks one.
+    #[serde(default)]
+    pub device_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub os_version: Option<String>,
 }
 
 /// A web page on the canvas (feature 004). The page itself lives in the shell.

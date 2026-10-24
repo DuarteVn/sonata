@@ -10,7 +10,7 @@ export type KeyInput = {
   meta?: boolean;
 };
 
-export type KeyAction = "tool:select" | "tool:terminal" | "tool:note" | "tool:browser" | "delete" | "clear" | "cancelLink";
+export type KeyAction = "tool:select" | "tool:terminal" | "tool:note" | "tool:browser" | "tool:device" | "delete" | "clear" | "cancelLink";
 
 export function routeKey(input: KeyInput): KeyAction | null {
   if (input.textFocus || input.terminalFocus || input.meta) return null;
@@ -27,6 +27,9 @@ export function routeKey(input: KeyInput): KeyAction | null {
     case "b":
     case "B":
       return "tool:browser";
+    case "d":
+    case "D":
+      return "tool:device";
     case "Delete":
     case "Backspace":
       return input.hasSelection ? "delete" : null;

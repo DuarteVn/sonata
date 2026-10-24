@@ -1,0 +1,11 @@
+{
+    "com.apple.Preferences" =     {
+        ApplicationType = System;
+        CFBundleDisplayName = Settings;
+        CFBundleIdentifier = "com.apple.Preferences";
+    };
+    "com.example.shop" =     {
+        ApplicationType = User;
+        CFBundleIdentifier = "com.example.shop";
+    };
+}
