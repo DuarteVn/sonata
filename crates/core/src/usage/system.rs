@@ -35,6 +35,7 @@ impl Backend for SystemBackend {
         };
         match (p.kind, p.id.as_str()) {
             (ProviderKind::BuiltIn, "claude") => super::claude::read(path, env, now),
+            (ProviderKind::BuiltIn, "codex") => super::codex::read(path, env, now),
             _ => Reading::unavailable(p.id.clone(), now, "Not supported yet."),
         }
     }

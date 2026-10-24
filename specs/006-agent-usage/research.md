@@ -100,6 +100,16 @@ Mac, so live verification is a task of the implement phase)
 - The primary window is usually 5 hours (300 minutes) and the secondary 7 days; Sonata labels
   windows from `window_minutes`, not from position.
 
+**Implementation note (2026-10-23, unverified live)**: fixtures follow the generated schema in
+`codex-rs/app-server-protocol/schema/typescript/` on `openai/codex` `main`:
+`InitializeParams {clientInfo {name, title, version}, capabilities}`,
+`GetAccountRateLimitsParams {excludeResetCreditDetails?}`, and
+`GetAccountRateLimitsResponse {rateLimits: RateLimitSnapshot, …}` with
+`RateLimitWindow {usedPercent, windowDurationMins, resetsAt}`. Codex is not installed on the
+maintainer's Mac, so the reader was tested only against these fixtures and a fake `codex`.
+The fallback tries the newest five session files, because the newest one may hold no snapshot
+yet.
+
 **Alternatives considered**: `/status` in the Codex TUI (TUI scraping, rejected); reading
 `auth.json` and calling the backend (credential handling, rejected).
 

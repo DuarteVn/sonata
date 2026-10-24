@@ -154,3 +154,20 @@ pub fn observe(
     }
     crossed
 }
+
+/// Kind and label for a window known only by its length in minutes.
+pub fn kind_for_minutes(minutes: i64) -> (WindowKind, String) {
+    const DAY: i64 = 24 * 60;
+    if minutes <= DAY {
+        let label = if minutes % 60 == 0 {
+            format!("{}-hour", minutes / 60)
+        } else {
+            format!("{minutes}-minute")
+        };
+        (WindowKind::Short, label)
+    } else if (6 * DAY..=8 * DAY).contains(&minutes) {
+        (WindowKind::Weekly, "Weekly".into())
+    } else {
+        (WindowKind::Other, format!("{}-day", minutes / DAY))
+    }
+}

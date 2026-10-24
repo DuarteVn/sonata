@@ -122,3 +122,29 @@ describe("usage panel", () => {
     expect(ipc.usageSetEnabled).toHaveBeenCalledWith(true);
   });
 });
+
+describe("usage panel with several agents", () => {
+  it("shows a section per agent in the same form", () => {
+    show(
+      usageState([
+        provider(),
+        provider({
+          id: "codex",
+          name: "Codex",
+          color: "#10a37f",
+          reading: reading({
+            providerId: "codex",
+            plan: "Plus",
+            account: null,
+            accountEmail: null,
+            windows: [{ kind: "short", label: "5-hour", usedPercent: 42, resetsAt: null }],
+          }),
+        }),
+      ]),
+    );
+    expect(screen.getByRole("region", { name: "Claude Code" })).toHaveTextContent("76%");
+    const codex = screen.getByRole("region", { name: "Codex" });
+    expect(codex).toHaveTextContent("Plus");
+    expect(codex).toHaveTextContent("42%");
+  });
+});

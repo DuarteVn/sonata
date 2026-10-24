@@ -154,14 +154,14 @@ agent off stops only that agent.
 
 ### Tests
 
-- [ ] T054 [US3] Record Codex fixtures (never install Codex): if `codex` is available on the maintainer's Mac, run `codex app-server generate-json-schema --out <tmp>` and record the `account/rateLimits/read` response and `initialize` params into `crates/core/tests/fixtures/usage/codex-*.json`; otherwise build fixtures from the public `openai/codex` source (research R2) and mark the task note "unverified live" in `specs/006-agent-usage/research.md`
-- [ ] T055 [P] [US3] Write failing tests in `crates/core/tests/usage_codex.rs`: app-server response → windows (`primary` 300 min → short "5-hour", `secondary` 10080 min → weekly "Weekly", other lengths → `other` labelled from minutes), `planType` → plan; auth error → `NotLoggedIn`; rollout tail parser: last `token_count` with non-null `rate_limits` in the last 256 KiB of a fixture file, `readAt` = file mtime; no session file → `Unavailable` "Use Codex once to record limits."
-- [ ] T056 [P] [US3] Write failing test with a fake `codex` script that reads JSON lines from stdin and answers `initialize` and `account/rateLimits/read`; reader sends exactly the three lines of contracts/usage-provider.md, stops after `id: 2`, and kills the group; fake that exits on unknown method → fallback to rollout
+- [X] T054 [US3] Record Codex fixtures (never install Codex): if `codex` is available on the maintainer's Mac, run `codex app-server generate-json-schema --out <tmp>` and record the `account/rateLimits/read` response and `initialize` params into `crates/core/tests/fixtures/usage/codex-*.json`; otherwise build fixtures from the public `openai/codex` source (research R2) and mark the task note "unverified live" in `specs/006-agent-usage/research.md`
+- [X] T055 [P] [US3] Write failing tests in `crates/core/tests/usage_codex.rs`: app-server response → windows (`primary` 300 min → short "5-hour", `secondary` 10080 min → weekly "Weekly", other lengths → `other` labelled from minutes), `planType` → plan; auth error → `NotLoggedIn`; rollout tail parser: last `token_count` with non-null `rate_limits` in the last 256 KiB of a fixture file, `readAt` = file mtime; no session file → `Unavailable` "Use Codex once to record limits."
+- [X] T056 [P] [US3] Write failing test with a fake `codex` script that reads JSON lines from stdin and answers `initialize` and `account/rateLimits/read`; reader sends exactly the three lines of contracts/usage-provider.md, stops after `id: 2`, and kills the group; fake that exits on unknown method → fallback to rollout
 
 ### Implementation
 
-- [ ] T057 [US3] Implement `crates/core/src/usage/codex.rs` (`CodexReader`: app-server via `runner` with piped stdin, 1 MiB line-by-line cap, 20 s timeout; `CODEX_HOME` honored; rollout fallback); register `codex` in the service registry; make T055–T056 pass
-- [ ] T058 [US3] Confirm the panel and Settings show Codex rows with no UI change (vitest case in `ui/tests/usagePanel.test.tsx` with two providers)
+- [X] T057 [US3] Implement `crates/core/src/usage/codex.rs` (`CodexReader`: app-server via `runner` with piped stdin, 1 MiB line-by-line cap, 20 s timeout; `CODEX_HOME` honored; rollout fallback); register `codex` in the service registry; make T055–T056 pass
+- [X] T058 [US3] Confirm the panel and Settings show Codex rows with no UI change (vitest case in `ui/tests/usagePanel.test.tsx` with two providers)
 
 **Checkpoint**: Codex section shows its windows or an honest unavailable state.
 
