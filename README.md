@@ -141,6 +141,7 @@ without credentials or emails. To test it, follow `specs/006-agent-usage/quickst
 ├── usage-cache.json                    last usage readings (no credentials)
 ├── usage-providers/                    custom usage provider definitions + README.md
 ├── logs/sonata.log.<date>              kept 7 days, never contains terminal output
+├── lanes/<workspace id>/<name>/        lane checkouts (git worktrees of your repository)
 └── workspaces/<id>/
     ├── workspace.json                  layout: nodes, camera, settings
     ├── notes/<node-id>.md              your notes, editable with any editor

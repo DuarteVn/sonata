@@ -25,16 +25,20 @@ Everyone:
   sonata note write <note> \"<text>\" [--append] (or --stdin)
   sonata notify \"<message>\"                    macOS notification for the user
   sonata browser open|read|click|fill|press|screenshot|back|forward|reload <browser> …
+  sonata lane status                           your lane: branch, changed files, ahead/behind
+  sonata lane land [--timeout 5m]              ask the user to merge your lane into its base
+  sonata lane remove [--delete-branch]         ask the user to remove your lane
 
 Orchestrator only:
-  sonata recruit <claude|codex|opencode|gemini|shell|\"<command>\"> [--name N] [--role R | --role-text T] [--folder F]
+  sonata recruit <claude|codex|opencode|gemini|shell|\"<command>\"> [--name N] [--role R | --role-text T] [--folder F | --lane]
+  sonata lane status|land|remove <name>        the same for a linked terminal
   sonata dismiss <name>
   sonata note new \"<title>\" [\"<text>\"]       create a note linked to you
   sonata browser new [<url>]                  open a browser linked to you
   sonata link <a> <b>
   sonata unlink <a> <b>
 
-Options: --timeout 10m (ask), --json (any command).
+Options: --timeout 10m (ask), --timeout 5m (lane land/remove), --json (any command).
 Exit codes: 0 ok, 1 error, 2 usage, 3 not allowed, 4 not found, 5 timed out, 6 Sonata not reachable.";
 
 /// Prints the help lines for one command (or everything for unknown ones).

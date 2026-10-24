@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-lane-confirm-answer"
+description = "Enables the lane_confirm_answer command without any pre-configured scope."
+commands.allow = ["lane_confirm_answer"]
+
+[[permission]]
+identifier = "deny-lane-confirm-answer"
+description = "Denies the lane_confirm_answer command without any pre-configured scope."
+commands.deny = ["lane_confirm_answer"]

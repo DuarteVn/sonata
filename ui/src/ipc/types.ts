@@ -16,6 +16,13 @@ export type ErrorCode =
   | "ImageTooLarge"
   | "ImageUnsupported"
   | "InvalidAddress"
+  | "LaneUnavailable"
+  | "LaneBlocked"
+  | "LaneConflict"
+  | "LaneUnsafePath"
+  | "LaneHasChanges"
+  | "ConfirmationRequired"
+  | "LaneConfirmationNeeded"
   | "Io"
   | "Internal";
 
@@ -79,6 +86,57 @@ export type TerminalContent = {
   orchestrator?: boolean;
   recruitedBy?: string;
   sendInstructions?: boolean;
+  lane?: Lane;
+};
+
+/** A terminal's own git checkout and branch (feature 008). */
+export type Lane = {
+  branch: string;
+  baseBranch: string;
+  mainCheckout: string;
+  checkoutPath: string;
+  subdirectory?: string;
+  createdAt: string;
+  landedAt?: string;
+};
+
+export type LaneAvailability = { available: boolean; reason?: string; baseBranch?: string };
+
+export type LaneState = "ok" | "landed" | "checkoutMissing" | "branchMissing" | "mainCheckoutMissing" | "busy" | "gitUnavailable";
+
+/** `lane://status` (data-model.md). Counts are absent when the lane cannot be read. */
+export type LaneStatus = {
+  nodeId: string;
+  state: LaneState;
+  branch: string;
+  baseBranch: string;
+  changed?: number;
+  ahead?: number;
+  behind?: number;
+};
+
+export type LaneAction = "land" | "remove";
+export type LaneRemoval = { discardChanges: boolean; deleteBranch: boolean };
+
+/** `lane://confirm`: an agent asked for a land or removal; a human must answer. */
+export type LaneConfirmEvent = {
+  requestId: string;
+  nodeId: string;
+  action: LaneAction;
+  requestedBy: string;
+  preview: LanePreview;
+  deleteBranch: boolean;
+};
+
+/** What a land or remove confirmation shows (contracts/ipc.md). */
+export type LanePreview = {
+  branch: string;
+  baseBranch: string;
+  commits: number;
+  changedFiles: string[];
+  changedTotal: number;
+  unmergedCommits: number;
+  blockers: string[];
 };
 
 export type NoteColor = "yellow" | "blue" | "green" | "pink" | "purple" | "gray";

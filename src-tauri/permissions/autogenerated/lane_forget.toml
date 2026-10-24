@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-lane-forget"
+description = "Enables the lane_forget command without any pre-configured scope."
+commands.allow = ["lane_forget"]
+
+[[permission]]
+identifier = "deny-lane-forget"
+description = "Denies the lane_forget command without any pre-configured scope."
+commands.deny = ["lane_forget"]

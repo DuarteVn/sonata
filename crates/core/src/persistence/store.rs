@@ -76,7 +76,14 @@ pub struct Store {
 }
 
 fn workspace_migrations() -> Migrations {
-    Migrations::new(WORKSPACE_SCHEMA_VERSION).step(1, workspace_v1_to_v2)
+    Migrations::new(WORKSPACE_SCHEMA_VERSION)
+        .step(1, workspace_v1_to_v2)
+        .step(2, workspace_v2_to_v3)
+}
+
+/// Version 3 adds the optional terminal `lane` (feature 008); no payload change.
+fn workspace_v2_to_v3(payload: serde_json::Value) -> Result<serde_json::Value, String> {
+    Ok(payload)
 }
 
 /// Version 2 adds `links` (feature 002).

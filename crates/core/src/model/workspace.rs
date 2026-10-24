@@ -8,8 +8,9 @@ use super::link::Link;
 use super::node::Node;
 
 pub const WORKSPACE_TYPE: &str = "workspace";
-/// Version 2 (feature 002) added `links`.
-pub const WORKSPACE_SCHEMA_VERSION: u32 = 2;
+/// Version 2 (feature 002) added `links`. Version 3 (feature 008) added terminal lanes; the bump
+/// makes older builds refuse the file instead of dropping lanes on save (research R13).
+pub const WORKSPACE_SCHEMA_VERSION: u32 = 3;
 
 pub const ZOOM_MIN: f64 = 0.1;
 pub const ZOOM_MAX: f64 = 4.0;

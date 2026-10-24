@@ -1,10 +1,16 @@
 import { create } from "zustand";
 import { ipc } from "../ipc/commands";
+import { isAppError } from "../ipc/types";
 import type {
   AskEvent,
   Camera,
   CanvasNode,
   Frame,
+  LaneAction,
+  LaneConfirmEvent,
+  LanePreview,
+  LaneRemoval,
+  LaneStatus,
   Link,
   NoteStyle,
   NoteSync,
@@ -15,6 +21,15 @@ import type {
 
 export type Tool = "select" | "terminal" | "note" | "browser";
 export type Selection = { kind: "node" | "link"; id: string } | null;
+/** A land or remove confirmation (feature 008); `request` is set when an agent asked for it. */
+export type LaneDialogState = {
+  nodeId: string;
+  action: LaneAction;
+  request?: { requestId: string; requestedBy: string; preview: LanePreview; deleteBranch: boolean };
+  /** Remove the lane as part of deleting the terminal. */
+  deleteNode?: boolean;
+};
+
 export type TerminalDialogMode = { kind: "create"; at?: { x: number; y: number } } | { kind: "edit"; nodeId: string };
 
 export type NoteState = { text: string; sync: NoteSync; conflictPath?: string; assetBase?: string; loaded: boolean };
@@ -27,6 +42,8 @@ type CanvasState = {
   /** True while a pan/zoom gesture is in progress (live terminals use a CSS transform). */
   gesturing: boolean;
   terminalStates: Record<string, TerminalStateEvent>;
+  laneStatuses: Record<string, LaneStatus>;
+  setLaneStatus: (s: LaneStatus) => void;
   tool: Tool;
   selection: Selection;
   /** Nodes selected together (two or more), from a selection rectangle or Shift+click. */
@@ -46,6 +63,10 @@ type CanvasState = {
   cancelLinking: () => void;
   toggleRaw: (id: string) => void;
   openTerminalDialog: (mode: TerminalDialogMode | null) => void;
+  laneDialog: LaneDialogState | null;
+  openLaneDialog: (state: LaneDialogState | null) => void;
+  showLaneRequest: (e: LaneConfirmEvent) => void;
+  closeLaneRequest: (requestId: string) => void;
   replaceNode: (node: CanvasNode) => void;
   setNoteStyle: (id: string, style: NoteStyle) => Promise<void>;
   /** Terminal waiting for "close anyway?" confirmation. */
@@ -90,9 +111,9 @@ type CanvasState = {
   bringToFront: (id: string) => Promise<void>;
   addTerminal: (
     frame: Frame,
-    opts: { name?: string; launchCommand?: string; workingDirectory?: string; settings?: TerminalSettings },
+    opts: { name?: string; launchCommand?: string; workingDirectory?: string; settings?: TerminalSettings; lane?: boolean },
   ) => Promise<CanvasNode>;
-  removeNode: (id: string, confirmed: boolean) => Promise<void>;
+  removeNode: (id: string, confirmed: boolean, laneRemoval?: LaneRemoval) => Promise<void>;
   renameTerminal: (id: string, name: string) => Promise<void>;
   setTerminalState: (e: TerminalStateEvent) => void;
 };
@@ -111,6 +132,7 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   focusedId: null,
   gesturing: false,
   terminalStates: {},
+  laneStatuses: {},
   notes: {},
   previews: {},
   liveIds: new Set(),
@@ -163,6 +185,7 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   rawNotes: new Set(),
   linkingFrom: null,
   terminalDialog: null,
+  laneDialog: null,
 
   group: [],
 
@@ -200,6 +223,17 @@ export const useCanvas = create<CanvasState>((set, get) => ({
       return { rawNotes: next };
     }),
   openTerminalDialog: (terminalDialog) => set({ terminalDialog }),
+  openLaneDialog: (laneDialog) => set({ laneDialog }),
+  showLaneRequest: (e) =>
+    set({
+      laneDialog: {
+        nodeId: e.nodeId,
+        action: e.action,
+        request: { requestId: e.requestId, requestedBy: e.requestedBy, preview: e.preview, deleteBranch: e.deleteBranch },
+      },
+    }),
+  closeLaneRequest: (requestId) =>
+    set((s) => (s.laneDialog?.request?.requestId === requestId ? { laneDialog: null } : {})),
   confirmClose: null,
   asks: {},
   browserStates: {},
@@ -332,10 +366,20 @@ export const useCanvas = create<CanvasState>((set, get) => ({
     return node;
   },
 
-  removeNode: async (id, confirmed) => {
+  removeNode: async (id, confirmed, laneRemoval) => {
     const ws = get().workspaceId;
     if (!ws) return;
-    await ipc.nodeDelete(ws, id, confirmed);
+    try {
+      if (laneRemoval) await ipc.nodeDelete(ws, id, confirmed, laneRemoval);
+      else await ipc.nodeDelete(ws, id, confirmed);
+    } catch (err) {
+      // A terminal with a lane is deleted through the remove-lane confirmation (feature 008).
+      if (isAppError(err) && err.code === "LaneConfirmationNeeded") {
+        set({ laneDialog: { nodeId: id, action: "remove", deleteNode: true } });
+        return;
+      }
+      throw err;
+    }
     set((s) => ({
       nodes: s.nodes.filter((n) => n.id !== id),
       links: s.links.filter((l) => l.a !== id && l.b !== id),
@@ -355,6 +399,8 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   },
 
   // A busy terminal that becomes idle while not focused asks for attention (FR-013).
+  setLaneStatus: (status) => set((s) => ({ laneStatuses: { ...s.laneStatuses, [status.nodeId]: status } })),
+
   setTerminalState: (e) =>
     set((s) => {
       const prev = s.terminalStates[e.nodeId];

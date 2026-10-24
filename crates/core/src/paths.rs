@@ -122,6 +122,15 @@ impl DataRoot {
         self.root.join("usage-providers")
     }
 
+    /// Lane checkouts (feature 008): `<root>/lanes/<workspace id>/<slug>`.
+    pub fn lanes_dir(&self) -> PathBuf {
+        self.root.join("lanes")
+    }
+
+    pub fn lane_workspace_dir(&self, id: Uuid) -> PathBuf {
+        self.lanes_dir().join(id.to_string())
+    }
+
     pub fn logs_dir(&self) -> PathBuf {
         self.root.join("logs")
     }
@@ -150,11 +159,16 @@ impl DataRoot {
 }
 
 /// Forces `0700` on folders and `0600` on files under `root`. Returns how many entries were
-/// fixed (FR-015a). Symbolic links are left alone.
+/// fixed (FR-015a). Symbolic links are left alone, and so are lane checkouts
+/// (`<root>/lanes/<id>/<slug>`), which hold the user's project files (feature 008, research R4).
 pub fn enforce_private_tree(root: &Path) -> io::Result<usize> {
     let mut fixed = 0;
+    let lanes = root.join("lanes");
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
+        if dir.parent() == Some(lanes.as_path()) {
+            continue;
+        }
         for entry in fs::read_dir(&dir)? {
             let entry = entry?;
             let kind = entry.file_type()?;

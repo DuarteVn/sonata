@@ -64,7 +64,13 @@
     "allow-usage-set-provider-enabled",
     "allow-usage-set-provider-color",
     "allow-usage-answer-consent",
-    "allow-usage-open-settings"
+    "allow-usage-open-settings",
+    "allow-lane-check",
+    "allow-lane-preview",
+    "allow-lane-land",
+    "allow-lane-remove",
+    "allow-lane-forget",
+    "allow-lane-confirm-answer"
   ],
   "webviews": [
     "main"

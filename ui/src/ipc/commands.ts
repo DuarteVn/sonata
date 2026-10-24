@@ -1,6 +1,10 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type {
   ExchangeEntry,
+  LaneAction,
+  LaneAvailability,
+  LanePreview,
+  LaneRemoval,
   Link,
   NoteStyle,
   PresetStatus,
@@ -40,14 +44,22 @@ export const ipc = {
   nodeCreateTerminal: (
     workspaceId: string,
     frame: Frame,
-    opts: { name?: string; launchCommand?: string; workingDirectory?: string; settings?: TerminalSettings } = {},
+    opts: { name?: string; launchCommand?: string; workingDirectory?: string; settings?: TerminalSettings; lane?: boolean } = {},
   ) => invoke<CanvasNode>("node_create_terminal", { workspaceId, frame, ...opts }),
+  laneCheck: (workspaceId: string) => invoke<LaneAvailability>("lane_check", { workspaceId }),
+  lanePreview: (nodeId: string, action: LaneAction) => invoke<LanePreview>("lane_preview", { nodeId, action }),
+  laneLand: (nodeId: string, confirmed: boolean) => invoke<number>("lane_land", { nodeId, confirmed }),
+  laneRemove: (nodeId: string, discardChanges: boolean, deleteBranch: boolean, confirmed: boolean) =>
+    invoke<void>("lane_remove", { nodeId, discardChanges, deleteBranch, confirmed }),
+  laneForget: (nodeId: string) => invoke<void>("lane_forget", { nodeId }),
+  laneConfirmAnswer: (requestId: string, accepted: boolean, discardChanges?: boolean, deleteBranch?: boolean) =>
+    invoke<void>("lane_confirm_answer", { requestId, accepted, discardChanges, deleteBranch }),
   nodeUpdateFrame: (workspaceId: string, nodeId: string, frame: Frame) =>
     invoke<Frame>("node_update_frame", { workspaceId, nodeId, frame }),
   nodeBringToFront: (workspaceId: string, nodeId: string) =>
     invoke<{ z: number }>("node_bring_to_front", { workspaceId, nodeId }),
-  nodeDelete: (workspaceId: string, nodeId: string, confirmed: boolean) =>
-    invoke<void>("node_delete", { workspaceId, nodeId, confirmed }),
+  nodeDelete: (workspaceId: string, nodeId: string, confirmed: boolean, laneRemoval?: LaneRemoval) =>
+    invoke<void>("node_delete", { workspaceId, nodeId, confirmed, laneRemoval }),
 
   nodeCreateNote: (workspaceId: string, frame: Frame) => invoke<CanvasNode>("node_create_note", { workspaceId, frame }),
   noteRead: (nodeId: string) => invoke<NoteView>("note_read", { nodeId }),

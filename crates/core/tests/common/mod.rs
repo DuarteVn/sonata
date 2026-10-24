@@ -196,3 +196,47 @@ pub fn is_output(line: &str, word: &str) -> bool {
     let line = line.trim_matches(|c: char| c == '\r' || c.is_whitespace());
     line == word || line.rsplit("$ ").next() == Some(word) || line.rsplit("% ").next() == Some(word)
 }
+
+/// Runs `git` in `dir` for test setup, isolated from the user's global config. Panics on failure.
+pub fn git(dir: &Path, args: &[&str]) -> String {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE")
+        .output()
+        .expect("run git");
+    assert!(
+        out.status.success(),
+        "git {args:?} failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+/// A throwaway repository at `<tmp>/projects/<name>` on branch `main` with one commit
+/// (`a.txt` = "one"). Identity and signing are set locally so the app's own git calls work too.
+pub fn git_repo(sb: &Sandbox, name: &str) -> PathBuf {
+    let dir = sb.project(name);
+    git(&dir, &["init", "-q", "-b", "main"]);
+    git(&dir, &["config", "user.name", "Test"]);
+    git(&dir, &["config", "user.email", "test@example.com"]);
+    git(&dir, &["config", "commit.gpgsign", "false"]);
+    commit_file(&dir, "a.txt", "one\n", "init");
+    dir
+}
+
+/// Writes `file` (relative to `dir`), stages everything, and commits.
+pub fn commit_file(dir: &Path, file: &str, content: &str, message: &str) {
+    let path = dir.join(file);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).expect("parent dir");
+    }
+    std::fs::write(&path, content).expect("write file");
+    git(dir, &["add", "-A"]);
+    git(dir, &["commit", "-q", "-m", message]);
+}

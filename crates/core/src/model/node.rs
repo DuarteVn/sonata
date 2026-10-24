@@ -147,6 +147,9 @@ pub struct TerminalContent {
     /// Type a short Sonata instruction once the agent is ready; `None` = automatic (003 FR-019).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub send_instructions: Option<bool>,
+    /// The terminal's own git checkout and branch (feature 008); set only at creation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lane: Option<Box<Lane>>,
 }
 
 impl TerminalContent {
@@ -163,7 +166,48 @@ impl TerminalContent {
             orchestrator: false,
             recruited_by: None,
             send_instructions: None,
+            lane: None,
         }
+    }
+}
+
+/// A terminal's isolated checkout (feature 008, data-model.md).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Lane {
+    pub branch: String,
+    pub base_branch: String,
+    /// Top folder of the workspace's repository; land runs here.
+    pub main_checkout: PathBuf,
+    /// `<data root>/lanes/<workspace id>/<slug>`.
+    pub checkout_path: PathBuf,
+    /// The workspace folder relative to `main_checkout`, when it is a subfolder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subdirectory: Option<PathBuf>,
+    pub created_at: DateTime<Utc>,
+    /// Set by a successful land; the checkout is gone after that.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub landed_at: Option<DateTime<Utc>>,
+}
+
+impl Lane {
+    /// Where the terminal runs while the lane is active.
+    pub fn working_directory(&self) -> PathBuf {
+        match &self.subdirectory {
+            Some(sub) => self.checkout_path.join(sub),
+            None => self.checkout_path.clone(),
+        }
+    }
+
+    /// The checkout folder name, which matches the branch after `lane/`.
+    pub fn slug(&self) -> &str {
+        self.branch
+            .strip_prefix(crate::lanes::naming::BRANCH_PREFIX)
+            .unwrap_or(&self.branch)
+    }
+
+    pub fn is_landed(&self) -> bool {
+        self.landed_at.is_some()
     }
 }
 

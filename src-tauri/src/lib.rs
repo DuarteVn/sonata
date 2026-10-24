@@ -139,6 +139,12 @@ pub fn run() {
             commands::usage::usage_answer_consent,
             commands::usage::usage_open_settings,
             commands::usage::usage_providers_folder,
+            commands::lane::lane_confirm_answer,
+            commands::lane::lane_forget,
+            commands::lane::lane_remove,
+            commands::lane::lane_land,
+            commands::lane::lane_preview,
+            commands::lane::lane_check,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Sonata");

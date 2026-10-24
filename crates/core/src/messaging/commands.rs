@@ -13,13 +13,18 @@ use super::{
     Request,
 };
 use crate::App;
+use crate::lanes::confirm::Answer;
+use crate::lanes::ops::Action;
 use crate::model::node::{BrowserContent, Node, NodeContent};
 use crate::terminal::manager::RunStatus;
 
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 const MIN_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_TIMEOUT: Duration = Duration::from_secs(60 * 60);
-const PROGRESS_EVERY: Duration = Duration::from_secs(15);
+pub const PROGRESS_EVERY: Duration = Duration::from_secs(15);
+const LANE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+const LANE_TIMEOUT_RANGE: std::ops::RangeInclusive<Duration> =
+    Duration::from_secs(60)..=Duration::from_secs(30 * 60);
 
 pub struct Ctx<'a> {
     pub app: &'a App,
@@ -54,11 +59,14 @@ pub fn handle(app: &App, req: &Request, progress: &mut dyn FnMut(&str)) -> Reply
             orchestrator(&ctx).unwrap_or_else(|| browser_new(&ctx, rest))
         }
         ["browser", rest @ ..] => browser(&ctx, rest),
+        ["lane", "status", rest @ ..] => lane_status(&ctx, rest),
+        ["lane", "land", rest @ ..] => lane_request(&ctx, Action::Land, rest, progress),
+        ["lane", "remove", rest @ ..] => lane_request(&ctx, Action::Remove, rest, progress),
         ["notify", rest @ ..] if !rest.is_empty() || stdin.is_some() => {
             notify(&ctx, &stdin.unwrap_or_else(|| rest.join(" ")))
         }
         ["recruit", rest @ ..] => orchestrator(&ctx).unwrap_or_else(|| recruit(&ctx, rest)),
-        ["dismiss", name] => orchestrator(&ctx).unwrap_or_else(|| dismiss(&ctx, name)),
+        ["dismiss", name] => orchestrator(&ctx).unwrap_or_else(|| dismiss(&ctx, name, progress)),
         ["link", a, b] => orchestrator(&ctx).unwrap_or_else(|| link(&ctx, a, b, true)),
         ["unlink", a, b] => orchestrator(&ctx).unwrap_or_else(|| link(&ctx, a, b, false)),
         ["_session", agent, hook] => session(&ctx, agent, hook),
@@ -642,9 +650,11 @@ fn recruit(ctx: &Ctx<'_>, rest: &[&str]) -> Reply {
     let mut role = None;
     let mut role_text = None;
     let mut folder = None;
+    let mut lane = false;
     let mut it = rest.iter();
     while let Some(a) = it.next() {
         match *a {
+            "--lane" => lane = true,
             "--name" => name = it.next().map(|s| s.to_string()),
             "--role" => role = it.next().map(|s| s.to_string()),
             "--role-text" => role_text = it.next().map(|s| s.to_string()),
@@ -667,9 +677,15 @@ fn recruit(ctx: &Ctx<'_>, rest: &[&str]) -> Reply {
     let Some(what) = what else {
         return Reply::err(
             EXIT_USAGE,
-            "Usage: sonata recruit <claude|codex|opencode|gemini|shell|\"<command>\"> [--name N] [--role R | --role-text T] [--folder F]",
+            "Usage: sonata recruit <claude|codex|opencode|gemini|shell|\"<command>\"> [--name N] [--role R | --role-text T] [--folder F | --lane]",
         );
     };
+    if lane && folder.is_some() {
+        return Reply::err(
+            EXIT_USAGE,
+            "--lane and --folder cannot be combined: a lane always starts from the workspace folder.",
+        );
+    }
     let folder = folder.map(|f| {
         let p = PathBuf::from(&f);
         if p.is_absolute() {
@@ -678,13 +694,37 @@ fn recruit(ctx: &Ctx<'_>, rest: &[&str]) -> Reply {
             PathBuf::from(&ctx.cwd).join(p)
         }
     });
-    match ctx.app.recruit(ctx.me, &what, name.as_deref(), role.as_deref(), role_text.as_deref(), folder) {
-        Ok(final_name) => Reply::ok(format!("Recruited \"{final_name}\". It is linked to you; ask it with `sonata ask \"{final_name}\" \"…\"`.")).with_data(json!({"name": final_name})),
-        Err(e) => Reply::err(if e.code == crate::ErrorCode::NodeNotFound { EXIT_NOT_FOUND } else { EXIT_ERROR }, e.message),
+    match ctx.app.recruit(
+        ctx.me,
+        &what,
+        name.as_deref(),
+        role.as_deref(),
+        role_text.as_deref(),
+        match (folder, lane) {
+            (_, true) => crate::app::RecruitPlace::Lane,
+            (Some(f), false) => crate::app::RecruitPlace::Folder(f),
+            (None, false) => crate::app::RecruitPlace::WorkspaceFolder,
+        },
+    ) {
+        Ok((final_name, lane)) => {
+            let place = lane
+                .as_ref()
+                .map(|l| format!(" in lane {} (base {})", l.branch, l.base_branch))
+                .unwrap_or_default();
+            Reply::ok(format!("Recruited \"{final_name}\"{place}. It is linked to you; ask it with `sonata ask \"{final_name}\" \"…\"`.")).with_data(json!({"name": final_name, "lane": lane.map(|l| l.branch)}))
+        }
+        Err(e) => Reply::err(
+            if e.code == crate::ErrorCode::NodeNotFound {
+                EXIT_NOT_FOUND
+            } else {
+                EXIT_ERROR
+            },
+            e.message,
+        ),
     }
 }
 
-fn dismiss(ctx: &Ctx<'_>, name: &str) -> Reply {
+fn dismiss(ctx: &Ctx<'_>, name: &str, progress: &mut dyn FnMut(&str)) -> Reply {
     let node = match resolve(ctx, name, Kind::Terminal) {
         Ok(n) => n,
         Err(r) => return r,
@@ -697,9 +737,190 @@ fn dismiss(ctx: &Ctx<'_>, name: &str) -> Reply {
             ),
         );
     }
+    if ctx.app.terminal_has_lane_checkout(node.id) {
+        let answer = match ask_human(ctx, node.id, Action::Remove, false, LANE_TIMEOUT, progress) {
+            Ok(a) => a,
+            Err(r) => return r,
+        };
+        if !answer.accepted {
+            return Reply::err(
+                EXIT_DENIED,
+                format!(
+                    "The user declined removing the lane of \"{name}\". Nothing was dismissed."
+                ),
+            );
+        }
+        return match ctx.app.dismiss_with_lane(node.id, removal(answer)) {
+            Ok(()) => Reply::ok(format!("Dismissed \"{name}\" and removed its lane.")),
+            Err(e) => Reply::err(EXIT_ERROR, e.message),
+        };
+    }
     match ctx.app.dismiss(node.id) {
         Ok(()) => Reply::ok(format!("Dismissed \"{name}\".")),
         Err(e) => Reply::err(EXIT_ERROR, e.message),
+    }
+}
+
+// ---- Lanes (feature 008) ----
+
+fn removal(a: Answer) -> crate::app::LaneRemoval {
+    crate::app::LaneRemoval {
+        discard_changes: a.discard_changes,
+        delete_branch: a.delete_branch,
+    }
+}
+
+/// The terminal a `lane` command acts on: the caller, or a linked terminal by name.
+fn lane_target(ctx: &Ctx<'_>, name: Option<&str>) -> Result<Uuid, Reply> {
+    match name {
+        None => Ok(ctx.me),
+        Some(n) => resolve(ctx, n, Kind::Terminal).map(|node| node.id),
+    }
+}
+
+fn lane_status(ctx: &Ctx<'_>, rest: &[&str]) -> Reply {
+    let target = match lane_target(ctx, rest.first().copied()) {
+        Ok(t) => t,
+        Err(r) => return r,
+    };
+    match ctx.app.lane_status(target) {
+        Ok(s) => {
+            let mut text = format!("Lane {} (base {})", s.branch, s.base_branch);
+            match (s.ahead, s.behind, s.changed) {
+                (Some(a), Some(b), Some(c)) => text.push_str(&format!(
+                    ": {a} ahead, {b} behind, {c} changed file{}.",
+                    if c == 1 { "" } else { "s" }
+                )),
+                _ => text.push('.'),
+            }
+            if s.state != crate::lanes::status::LaneState::Ok {
+                text.push_str(&format!(" State: {:?}.", s.state));
+            }
+            Reply::ok(text).with_data(serde_json::to_value(&s).unwrap_or_default())
+        }
+        Err(e) => Reply::err(EXIT_NOT_FOUND, e.message),
+    }
+}
+
+/// Shows the confirmation in the app and waits for the human.
+fn ask_human(
+    ctx: &Ctx<'_>,
+    target: Uuid,
+    action: Action,
+    delete_branch: bool,
+    timeout: Duration,
+    progress: &mut dyn FnMut(&str),
+) -> Result<Answer, Reply> {
+    let verb = match action {
+        Action::Land => "land",
+        Action::Remove => "lane removal",
+    };
+    progress(&format!(
+        "Waiting for the user to confirm the {verb} in Sonata…"
+    ));
+    let mut tick = || {
+        progress(&format!(
+            "Still waiting for the user to confirm the {verb}…"
+        ))
+    };
+    match ctx.app.request_lane_confirmation(
+        ctx.me,
+        target,
+        action,
+        delete_branch,
+        timeout,
+        &mut tick,
+    ) {
+        Ok(Some(a)) => Ok(a),
+        Ok(None) => Err(Reply::err(
+            EXIT_DENIED,
+            format!(
+                "No answer from the user within {}m. Nothing changed.",
+                timeout.as_secs() / 60
+            ),
+        )),
+        Err(e) => Err(Reply::err(EXIT_ERROR, e.message)),
+    }
+}
+
+fn lane_request(
+    ctx: &Ctx<'_>,
+    action: Action,
+    rest: &[&str],
+    progress: &mut dyn FnMut(&str),
+) -> Reply {
+    let mut name = None;
+    let mut delete_branch = false;
+    let mut timeout = LANE_TIMEOUT;
+    let mut it = rest.iter();
+    while let Some(a) = it.next() {
+        match *a {
+            "--delete-branch" if action == Action::Remove => delete_branch = true,
+            "--timeout" => match it.next().and_then(|v| parse_duration(v)) {
+                Some(d) if LANE_TIMEOUT_RANGE.contains(&d) => timeout = d,
+                _ => return Reply::err(EXIT_USAGE, "--timeout takes 1m to 30m."),
+            },
+            other if other.starts_with('-') => {
+                return Reply::err(
+                    EXIT_USAGE,
+                    format!("Unknown option \"{other}\". Run `sonata help lane`."),
+                );
+            }
+            other if name.is_none() => name = Some(other),
+            other => return Reply::err(EXIT_USAGE, format!("Unexpected \"{other}\".")),
+        }
+    }
+    if name.is_some()
+        && let Some(denied) = orchestrator(ctx)
+    {
+        return denied;
+    }
+    let target = match lane_target(ctx, name) {
+        Ok(t) => t,
+        Err(r) => return r,
+    };
+    let lane = match ctx.app.lane_status(target) {
+        Ok(s) if s.state != crate::lanes::status::LaneState::Landed => s,
+        _ => return Reply::err(EXIT_NOT_FOUND, "This terminal has no active lane."),
+    };
+    let answer = match ask_human(ctx, target, action, delete_branch, timeout, progress) {
+        Ok(a) => a,
+        Err(r) => return r,
+    };
+    let verb = if action == Action::Land {
+        "land"
+    } else {
+        "removal"
+    };
+    if !answer.accepted {
+        return Reply::err(
+            EXIT_DENIED,
+            format!("The user declined the {verb}. Nothing changed."),
+        );
+    }
+    let own = target == ctx.me;
+    match action {
+        Action::Land => match ctx.app.lane_land_confirmed(target, own) {
+            Ok(n) => Reply::ok(format!(
+                "Landed {} into {} ({n} commit{}). The lane was removed; the branch is kept.",
+                lane.branch,
+                lane.base_branch,
+                if n == 1 { "" } else { "s" }
+            )),
+            Err(e) => Reply::err(EXIT_ERROR, e.message),
+        },
+        Action::Remove => match ctx.app.lane_remove_confirmed(target, removal(answer), own) {
+            Ok(()) => Reply::ok(format!(
+                "Removed lane {}. {}",
+                lane.branch,
+                if answer.delete_branch {
+                    "The branch was deleted."
+                } else {
+                    "The branch is kept."
+                }
+            )),
+            Err(e) => Reply::err(EXIT_ERROR, e.message),
+        },
     }
 }
 

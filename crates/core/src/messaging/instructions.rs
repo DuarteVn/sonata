@@ -13,6 +13,14 @@ pub struct SessionInfo<'a> {
     pub workspace: &'a str,
     pub role: Option<&'a str>,
     pub orchestrator: bool,
+    pub lane: Option<LaneInfo<'a>>,
+}
+
+/// The terminal's lane, when it has one (feature 008, research R12).
+#[derive(Debug, Clone, Copy)]
+pub struct LaneInfo<'a> {
+    pub branch: &'a str,
+    pub base_branch: &'a str,
 }
 
 pub fn instructions(info: &SessionInfo<'_>) -> String {
@@ -44,12 +52,28 @@ pub fn instructions(info: &SessionInfo<'_>) -> String {
          prompt. Answer normally; your final message is returned to them. For long or structured \
          answers, run `sonata reply --stdin` with the full answer.\n",
     );
+    if let Some(lane) = info.lane {
+        s.push_str(&format!(
+            "\n## You work in a lane\n\n\
+             Your folder is your own git checkout on the branch `{branch}`, made from `{base}`. \
+             Other agents work in their own checkouts, so your files do not clash with theirs.\n\n\
+             - Commit your work on `{branch}`. Do not switch branches here; uncommitted work \
+             cannot be landed.\n\
+             - `sonata lane status` — your branch, changed files, and commits ahead of or behind \
+             `{base}`.\n\
+             - `sonata lane land` — when your task is done and committed, ask the user to merge \
+             `{branch}` into `{base}`. The user confirms in Sonata; this lane and this terminal \
+             stop after a successful land.\n",
+            branch = lane.branch,
+            base = lane.base_branch,
+        ));
+    }
     if info.orchestrator {
         s.push_str(
             "\n## You are the Orchestrator\n\n\
              You can build your team:\n\n\
              - `sonata recruit <claude|codex|opencode|gemini|shell> --name <Name> [--role-text \
-             \"<what they do>\"] [--folder <path>]` — start a new agent linked to you.\n\
+             \"<what they do>\"] [--folder <path> | --lane]` — start a new agent linked to you (`--lane`: in its own git checkout and branch).\n\
              - `sonata dismiss <name>` — close an agent you recruited.\n\
              - `sonata note new \"<title>\" [\"<text>\"]` — create a note linked to you.\n\
              - `sonata browser new [<url>]` — open a browser linked to you; drive it with \
@@ -68,6 +92,13 @@ pub fn typed_instructions(info: &SessionInfo<'_>) -> String {
          talk to the terminals and notes linked to you (`sonata list`, `sonata ask`).",
         info.name
     );
+    if let Some(lane) = info.lane {
+        s.push_str(&format!(
+            " You work in your own git checkout on branch `{}`: commit your work there, and run \
+             `sonata lane land` when it is done.",
+            lane.branch
+        ));
+    }
     if let Some(role) = info.role {
         s.push_str(&format!(" Your role: {role}"));
     }
@@ -114,4 +145,46 @@ pub fn write_session(
 pub fn codex_notify(hook: &str) -> String {
     let esc = hook.replace('\\', "\\\\").replace('"', "\\\"");
     format!("[\"{esc}\", \"_hook\", \"codex-notify\"]")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn info(lane: Option<LaneInfo<'static>>) -> SessionInfo<'static> {
+        SessionInfo {
+            name: "Api",
+            workspace: "W",
+            role: None,
+            orchestrator: false,
+            lane,
+        }
+    }
+
+    const LANE: LaneInfo<'static> = LaneInfo {
+        branch: "lane/api",
+        base_branch: "main",
+    };
+
+    #[test]
+    fn lane_section_only_with_a_lane() {
+        let with = instructions(&info(Some(LANE)));
+        assert!(with.contains("lane/api"), "{with}");
+        assert!(with.contains("main"));
+        assert!(with.contains("sonata lane status"));
+        assert!(with.contains("sonata lane land"));
+        assert!(with.contains("commit"));
+        let without = instructions(&info(None));
+        assert!(!without.contains("sonata lane"));
+    }
+
+    #[test]
+    fn typed_instructions_mention_the_lane() {
+        let with = typed_instructions(&info(Some(LANE)));
+        assert!(
+            with.contains("lane/api") && with.contains("sonata lane land"),
+            "{with}"
+        );
+        assert!(!typed_instructions(&info(None)).contains("lane"));
+    }
 }
