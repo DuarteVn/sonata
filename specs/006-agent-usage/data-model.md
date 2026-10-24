@@ -136,9 +136,13 @@ Per provider: `lastAttempt: Instant?`.
 }
 ```
 
-Only `ok`, `noPlanLimits`, and `notLoggedIn` readings are cached. Load failure → reported as a
-persistence warning, start with an empty cache, do not overwrite the bad file until the next
-successful save renames it aside as `usage-cache.json.bad` (constitution IV).
+Only `ok`, `noPlanLimits`, and `notLoggedIn` readings are cached. Load failure → the file is
+renamed aside as `usage-cache.json.invalid-<timestamp>` (the same rule as other settings
+files), the cache starts empty, and the problem is reported as a startup warning
+(constitution IV).
+
+Warning periods match when reset times differ by at most 2 minutes, because some sources derive
+the reset time from "seconds left".
 
 ## Custom definition file
 

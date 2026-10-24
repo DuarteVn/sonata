@@ -13,12 +13,14 @@ Types are in [../data-model.md](../data-model.md). All commands are thin wrapper
 | `usage_set_warnings` | settings | `{enabled: boolean}` | `UsageState` (FR-011) |
 | `usage_set_provider_enabled` | settings | `{providerId, enabled}` | `UsageState`; turning on a provider without consent returns it with `consent: unasked`, and the UI shows the consent dialog |
 | `usage_set_provider_color` | settings | `{providerId, color: "#rrggbb"}` | `UsageState` |
-| `usage_answer_consent` | main, settings | `{providerId, allow: boolean, command: string[]}` | `UsageState`; `command` must equal the provider's current command or the call fails (`consent_mismatch`) |
+| `usage_answer_consent` | main, settings | `{providerId, allow: boolean, command: string[]}` | `UsageState`; `command` must equal the provider's current command (as shown in the request, or `ProviderState.command`) or the call fails with code `ConsentMismatch` |
 | `usage_providers_folder` | settings | — | `{path: string}`; creates the folder and guide when missing. "Show folder" uses existing `app_reveal_path`; "Copy path" copies `path` in the UI |
 | `usage_open_settings` | main | — | `void`; opens or focuses the Settings window (same as menu) |
 
-Errors use the existing `CommandError` shape. No command input or output ever carries a
-credential.
+Errors use the existing `AppError` shape (`code`, `message`); new codes:
+`UsageProviderNotFound`, `ConsentMismatch`, `InvalidColor`. No command input or output ever
+carries a credential. Optional `Reading` fields that are empty are omitted (typed as optional
+in TypeScript).
 
 ## Events
 

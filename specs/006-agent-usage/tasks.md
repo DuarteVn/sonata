@@ -194,10 +194,10 @@ command, sandboxed 10 s run, guide file, folder actions.
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T067 [P] Write failing test `crates/core/tests/usage_no_secrets.rs` (SC-005): run a full service cycle with fake `claude` whose auth output includes `user@example.com` and whose stderr includes a fake token `sk-ant-oat01-FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE`; afterwards no file under the temp data root and no captured log line contains the token or the email
-- [ ] T068 [P] README `## Usage meter` in `README.md`: what is shown, where data comes from (CLI probe and its cost, Codex app server), consent, master switch, custom providers folder and guide, the sandbox; constitution-required "how to run and test" pointing to `specs/006-agent-usage/quickstart.md`
+- [X] T067 [P] Write failing test `crates/core/tests/usage_no_secrets.rs` (SC-005): run a full service cycle with fake `claude` whose auth output includes `user@example.com` and whose stderr includes a fake token `sk-ant-oat01-FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE`; afterwards no file under the temp data root and no captured log line contains the token or the email
+- [X] T068 [P] README `## Usage meter` in `README.md`: what is shown, where data comes from (CLI probe and its cost, Codex app server), consent, master switch, custom providers folder and guide, the sandbox; constitution-required "how to run and test" pointing to `specs/006-agent-usage/quickstart.md`
 - [ ] T069 Verify reads never block terminals (SC-004): run 8 shell terminals printing output while forcing "Refresh all" with a fake provider that sleeps 9 s; terminals keep scrolling (manual check, note result in quickstart)
-- [ ] T070 Run `sh scripts/check.sh` until it passes in full; run the "No credential check" from `specs/006-agent-usage/quickstart.md` after a dev session
+- [X] T070 Run `sh scripts/check.sh` until it passes in full; run the "No credential check" from `specs/006-agent-usage/quickstart.md` after a dev session
 - [ ] T071 `git fetch && git rebase origin/main`; resolve conflicts in shared files (`README.md`, `src-tauri/build.rs`, `src-tauri/capabilities/default.json`, `src-tauri/src/lib.rs`, `ui/src/ipc/*`, `ui/src/App.tsx`) keeping both sides; rerun `sh scripts/check.sh`
 
 ---
