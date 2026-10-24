@@ -271,3 +271,18 @@ fn screen_stream_asks_for_scaled_rgba_and_delivers_frames() {
     let fmt = fake.0.lock().unwrap().stream_formats[0].clone();
     assert_eq!((fmt.format, fmt.width, fmt.height), (1, 36, 80));
 }
+
+#[test]
+fn frames_bigger_than_four_megabytes_arrive() {
+    // 1080×1200 RGBA is 5.2 MB, above tonic's default 4 MB message limit (found on a real AVD).
+    let (port, _) = serve();
+    let c = EmulatorClient::connect(port, TOKEN);
+    let got = Arc::new(Mutex::new(0usize));
+    let sink = got.clone();
+    let _stream = c.stream(1080, 1200, move |f| *sink.lock().unwrap() = f.rgba.len());
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while *got.lock().unwrap() == 0 && std::time::Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(*got.lock().unwrap(), 1080 * 1200 * 4);
+}

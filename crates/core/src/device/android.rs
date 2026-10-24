@@ -40,6 +40,9 @@ pub struct AndroidDriver {
     serial: String,
     /// `None`: reduced mode, adb only (research R7).
     grpc: Option<EmulatorClient>,
+    /// The AVD has a hardware keyboard; without one the emulator drops gRPC key events, so
+    /// text and keys go through adb (found on a real AVD).
+    grpc_keys: bool,
     tracker: Arc<Mutex<StillTracker>>,
     watch: Mutex<Option<StreamHandle>>,
     size: OnceLock<(u32, u32)>,
@@ -53,11 +56,13 @@ impl AndroidDriver {
         adb: PathBuf,
         serial: String,
         grpc: Option<Grpc>,
+        hw_keyboard: bool,
     ) -> Self {
         Self {
             procs,
             adb,
             serial,
+            grpc_keys: grpc.is_some() && hw_keyboard,
             grpc: grpc.map(|g| EmulatorClient::connect(g.port, &g.token)),
             tracker: Arc::new(Mutex::new(StillTracker::new(Instant::now()))),
             watch: Mutex::new(None),
@@ -190,7 +195,7 @@ impl DeviceDriver for AndroidDriver {
         if !text.chars().all(|c| (' '..='~').contains(&c)) {
             return Err("only plain ASCII text can be typed on Android emulators".into());
         }
-        if let Some(c) = &self.grpc {
+        if let Some(c) = self.grpc.as_ref().filter(|_| self.grpc_keys) {
             self.ensure_watch();
             return c.text(text);
         }
@@ -207,7 +212,7 @@ impl DeviceDriver for AndroidDriver {
     }
 
     fn key(&self, key: &Key) -> Result<(), String> {
-        if let Some(c) = &self.grpc {
+        if let Some(c) = self.grpc.as_ref().filter(|_| self.grpc_keys) {
             self.ensure_watch();
             return c.key(Self::key_name(key));
         }
@@ -216,10 +221,20 @@ impl DeviceDriver for AndroidDriver {
     }
 
     fn ui_dump(&self) -> Result<String, String> {
-        let out = self.adb(
-            &["exec-out", "uiautomator", "dump", "/dev/tty"],
-            DUMP_TIMEOUT,
-        )?;
+        // Right after an app starts, uiautomator can answer "null root node"; try again.
+        let mut out = String::new();
+        for attempt in 0..3 {
+            if attempt > 0 {
+                std::thread::sleep(Duration::from_millis(400));
+            }
+            out = self.adb(
+                &["exec-out", "uiautomator", "dump", "/dev/tty"],
+                DUMP_TIMEOUT,
+            )?;
+            if !out.contains("null root node") {
+                break;
+            }
+        }
         if out.contains("could not get idle state") {
             return Err("screen never settled; try again or use coordinates".into());
         }
@@ -259,15 +274,24 @@ impl DeviceDriver for AndroidDriver {
         {
             return Err("not installed or not launchable".into());
         }
+        // `monkey` exits non-zero on emulators even when it works; resolve and start instead.
         let out = self.shell(&[
-            "monkey",
-            "-p",
-            app,
+            "cmd",
+            "package",
+            "resolve-activity",
+            "--brief",
             "-c",
             "android.intent.category.LAUNCHER",
-            "1",
+            app,
         ])?;
-        if out.contains("No activities found") || out.contains("monkey aborted") {
+        let component = out
+            .lines()
+            .map(str::trim)
+            .rfind(|l| l.starts_with(app) && l.contains('/'))
+            .ok_or("not installed or not launchable")?
+            .to_string();
+        let started = self.shell(&["am", "start", "-n", &component])?;
+        if started.contains("Error") {
             return Err("not installed or not launchable".into());
         }
         Ok(())

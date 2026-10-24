@@ -53,6 +53,10 @@ pub struct Touch {
     pub identifier: i32,
     #[prost(int32, tag = "4")]
     pub pressure: i32,
+    #[prost(int32, tag = "5")]
+    pub touch_major: i32,
+    #[prost(int32, tag = "6")]
+    pub touch_minor: i32,
 }
 
 #[derive(Clone, PartialEq, prost::Message)]
@@ -62,6 +66,12 @@ pub struct TouchEvent {
     #[prost(int32, tag = "2")]
     pub display: i32,
 }
+
+/// A finger, not a pen: full pressure (the emulator's range is 0–1024) and a contact area.
+/// A pressure of 1 with no area made Android treat taps as a stylus (found on a real AVD:
+/// the keyboard opened its handwriting tutorial over text fields).
+const FINGER_PRESSURE: i32 = 1024;
+const FINGER_SIZE: i32 = 10;
 
 /// `KeyboardEvent.eventType`: keydown 0, keyup 1, keypress 2.
 pub const KEY_PRESS: i32 = 2;
@@ -118,6 +128,8 @@ pub struct Frame {
 }
 
 const SERVICE: &str = "/android.emulation.control.EmulatorController/";
+/// Full-size RGBA frames exceed tonic's default 4 MB message limit (found on a real AVD).
+const MAX_MESSAGE: usize = 64 << 20;
 /// Every call fails after this, so a hung emulator cannot block an agent command forever.
 const CALL_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -182,7 +194,7 @@ impl EmulatorClient {
         let path =
             PathAndQuery::try_from(format!("{SERVICE}{method}")).map_err(|e| e.to_string())?;
         let req = self.request(msg);
-        let mut grpc = Grpc::new(self.channel.clone());
+        let mut grpc = Grpc::new(self.channel.clone()).max_decoding_message_size(MAX_MESSAGE);
         runtime().block_on(async move {
             grpc.ready()
                 .await
@@ -200,7 +212,9 @@ impl EmulatorClient {
             x,
             y,
             identifier: 0,
-            pressure: i32::from(down),
+            pressure: if down { FINGER_PRESSURE } else { 0 },
+            touch_major: if down { FINGER_SIZE } else { 0 },
+            touch_minor: if down { FINGER_SIZE } else { 0 },
         };
         self.unary(
             "sendTouch",
@@ -254,7 +268,7 @@ impl EmulatorClient {
             PathAndQuery::from_static("/android.emulation.control.EmulatorController/injectWheel");
         let ev = WheelEvent { dx, dy, display: 0 };
         let req = self.request(tokio_stream::iter([ev]));
-        let mut grpc = Grpc::new(self.channel.clone());
+        let mut grpc = Grpc::new(self.channel.clone()).max_decoding_message_size(MAX_MESSAGE);
         runtime().block_on(async move {
             grpc.ready()
                 .await
@@ -302,7 +316,7 @@ impl EmulatorClient {
         });
         req.metadata_mut()
             .insert("authorization", self.auth.clone());
-        let mut grpc = Grpc::new(self.channel.clone());
+        let mut grpc = Grpc::new(self.channel.clone()).max_decoding_message_size(MAX_MESSAGE);
         ScreenStream(runtime().spawn(async move {
             if grpc.ready().await.is_err() {
                 return;

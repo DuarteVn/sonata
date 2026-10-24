@@ -213,3 +213,33 @@ first, then area). Non-live devices stop their full stream and show the card ima
 Principle VII lists device simulators as out of scope "until specified". This specification is
 that step; no amendment is needed. The emulator's gRPC port is a listener owned by the emulator,
 bound to localhost and protected by a per-instance token, which matches principle V.
+
+## R15. Findings on a real AVD (2026-10-23, task T024/T025)
+
+Setup: SDK command-line tools from Homebrew (`android-commandlinetools`), emulator 37.2.12,
+platform-tools 37.0.1, AVD `Pixel_API_35` (`system-images;android-35;google_apis;arm64-v8a`,
+1080×2400) made with `avdmanager`; Apple Silicon. Measured with
+`crates/core/examples/emulator_probe.rs` and `device_flow.rs`.
+
+- `-qt-hide-window -grpc <port> -grpc-use-token` works: the emulator boots without a window
+  and serves gRPC on localhost. `emulator` execs into `qemu-system-aarch64`, so the spawned PID
+  is the discovery file's PID.
+- Discovery file `~/Library/Caches/TemporaryItems/avd/running/pid_<pid>.ini` has `avd.name`,
+  `avd.dir`, `port.serial`, `grpc.port`, `grpc.token`. `authorization: Bearer <token>` works.
+- Full RGBA frames exceed tonic's default 4 MB message limit: the client now allows 64 MB.
+- Stream: 720×1600 → 39 fps (4.6 MB/frame); 360×800 → 43 fps. Touch or key → first changed
+  frame: median 47–52 ms, max 78 ms (before the UI's draw time). FR-004 and SC-002 hold at
+  the gRPC level; the Tauri channel and canvas draw still need a check in the real app.
+- Touches must look like a finger: pressure 1 with no contact area made Android treat taps as
+  a stylus (the keyboard opened its handwriting tutorial). Now pressure 1024, touch size 10.
+- AVDs made by `avdmanager` have `hw.keyboard=no`; the emulator then drops gRPC key events
+  (text, Back, Home, Recents had no effect). Sonata reads `hw.keyboard` from `<avd.dir>/config.ini`
+  and uses `adb shell input` when it is off; it never edits the AVD. On API 35, `adb shell
+  input` takes 10–20 ms, so this fallback is also fine for live typing (the 200 ms–1 s figures
+  in R3 are from older devices).
+- `monkey` exits 251 on the emulator even when it starts the app; launch now uses
+  `cmd package resolve-activity` then `am start -n`.
+- `uiautomator dump` takes about 2 s and can return "null root node" right after an app
+  starts; Sonata retries up to 3 times.
+- Quick boot through Sonata's launcher: ready in 14.7 s (SC-001: under 15 s). `adb emu kill`
+  exits in 5 s and saves the snapshot.

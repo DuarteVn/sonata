@@ -119,19 +119,26 @@ fn driver(script: &Arc<Script>, adb: PathBuf) -> AndroidDriver {
         adb,
         "emulator-5554".into(),
         None,
+        false,
     )
 }
 
 #[test]
 fn apps_and_launch() {
+    // `monkey` exits with 251 on emulators even when it worked, so launch resolves the
+    // launcher activity and starts it (found on a real AVD).
     let s = Script::new(&[
         (
-            "android.intent.category.LAUNCHER",
+            "query-activities --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER",
             &fixture("query_activities.txt"),
         ),
         (
-            "monkey -p com.missing -c android.intent.category.LAUNCHER 1",
-            "** No activities found to run, monkey aborted.",
+            "resolve-activity --brief -c android.intent.category.LAUNCHER com.example.shop",
+            "priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true\ncom.example.shop/.MainActivity\n",
+        ),
+        (
+            "resolve-activity --brief -c android.intent.category.LAUNCHER com.missing",
+            "No activity found\n",
         ),
     ]);
     let d = driver(&s, "/sdk/platform-tools/adb".into());
@@ -146,10 +153,8 @@ fn apps_and_launch() {
         "not installed or not launchable"
     );
     assert!(
-        s.calls().contains(
-            &"adb shell monkey -p com.example.shop -c android.intent.category.LAUNCHER 1"
-                .to_string()
-        ),
+        s.calls()
+            .contains(&"adb shell am start -n com.example.shop/.MainActivity".to_string()),
         "{:?}",
         s.calls()
     );
@@ -258,5 +263,25 @@ fn a_dump_that_never_settles_is_a_clear_error() {
     assert_eq!(
         d.ui_dump().unwrap_err(),
         "screen never settled; try again or use coordinates"
+    );
+}
+
+#[test]
+fn a_dump_with_no_root_yet_is_retried() {
+    // Right after an app starts, uiautomator can answer "null root node" once (real AVD).
+    let s = Script::new(&[
+        (
+            "uiautomator dump /dev/tty",
+            "ERROR: null root node returned by UiTestAutomationBridge.\n",
+        ),
+        (
+            "uiautomator dump /dev/tty",
+            "<hierarchy rotation=\"0\"></hierarchy>UI hierchary dumped to: /dev/tty\n",
+        ),
+    ]);
+    let d = driver(&s, "/sdk/platform-tools/adb".into());
+    assert_eq!(
+        d.ui_dump().unwrap(),
+        "<hierarchy rotation=\"0\"></hierarchy>"
     );
 }

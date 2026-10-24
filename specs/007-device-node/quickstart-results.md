@@ -22,7 +22,20 @@
 Known flaky test, unrelated to this feature: `multi_workspace` (busy-terminal timing) failed
 once in a full run and passed on 3 reruns and the next full run.
 
+## Real AVD, core paths (no Android Studio)
+
+See research R15. Through Sonata's own launcher and driver: hidden boot with token (14.7 s
+quick boot), attach to a running emulator, 39 fps at 720×1600, input → screen change in ~50 ms,
+`read` with numbered elements on Settings (2 s), tap element 4 ("Search settings"), type
+"display" (results appear), stale numbers refused after the screen changed, Back/Home/Recents,
+apps (18), launch Settings, screenshot, graceful stop. Bugs found and fixed: 4 MB frame limit,
+stylus-like touches, keys dropped without a hardware keyboard, `monkey` exit code, early
+"null root node" dumps.
+
 ## Not done yet
 
 - Quickstart steps 1–2 in the real app (visual check of the missing-SDK card) — needs a person.
-- Steps 3–10 need Android Studio with one AVD (tasks T024, T025, T032, T037).
+- Visual checks in the real app (live view in the node, click → screen through the Tauri channel,
+  pan with live devices, quit dialog): need a person.
+- SC-003 login test on a sample app (T032): no sample login app installed; the Settings search
+  flow above exercised the same commands.

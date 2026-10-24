@@ -287,3 +287,47 @@ fn a_missing_sdk_fails_the_start() {
         "Android SDK not found"
     );
 }
+
+/// AVDs made by `avdmanager` have `hw.keyboard=no`; then the emulator drops gRPC key events, so
+/// text and keys must go through adb (found on a real AVD).
+#[test]
+fn without_a_hardware_keyboard_text_and_keys_use_adb() {
+    for (keyboard, via_adb) in [("no", true), ("yes", false)] {
+        let s = setup();
+        let avd_dir = s.running_dir.join(format!("Pixel_{keyboard}.avd"));
+        std::fs::create_dir_all(&avd_dir).unwrap();
+        std::fs::write(
+            avd_dir.join("config.ini"),
+            format!("hw.keyboard={keyboard}\n"),
+        )
+        .unwrap();
+        let mut session = s.launcher.start(&target("Pixel_8")).unwrap();
+        discovery(
+            &s.running_dir,
+            4242,
+            &[
+                ("avd.name", "Pixel_8"),
+                ("port.serial", "5556"),
+                ("grpc.port", "1"),
+                ("grpc.token", "tok"),
+                ("avd.dir", avd_dir.to_str().unwrap()),
+            ],
+        );
+        s.world.booted.store(true, Ordering::SeqCst);
+        let Poll::Ready(driver) = session.poll() else {
+            panic!("not ready")
+        };
+        let _ = driver.text("hi");
+        let _ = driver.key(&sonata_core::device::Key::Back);
+        let calls = s.world.calls.lock().unwrap().clone();
+        let adb_text = calls.iter().any(|c| c.ends_with("shell input text hi"));
+        let adb_key = calls
+            .iter()
+            .any(|c| c.ends_with("shell input keyevent KEYCODE_BACK"));
+        assert_eq!(
+            (adb_text, adb_key),
+            (via_adb, via_adb),
+            "hw.keyboard={keyboard}: {calls:?}"
+        );
+    }
+}

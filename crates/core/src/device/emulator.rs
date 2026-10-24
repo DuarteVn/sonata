@@ -39,6 +39,17 @@ struct Instance {
     console: Option<u16>,
     grpc_port: Option<u16>,
     token: Option<String>,
+    avd_dir: Option<PathBuf>,
+}
+
+impl Instance {
+    /// `hw.keyboard=yes` in the AVD's `config.ini`; unknown counts as no (adb always works).
+    fn hw_keyboard(&self) -> bool {
+        self.avd_dir
+            .as_ref()
+            .and_then(|d| std::fs::read_to_string(d.join("config.ini")).ok())
+            .is_some_and(|t| parse_ini(&t).get("hw.keyboard").is_some_and(|v| v == "yes"))
+    }
 }
 
 fn read_instance(path: &Path) -> Option<Instance> {
@@ -61,6 +72,7 @@ fn read_instance(path: &Path) -> Option<Instance> {
         console: port("port.serial"),
         grpc_port: port("grpc.port"),
         token: ini.get("grpc.token").filter(|t| !t.is_empty()).cloned(),
+        avd_dir: ini.get("avd.dir").map(PathBuf::from),
     })
 }
 
@@ -193,12 +205,16 @@ struct AndroidSession {
 }
 
 impl AndroidSession {
-    /// The token the emulator wrote for this instance (never passed on a command line).
-    fn read_grpc(&self) -> Option<Grpc> {
+    /// This instance's discovery file: gRPC port, token (never passed on a command line), AVD.
+    fn instance(&self) -> Option<Instance> {
         let name = format!("pid_{}.ini", self.pid);
         self.discovery_dirs
             .iter()
             .find_map(|d| read_instance(&d.join(&name)))
+    }
+
+    fn read_grpc(&self) -> Option<Grpc> {
+        self.instance()
             .and_then(|i| i.grpc_port.zip(i.token))
             .map(|(port, token)| Grpc { port, token })
     }
@@ -245,11 +261,13 @@ impl Session for AndroidSession {
             }
             return Poll::Booting;
         }
+        let hw_keyboard = self.instance().is_some_and(|i| i.hw_keyboard());
         let driver = Arc::new(AndroidDriver::new(
             self.procs.clone(),
             self.adb.clone(),
             self.serial.clone(),
             self.grpc.clone(),
+            hw_keyboard,
         ));
         self.driver = Some(driver.clone());
         Poll::Ready(driver)
