@@ -117,7 +117,9 @@ unit tested.
 ## R6. SDK and virtual device detection (FR-009, FR-010)
 
 **Decision**: SDK candidates in order: preference `androidSdkPath`, `$ANDROID_HOME`,
-`$ANDROID_SDK_ROOT`, `~/Library/Android/sdk` (Android Studio default). A candidate is valid when
+`$ANDROID_SDK_ROOT`, `~/Library/Android/sdk` (default for Android Studio and for a manual
+command-line tools install), then `<brew prefix>/share/android-commandlinetools` (Homebrew cask);
+Android Studio is not required (maintainer decision 2026-10-23). A candidate is valid when
 `emulator/emulator` and `platform-tools/adb` are executable files. Every looked-at path is kept for
 the "where we looked" message.
 
@@ -127,9 +129,9 @@ AVDs: directory from `$ANDROID_AVD_HOME`, else `$ANDROID_EMULATOR_HOME/avd`, els
 `hw.lcd.width`, `hw.lcd.height`. API level maps to an Android version with a small table. Pure
 parsing over fixture files; no process is run to list devices.
 
-Missing-tool messages link to the official pages: Android Studio install
-(`https://developer.android.com/studio/install`) and creating a virtual device
-(`https://developer.android.com/studio/run/managing-avds`). Sonata never runs `sdkmanager` or
+Missing-tool messages link to the official pages: command-line tools only
+(`https://developer.android.com/studio#command-line-tools-only`) and `avdmanager`
+(`https://developer.android.com/tools/avdmanager`). Sonata never runs `sdkmanager` or
 `avdmanager`. Note: running `adb` starts the adb server daemon if it is not running; Sonata does
 not stop it.
 

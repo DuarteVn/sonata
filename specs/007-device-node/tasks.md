@@ -52,7 +52,7 @@ depends on it.
 - [X] T021 [US1] Shell: `device_select`, `device_boot`, `device_stop`, `device_stream` (raw `ipc::Channel`, 12-byte header + RGBA, next frame only after `device_frame_ack`), `device_unstream` (card PNG at `<data root>/run/device/<node>.png`, 0600), `device_input`, `device_layout`, event `device://state` in `src-tauri/src/commands/device.rs`
 - [X] T022 [US1] `DeviceNode.tsx` live screen (`<canvas>` + `putImageData`, ack per frame), state chrome (off/booting/ready/stopped/error), Boot/Stop/Back/Home/Recents, floating toolbar link/screenshot/stop/delete, card image when not live; restart shows "Boot" without booting (AS6)
 - [X] T023 [US1] Delete node stops a device Sonata started; quit confirmation lists running devices and stops Sonata-started ones (FR-008) in `crates/core/src/app.rs` and the existing quit flow
-- [ ] T024 [US1] ⛔ Real AVD: confirm `-qt-hide-window` works headless (else switch to `-no-window`), discovery key names for gRPC port/token, token header form, key names `GoBack`/`GoHome`/`AppSwitch` (else adb keyevent fallback); fix code and fixtures to match; note results in `research.md`
+- [ ] T024 [US1] ⛔ Real AVD (SDK command-line tools, no Android Studio): confirm `-qt-hide-window` works headless (else switch to `-no-window`), discovery key names for gRPC port/token, token header form, key names `GoBack`/`GoHome`/`AppSwitch` (else adb keyevent fallback); fix code and fixtures to match; note results in `research.md`
 - [ ] T025 [US1] ⛔ Real AVD: measure fps and click-to-screen latency at 100% and 200% zoom; if < 15 fps or ≥ 300 ms, apply the JPEG fallback from research R2; record in `specs/007-device-node/quickstart-results.md`
 
 ## Phase 5: US3 Agents test the app through the device (P2)

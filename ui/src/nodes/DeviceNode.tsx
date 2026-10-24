@@ -374,7 +374,10 @@ function DevicePicker({ nodeId }: { nodeId: string }) {
                 <li key={p}>{p}</li>
               ))}
             </ul>
-            <p className="device-dim">Install Android Studio, which includes the SDK and the emulator. Sonata never installs it for you.</p>
+            <p className="device-dim">
+              Install the Android SDK command-line tools with the emulator, platform tools, and one system image. Android Studio is not
+              needed. Sonata never installs anything for you.
+            </p>
             <div className="device-actions">
               <button type="button" onClick={() => help("android")}>
                 Open install instructions
@@ -387,7 +390,7 @@ function DevicePicker({ nodeId }: { nodeId: string }) {
         ) : android.avds.length === 0 ? (
           <>
             <p className="device-missing">No virtual devices yet</p>
-            <p className="device-dim">Create one in Android Studio's Device Manager. Sonata looks in {android.avdHome}.</p>
+            <p className="device-dim">Create one with the SDK's avdmanager (or Android Studio's Device Manager). Sonata looks in {android.avdHome}.</p>
             <div className="device-actions">
               <button type="button" onClick={() => help("avd")}>
                 How to create one

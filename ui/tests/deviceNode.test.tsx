@@ -9,8 +9,8 @@ const missing: ToolReport = {
     looked: ["/Users/me/Library/Android/sdk"],
     avdHome: "/Users/me/.android/avd",
     avds: [],
-    helpUrl: "https://developer.android.com/studio/install",
-    avdHelpUrl: "https://developer.android.com/studio/run/managing-avds",
+    helpUrl: "https://developer.android.com/studio#command-line-tools-only",
+    avdHelpUrl: "https://developer.android.com/tools/avdmanager",
   },
   ios: { developerDir: null, simulators: [], helpUrl: "https://developer.apple.com/xcode/" },
 };

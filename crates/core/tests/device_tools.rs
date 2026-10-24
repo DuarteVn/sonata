@@ -44,6 +44,8 @@ fn avd(home: &Path, name: &str, display: &str, api: u32) {
 fn env(home: &Path, vars: &[(&str, &Path)]) -> Env {
     Env {
         home: home.to_path_buf(),
+        // Homebrew prefixes inside the test folder, never the real ones.
+        brew_prefixes: vec![home.join("brew")],
         vars: vars
             .iter()
             .map(|(k, v)| (k.to_string(), v.display().to_string()))
@@ -58,7 +60,13 @@ fn nothing_installed_reports_every_place_looked() {
     let home = tmp.path().join("home");
     let r = detect(&env(&home, &[]), None);
     assert!(r.android.sdk.is_none());
-    assert_eq!(r.android.looked, vec![home.join("Library/Android/sdk")]);
+    assert_eq!(
+        r.android.looked,
+        vec![
+            home.join("Library/Android/sdk"),
+            home.join("brew/share/android-commandlinetools"),
+        ]
+    );
     assert!(
         r.android
             .help_url
@@ -108,6 +116,15 @@ fn sdk_candidates_in_order_and_only_complete_ones_count() {
         Some(from_root_var.as_path()),
         "preference first"
     );
+}
+
+#[test]
+fn the_homebrew_command_line_tools_folder_counts_without_android_studio() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    let brew = sdk(&home.join("brew/share/android-commandlinetools"));
+    let r = detect(&env(&home, &[]), None);
+    assert_eq!(r.android.sdk.as_deref(), Some(brew.as_path()));
 }
 
 #[test]

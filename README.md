@@ -107,10 +107,14 @@ turn it off per terminal (terminal menu → Save history) for sessions that prin
 
 ## Device nodes: requirements
 
-- Install [Android Studio](https://developer.android.com/studio/install) and create at least one
-  virtual device in its Device Manager (an ARM system image on Apple Silicon).
-- Sonata looks for the SDK in `ANDROID_HOME`, `ANDROID_SDK_ROOT`, `~/Library/Android/sdk`, or a
-  folder you choose in the node ("Choose SDK folder…"). Virtual devices come from
+- Android Studio is not needed. The SDK
+  [command-line tools](https://developer.android.com/studio#command-line-tools-only) are
+  enough: install `emulator`, `platform-tools`, and one system image with `sdkmanager`, then
+  create a virtual device with `avdmanager` (an ARM image on Apple Silicon). `sdkmanager` and
+  `avdmanager` need Java 17 or later; Sonata itself does not. Android Studio works too.
+- Sonata looks for the SDK in `ANDROID_HOME`, `ANDROID_SDK_ROOT`, `~/Library/Android/sdk`,
+  Homebrew's `android-commandlinetools`, or a folder you choose in the node ("Choose SDK
+  folder…"). Virtual devices come from
   `~/.android/avd` (or `ANDROID_AVD_HOME`).
 - Sonata never downloads, installs, or changes SDKs, emulators, or Xcode. When something is
   missing, the node says what, where it looked, and links to the official page.

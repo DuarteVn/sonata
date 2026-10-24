@@ -12,8 +12,9 @@ use serde::Serialize;
 
 use super::avd::{Avd, list_avds};
 
-pub const ANDROID_HELP_URL: &str = "https://developer.android.com/studio/install";
-pub const AVD_HELP_URL: &str = "https://developer.android.com/studio/run/managing-avds";
+/// The SDK command-line tools alone are enough; Android Studio is not needed.
+pub const ANDROID_HELP_URL: &str = "https://developer.android.com/studio#command-line-tools-only";
+pub const AVD_HELP_URL: &str = "https://developer.android.com/tools/avdmanager";
 pub const XCODE_HELP_URL: &str = "https://developer.apple.com/xcode/";
 
 /// The parts of the process environment detection reads; tests build their own.
@@ -21,6 +22,8 @@ pub const XCODE_HELP_URL: &str = "https://developer.apple.com/xcode/";
 pub struct Env {
     pub home: PathBuf,
     pub vars: HashMap<String, String>,
+    /// Homebrew prefixes; the `android-commandlinetools` cask keeps its SDK under them.
+    pub brew_prefixes: Vec<PathBuf>,
 }
 
 impl Env {
@@ -30,6 +33,7 @@ impl Env {
                 .map(PathBuf::from)
                 .unwrap_or_default(),
             vars: std::env::vars().collect(),
+            brew_prefixes: vec!["/opt/homebrew".into(), "/usr/local".into()],
         }
     }
 
@@ -90,16 +94,23 @@ fn complete_sdk(dir: &Path) -> bool {
     executable(&dir.join("emulator/emulator")) && executable(&dir.join("platform-tools/adb"))
 }
 
-/// Preference, `ANDROID_HOME`, `ANDROID_SDK_ROOT`, then Android Studio's default folder.
+/// Preference, `ANDROID_HOME`, `ANDROID_SDK_ROOT`, `~/Library/Android/sdk` (the default of both
+/// Android Studio and a manual command-line tools install), then Homebrew's
+/// `android-commandlinetools`. Apps opened from the Dock do not see shell variables, so the
+/// fixed folders matter.
 fn sdk_candidates(env: &Env, preference: Option<&Path>) -> Vec<PathBuf> {
     let mut out: Vec<PathBuf> = Vec::new();
-    let all = [
+    let fixed = [
         preference.map(Path::to_path_buf),
         env.path("ANDROID_HOME"),
         env.path("ANDROID_SDK_ROOT"),
         Some(env.home.join("Library/Android/sdk")),
     ];
-    for c in all.into_iter().flatten() {
+    let brew = env
+        .brew_prefixes
+        .iter()
+        .map(|p| Some(p.join("share/android-commandlinetools")));
+    for c in fixed.into_iter().chain(brew).flatten() {
         if !out.contains(&c) {
             out.push(c);
         }
