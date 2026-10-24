@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use sonata_core::app::{NewTerminal, TerminalSettings};
+use sonata_core::app::{LaneRemoval, NewTerminal, TerminalSettings};
 use sonata_core::model::node::{Frame, Node};
 use sonata_core::model::workspace::Camera;
 use sonata_core::{App, AppError};
@@ -64,8 +64,12 @@ pub fn node_delete(
     workspace_id: Uuid,
     node_id: Uuid,
     confirmed: bool,
+    lane_removal: Option<LaneRemoval>,
 ) -> Result<(), AppError> {
-    app.delete_node(workspace_id, node_id, confirmed)
+    match lane_removal {
+        Some(removal) => app.delete_node_with_lane(workspace_id, node_id, confirmed, removal),
+        None => app.delete_node(workspace_id, node_id, confirmed),
+    }
 }
 
 #[tauri::command]

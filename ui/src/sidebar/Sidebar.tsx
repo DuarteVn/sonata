@@ -141,7 +141,7 @@ export function Sidebar({ onCreate, onHide, width, onResize, onInstallUpdate }: 
       {deleting && (
         <ConfirmDialog
           title={`Delete "${deleting.name}"?`}
-          body={`This stops its terminals and removes its layout, notes, and history from Sonata. The folder ${deleting.workingDirectory} is not touched. This cannot be undone.`}
+          body={`This stops its terminals and removes its layout, notes, and history from Sonata. The folder ${deleting.workingDirectory} is not touched; lane folders are removed and their branches kept (lanes with uncommitted work block the deletion). This cannot be undone.`}
           confirmLabel="Delete"
           danger
           onCancel={() => setDeleting(null)}

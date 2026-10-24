@@ -103,6 +103,7 @@ export type Lane = {
 export type LaneAvailability = { available: boolean; reason?: string; baseBranch?: string };
 
 export type LaneAction = "land" | "remove";
+export type LaneRemoval = { discardChanges: boolean; deleteBranch: boolean };
 
 /** What a land or remove confirmation shows (contracts/ipc.md). */
 export type LanePreview = {

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { ipc } from "../ipc/commands";
+import { isAppError } from "../ipc/types";
 import type {
   AskEvent,
   Camera,
@@ -7,6 +8,7 @@ import type {
   Frame,
   LaneAction,
   LanePreview,
+  LaneRemoval,
   Link,
   NoteStyle,
   NoteSync,
@@ -22,6 +24,8 @@ export type LaneDialogState = {
   nodeId: string;
   action: LaneAction;
   request?: { requestId: string; requestedBy: string; preview: LanePreview; deleteBranch: boolean };
+  /** Remove the lane as part of deleting the terminal. */
+  deleteNode?: boolean;
 };
 
 export type TerminalDialogMode = { kind: "create"; at?: { x: number; y: number } } | { kind: "edit"; nodeId: string };
@@ -103,7 +107,7 @@ type CanvasState = {
     frame: Frame,
     opts: { name?: string; launchCommand?: string; workingDirectory?: string; settings?: TerminalSettings; lane?: boolean },
   ) => Promise<CanvasNode>;
-  removeNode: (id: string, confirmed: boolean) => Promise<void>;
+  removeNode: (id: string, confirmed: boolean, laneRemoval?: LaneRemoval) => Promise<void>;
   renameTerminal: (id: string, name: string) => Promise<void>;
   setTerminalState: (e: TerminalStateEvent) => void;
 };
@@ -345,10 +349,20 @@ export const useCanvas = create<CanvasState>((set, get) => ({
     return node;
   },
 
-  removeNode: async (id, confirmed) => {
+  removeNode: async (id, confirmed, laneRemoval) => {
     const ws = get().workspaceId;
     if (!ws) return;
-    await ipc.nodeDelete(ws, id, confirmed);
+    try {
+      if (laneRemoval) await ipc.nodeDelete(ws, id, confirmed, laneRemoval);
+      else await ipc.nodeDelete(ws, id, confirmed);
+    } catch (err) {
+      // A terminal with a lane is deleted through the remove-lane confirmation (feature 008).
+      if (isAppError(err) && err.code === "LaneConfirmationNeeded") {
+        set({ laneDialog: { nodeId: id, action: "remove", deleteNode: true } });
+        return;
+      }
+      throw err;
+    }
     set((s) => ({
       nodes: s.nodes.filter((n) => n.id !== id),
       links: s.links.filter((l) => l.a !== id && l.b !== id),

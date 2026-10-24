@@ -76,12 +76,12 @@ see only their own change (quickstart A).
 **Goal**: Confirmed removal deletes only a verified checkout; the branch stays unless chosen.
 **Independent Test**: quickstart C.
 
-- [ ] T035 [P] [US3] Write tests for `remove`: clean lane → folder gone, `worktree list` without it, branch kept, terminal back in the workspace folder; dirty lane without `discardChanges` → `LaneHasChanges` and nothing removed; with it → removed; `deleteBranch` on a merged branch uses `-d`; on an unmerged branch deletes only with the flag and reports the lost count; hand-edited `checkoutPath` pointing at the main checkout or outside `lanes/` → `LaneUnsafePath`, nothing deleted; missing folder → prune and clear (forget), in crates/core/tests/lanes_remove.rs
-- [ ] T036 [US3] Implement `remove` and `forget` (research R7, R8) in crates/core/src/lanes/ops.rs and `App::lane_remove`, `App::lane_forget` in crates/core/src/app.rs
-- [ ] T037 [P] [US3] Write tests: `delete_node` on a lane terminal without `lane_removal` → `LaneConfirmationNeeded`; with it → lane removed then node deleted; `delete_workspace` with a dirty lane → `LaneHasChanges` and nothing deleted; with clean lanes → lanes removed and `lanes/<ws>` gone, in crates/core/tests/lanes_remove.rs
-- [ ] T038 [US3] Apply research R14 in `delete_node` and `delete_workspace` in crates/core/src/app.rs; pass `laneRemoval` through src-tauri/src/commands/node.rs
-- [ ] T039 [US3] Add `lane_remove`, `lane_forget` commands and wrappers in src-tauri/src/commands/lane.rs, ui/src/ipc/commands.ts
-- [ ] T040 [P] [US3] Write tests for `LaneDialog` remove mode (changed-file list, second "discard these changes" confirmation, delete-branch option with unmerged-commit warning) and for node deletion opening it, in ui/tests/laneDialog.test.tsx
+- [x] T035 [P] [US3] Write tests for `remove`: clean lane → folder gone, `worktree list` without it, branch kept, terminal back in the workspace folder; dirty lane without `discardChanges` → `LaneHasChanges` and nothing removed; with it → removed; `deleteBranch` on a merged branch uses `-d`; on an unmerged branch deletes only with the flag and reports the lost count; hand-edited `checkoutPath` pointing at the main checkout or outside `lanes/` → `LaneUnsafePath`, nothing deleted; missing folder → prune and clear (forget), in crates/core/tests/lanes_remove.rs
+- [x] T036 [US3] Implement `remove` and `forget` (research R7, R8) in crates/core/src/lanes/ops.rs and `App::lane_remove`, `App::lane_forget` in crates/core/src/app.rs
+- [x] T037 [P] [US3] Write tests: `delete_node` on a lane terminal without `lane_removal` → `LaneConfirmationNeeded`; with it → lane removed then node deleted; `delete_workspace` with a dirty lane → `LaneHasChanges` and nothing deleted; with clean lanes → lanes removed and `lanes/<ws>` gone, in crates/core/tests/lanes_remove.rs
+- [x] T038 [US3] Apply research R14 in `delete_node` and `delete_workspace` in crates/core/src/app.rs; pass `laneRemoval` through src-tauri/src/commands/node.rs
+- [x] T039 [US3] Add `lane_remove`, `lane_forget` commands and wrappers in src-tauri/src/commands/lane.rs, ui/src/ipc/commands.ts
+- [x] T040 [P] [US3] Write tests for `LaneDialog` remove mode (changed-file list, second "discard these changes" confirmation, delete-branch option with unmerged-commit warning) and for node deletion opening it, in ui/tests/laneDialog.test.tsx
 - [ ] T041 [US3] Implement remove mode in ui/src/dialogs/LaneDialog.tsx, "Remove lane…" and "Forget lane" in ui/src/nodes/TerminalMenu.tsx, and the lane path in node and workspace deletion in ui/src/state/canvas.ts, ui/src/canvas/Canvas.tsx, ui/src/canvas/NodeToolbar.tsx, and ui/src/sidebar/Sidebar.tsx
 
 ## Phase 6: User Story 4 — Lane state on the canvas (P2)

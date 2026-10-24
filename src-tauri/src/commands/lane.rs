@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use sonata_core::app::LaneRemoval;
 use sonata_core::lanes::ops::{Action, Availability, Preview};
 use sonata_core::{App, AppError};
 use tauri::State;
@@ -28,4 +29,27 @@ pub fn lane_land(
     confirmed: bool,
 ) -> Result<u32, AppError> {
     app.lane_land(node_id, confirmed)
+}
+
+#[tauri::command]
+pub fn lane_remove(
+    app: State<'_, Arc<App>>,
+    node_id: Uuid,
+    discard_changes: bool,
+    delete_branch: bool,
+    confirmed: bool,
+) -> Result<(), AppError> {
+    app.lane_remove(
+        node_id,
+        LaneRemoval {
+            discard_changes,
+            delete_branch,
+        },
+        confirmed,
+    )
+}
+
+#[tauri::command]
+pub fn lane_forget(app: State<'_, Arc<App>>, node_id: Uuid) -> Result<(), AppError> {
+    app.lane_forget(node_id)
 }

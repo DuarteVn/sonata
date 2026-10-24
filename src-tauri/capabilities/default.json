@@ -67,7 +67,9 @@
     "allow-usage-open-settings",
     "allow-lane-check",
     "allow-lane-preview",
-    "allow-lane-land"
+    "allow-lane-land",
+    "allow-lane-remove",
+    "allow-lane-forget"
   ],
   "webviews": [
     "main"

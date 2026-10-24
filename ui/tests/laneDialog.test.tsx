@@ -91,11 +91,80 @@ describe("Terminal menu lane items", () => {
     await userEvent.click(screen.getByRole("button", { name: "Terminal options" }));
     await userEvent.click(screen.getByRole("menuitem", { name: /Land/ }));
     expect(useCanvas.getState().laneDialog).toEqual({ nodeId: "t1", action: "land" });
+    await userEvent.click(screen.getByRole("button", { name: "Terminal options" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Remove lane…" }));
+    expect(useCanvas.getState().laneDialog).toEqual({ nodeId: "t1", action: "remove" });
     unmount();
 
     const landed = { ...node, content: { terminal: { name: "Api", saveHistory: true, lane: { ...lane, landedAt: "x" } } } };
     render(<TerminalMenu node={landed} />);
     await userEvent.click(screen.getByRole("button", { name: "Terminal options" }));
     expect(screen.queryByRole("menuitem", { name: /Land/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("Remove lane", () => {
+  it("removes a clean lane and keeps the branch by default", async () => {
+    const onClose = vi.fn();
+    render(<LaneDialog state={{ nodeId: "t1", action: "remove" }} onClose={onClose} />);
+    expect(await screen.findByText(/branch is kept/)).toBeInTheDocument();
+    expect(ipc.lanePreview).toHaveBeenCalledWith("t1", "remove");
+    await userEvent.click(screen.getByRole("button", { name: "Remove lane" }));
+    await waitFor(() => expect(ipc.laneRemove).toHaveBeenCalledWith("t1", false, false, true));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("needs a second confirmation to discard uncommitted files", async () => {
+    ipc.lanePreview.mockResolvedValue(preview({ changedFiles: ["wip.txt", "b.txt"], changedTotal: 2 }));
+    render(<LaneDialog state={{ nodeId: "t1", action: "remove" }} onClose={() => {}} />);
+    expect(await screen.findByText("wip.txt")).toBeInTheDocument();
+    const remove = screen.getByRole("button", { name: "Remove lane" });
+    expect(remove).toBeDisabled();
+    await userEvent.click(screen.getByRole("checkbox", { name: /Discard these 2 uncommitted files/ }));
+    await userEvent.click(remove);
+    await waitFor(() => expect(ipc.laneRemove).toHaveBeenCalledWith("t1", true, false, true));
+  });
+
+  it("warns before deleting a branch with commits found nowhere else", async () => {
+    ipc.lanePreview.mockResolvedValue(preview({ unmergedCommits: 3 }));
+    render(<LaneDialog state={{ nodeId: "t1", action: "remove" }} onClose={() => {}} />);
+    await userEvent.click(await screen.findByRole("checkbox", { name: /Also delete the branch/ }));
+    expect(screen.getByText(/3 commits exist only on lane\/api/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Remove lane" }));
+    await waitFor(() => expect(ipc.laneRemove).toHaveBeenCalledWith("t1", false, true, true));
+  });
+
+  it("deletes the terminal through the same choices when asked to", async () => {
+    const { useCanvas } = await import("../src/state/canvas");
+    const removeNode = vi.fn(async () => {});
+    useCanvas.setState({ removeNode });
+    render(<LaneDialog state={{ nodeId: "t1", action: "remove", deleteNode: true }} onClose={() => {}} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Delete terminal" }));
+    await waitFor(() =>
+      expect(removeNode).toHaveBeenCalledWith("t1", true, { discardChanges: false, deleteBranch: false }),
+    );
+    expect(ipc.laneRemove).not.toHaveBeenCalled();
+  });
+
+  it("offers removal when there is nothing to land", async () => {
+    ipc.lanePreview.mockResolvedValue(preview({ commits: 0 }));
+    render(<LaneDialog state={{ nodeId: "t1", action: "land" }} onClose={() => {}} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Remove lane…" }));
+    expect(await screen.findByRole("button", { name: "Remove lane" })).toBeInTheDocument();
+    expect(ipc.lanePreview).toHaveBeenLastCalledWith("t1", "remove");
+  });
+});
+
+describe("Deleting a lane terminal", () => {
+  it("opens the remove dialog instead of failing", async () => {
+    const { useCanvas } = await import("../src/state/canvas");
+    const nodeDelete = vi.fn(async () => {
+      throw { code: "LaneConfirmationNeeded", message: "This terminal works in a lane." };
+    });
+    (ipc as Record<string, unknown>).nodeDelete = nodeDelete;
+    useCanvas.setState(useCanvas.getInitialState(), true);
+    useCanvas.setState({ workspaceId: "w1" });
+    await useCanvas.getState().removeNode("t1", false);
+    expect(useCanvas.getState().laneDialog).toEqual({ nodeId: "t1", action: "remove", deleteNode: true });
   });
 });

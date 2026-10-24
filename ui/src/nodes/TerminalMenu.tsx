@@ -100,6 +100,17 @@ export function TerminalMenu({ node }: { node: CanvasNode }) {
                 <span className="menu-check" aria-hidden />
                 Land into {activeLane.baseBranch}…
               </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  useCanvas.getState().openLaneDialog({ nodeId: node.id, action: "remove" });
+                }}
+              >
+                <span className="menu-check" aria-hidden />
+                Remove lane…
+              </button>
             </>
           )}
         </div>,

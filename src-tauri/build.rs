@@ -61,6 +61,8 @@ const COMMANDS: &[&str] = &[
     "lane_check",
     "lane_preview",
     "lane_land",
+    "lane_remove",
+    "lane_forget",
 ];
 
 fn main() {
