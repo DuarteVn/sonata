@@ -259,7 +259,7 @@ pub fn preview(git: &Git, lane: &Lane, action: Action) -> Preview {
                 "--count",
                 &lane.branch,
                 "--not",
-                &format!("--exclude=refs/heads/{}", lane.branch),
+                &format!("--exclude={}", lane.branch),
                 "--branches",
             ],
         )
@@ -456,36 +456,121 @@ pub fn land(git: &Git, lane: &Lane) -> AppResult<u32> {
     Err(blocked(format!("Land failed: {}", detail.trim())))
 }
 
+fn unsafe_path(lane: &Lane, e: GuardError) -> AppError {
+    AppError::new(
+        ErrorCode::LaneUnsafePath,
+        format!("Refusing to delete {}: {e}.", lane.checkout_path.display()),
+    )
+}
+
+/// Runs the removal guard. `Ok(true)`: the checkout exists and may be deleted; `Ok(false)`: it
+/// is already gone.
+pub fn check_checkout(git: &Git, lanes_ws_dir: &Path, lane: &Lane) -> AppResult<bool> {
+    let worktrees = git
+        .run(
+            &lane.main_checkout,
+            &["worktree", "list", "--porcelain", "-z"],
+        )
+        .map(|o| super::git::parse_worktrees_z(&o.stdout))
+        .unwrap_or_default();
+    match guard::check_removable(lanes_ws_dir, &lane.checkout_path, lane.slug(), &worktrees) {
+        Ok(()) => Ok(true),
+        Err(GuardError::Missing) => Ok(false),
+        Err(e) => Err(unsafe_path(lane, e)),
+    }
+}
+
+/// Checks, before anything stops or changes, that a lane may be removed: the path is safe and
+/// uncommitted work is either absent or explicitly discarded (FR-014, FR-016).
+pub fn prepare_removal(
+    git: &Git,
+    lanes_ws_dir: &Path,
+    lane: &Lane,
+    discard: bool,
+) -> AppResult<()> {
+    if !check_checkout(git, lanes_ws_dir, lane)? || discard {
+        return Ok(());
+    }
+    let changed = changed_paths(git, &lane.checkout_path, true).map_err(blocked)?;
+    if changed.is_empty() {
+        return Ok(());
+    }
+    let shown = changed
+        .iter()
+        .take(CONFLICT_FILES)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(", ");
+    let more = changed.len().saturating_sub(CONFLICT_FILES);
+    let more = if more > 0 {
+        format!(" and {more} more")
+    } else {
+        String::new()
+    };
+    Err(AppError::new(
+        ErrorCode::LaneHasChanges,
+        format!(
+            "The lane has {}: {shown}{more}. Confirm that they will be lost.",
+            plural(changed.len(), "uncommitted file")
+        ),
+    ))
+}
+
+/// Removes the checkout and, when asked, the branch (research R7, R8). Call
+/// [`prepare_removal`] first.
+pub fn remove(
+    git: &Git,
+    lanes_ws_dir: &Path,
+    lane: &Lane,
+    discard: bool,
+    delete_branch: bool,
+) -> AppResult<()> {
+    remove_checkout(git, lanes_ws_dir, lane, discard)?;
+    if delete_branch {
+        delete_lane_branch(git, lane)?;
+    }
+    Ok(())
+}
+
+fn delete_lane_branch(git: &Git, lane: &Lane) -> AppResult<()> {
+    let main = &lane.main_checkout;
+    if !lane.branch.starts_with(naming::BRANCH_PREFIX) || lane.branch == lane.base_branch {
+        return Err(blocked(format!(
+            "Refusing to delete {}: it is not a lane branch.",
+            lane.branch
+        )));
+    }
+    if !branch_exists(git, main, &lane.branch) {
+        return Ok(());
+    }
+    if git
+        .run(main, &["branch", "-d", &lane.branch])
+        .is_ok_and(|o| o.success())
+    {
+        return Ok(());
+    }
+    git.ok(main, &["branch", "-D", &lane.branch])
+        .map(|_| ())
+        .map_err(|e| blocked(format!("Could not delete {}: {e}", lane.branch)))
+}
+
 /// Deletes a lane checkout through git after the removal guard passes (research R7). A folder
 /// that is already gone only gets `worktree prune`.
 pub fn remove_checkout(git: &Git, lanes_ws_dir: &Path, lane: &Lane, force: bool) -> AppResult<()> {
     let main = &lane.main_checkout;
-    let worktrees = git
-        .run(main, &["worktree", "list", "--porcelain", "-z"])
-        .map(|o| super::git::parse_worktrees_z(&o.stdout))
-        .unwrap_or_default();
     let path = &lane.checkout_path;
-    match guard::check_removable(lanes_ws_dir, path, lane.slug(), &worktrees) {
-        Ok(()) => {
-            let mut args: Vec<&OsStr> = vec!["worktree".as_ref(), "remove".as_ref()];
-            if force {
-                args.push("--force".as_ref());
-            }
-            args.push(path.as_os_str());
-            let out = git.run(main, &args).map_err(|e| blocked(e.to_string()))?;
-            if !out.success() {
-                return Err(blocked(format!(
-                    "Could not remove the lane folder: {}",
-                    out.stderr.trim()
-                )));
-            }
+    if check_checkout(git, lanes_ws_dir, lane)? {
+        let mut args: Vec<&OsStr> = vec!["worktree".as_ref(), "remove".as_ref()];
+        if force {
+            args.push("--force".as_ref());
         }
-        Err(GuardError::Missing) => {}
-        Err(e) => {
-            return Err(AppError::new(
-                ErrorCode::LaneUnsafePath,
-                format!("Refusing to delete {}: {e}.", path.display()),
-            ));
+        args.push(path.as_os_str());
+        let out = git.run(main, &args).map_err(|e| blocked(e.to_string()))?;
+        if !out.success() {
+            return Err(blocked(format!(
+                "Could not remove the lane folder: {}",
+                out.stderr.trim()
+            )));
         }
     }
     let _ = git.run(main, &["worktree", "prune"]);

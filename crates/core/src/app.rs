@@ -60,6 +60,14 @@ pub struct AppOptions {
     pub usage_extra_path: Option<PathBuf>,
 }
 
+/// The choices of the remove-lane confirmation (FR-014, FR-015).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LaneRemoval {
+    pub discard_changes: bool,
+    pub delete_branch: bool,
+}
+
 /// Where a recruited terminal runs (feature 008 adds the lane).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RecruitPlace {
@@ -769,6 +777,12 @@ impl App {
             let n = w.node(node).ok_or_else(|| AppError::node_not_found(node))?;
             (n.terminal().is_some(), n.is_note())
         };
+        if is_terminal && self.has_lane_checkout(ws, node) {
+            return Err(AppError::new(
+                ErrorCode::LaneConfirmationNeeded,
+                "This terminal works in a lane. Choose what happens to the lane first.",
+            ));
+        }
         if is_terminal && !confirmed && self.terminals.is_busy(node) {
             return Err(AppError::new(
                 ErrorCode::TerminalBusy,
@@ -1092,23 +1106,7 @@ impl App {
             ));
         }
         if self.clear_landed_lane(node)? || !self.terminals.contains(node) {
-            let ws_id = self.workspace_of_node(node)?;
-            let (ws, n) = {
-                let m = self.workspaces();
-                let ws = m
-                    .workspace(ws_id)
-                    .cloned()
-                    .ok_or_else(|| AppError::workspace_not_found(ws_id))?;
-                let n = ws
-                    .node(node)
-                    .cloned()
-                    .ok_or_else(|| AppError::node_not_found(node))?;
-                (ws, n)
-            };
-            self.terminals.stop(node);
-            self.start_terminal(&ws, &n);
-            self.notify_nodes_changed(ws_id);
-            return Ok(());
+            return self.start_fresh(node);
         }
         self.terminals.restart(node)?;
         Ok(())
@@ -1329,6 +1327,7 @@ impl App {
     /// Stops the workspace's terminals and deletes its Sonata data (FR-006). The UI asks for
     /// confirmation first.
     pub fn delete_workspace(&self, id: Uuid) -> AppResult<()> {
+        self.remove_workspace_lanes(id)?;
         let node_ids: Vec<Uuid> = {
             let m = self.workspaces();
             let ws = m
@@ -2052,6 +2051,162 @@ impl App {
         let commits = crate::lanes::ops::land(self.lane_git()?, &lane)?;
         self.finish_land(ws, node, &lane);
         Ok(commits)
+    }
+
+    /// Removes a terminal's lane after human confirmation; the terminal restarts in the
+    /// workspace folder (FR-013 to FR-016).
+    pub fn lane_remove(&self, node: Uuid, removal: LaneRemoval, confirmed: bool) -> AppResult<()> {
+        if !confirmed {
+            return Err(confirmation_required("removal"));
+        }
+        let (ws, lane) = self.active_lane(node)?;
+        self.remove_lane(ws, node, &lane, removal)?;
+        self.start_fresh(node)
+    }
+
+    /// Stops the terminal and removes the lane; the caller decides what runs next.
+    fn remove_lane(
+        &self,
+        ws: Uuid,
+        node: Uuid,
+        lane: &crate::model::node::Lane,
+        removal: LaneRemoval,
+    ) -> AppResult<()> {
+        let git = self.lane_git()?;
+        let dir = self.data_root.lane_workspace_dir(ws);
+        crate::lanes::ops::prepare_removal(git, &dir, lane, removal.discard_changes)?;
+        self.stop_for_lane(node);
+        crate::lanes::ops::remove(
+            git,
+            &dir,
+            lane,
+            removal.discard_changes,
+            removal.delete_branch,
+        )?;
+        self.set_lane(ws, node, None)
+    }
+
+    /// Drops the record of a lane whose folder is gone; the branch is kept (FR-020).
+    pub fn lane_forget(&self, node: Uuid) -> AppResult<()> {
+        let ws = self.workspace_of_node(node)?;
+        let lane = self
+            .workspaces()
+            .workspace(ws)
+            .and_then(|w| w.node(node))
+            .and_then(Node::terminal)
+            .and_then(|t| t.lane.as_deref().cloned())
+            .ok_or_else(|| AppError::new(ErrorCode::LaneBlocked, "This terminal has no lane."))?;
+        if lane.checkout_path.exists() {
+            return Err(AppError::new(
+                ErrorCode::LaneBlocked,
+                "The lane folder still exists. Use Remove lane instead.",
+            ));
+        }
+        if let Ok(git) = self.lane_git() {
+            let _ = git.run(&lane.main_checkout, &["worktree", "prune"]);
+        }
+        self.set_lane(ws, node, None)?;
+        self.notify_nodes_changed(ws);
+        Ok(())
+    }
+
+    /// True when deleting this terminal would delete a lane folder.
+    fn has_lane_checkout(&self, ws: Uuid, node: Uuid) -> bool {
+        self.workspaces()
+            .workspace(ws)
+            .and_then(|w| w.node(node))
+            .and_then(Node::terminal)
+            .and_then(|t| t.lane.as_deref())
+            .is_some_and(|l| !l.is_landed() && l.checkout_path.exists())
+    }
+
+    /// Deletes a terminal that has a lane, removing the lane under the dialog's choices (FR-017).
+    pub fn delete_node_with_lane(
+        &self,
+        ws: Uuid,
+        node: Uuid,
+        confirmed: bool,
+        removal: LaneRemoval,
+    ) -> AppResult<()> {
+        if !confirmed && self.terminals.is_busy(node) {
+            return Err(AppError::new(
+                ErrorCode::TerminalBusy,
+                "A program is still running in this terminal. Close it anyway?",
+            ));
+        }
+        if let Ok((_, lane)) = self.active_lane(node) {
+            self.remove_lane(ws, node, &lane, removal)?;
+        }
+        self.delete_node(ws, node, true)
+    }
+
+    /// Starts a stopped or landed terminal again with its current settings.
+    fn start_fresh(&self, node: Uuid) -> AppResult<()> {
+        let ws_id = self.workspace_of_node(node)?;
+        let (ws, n) = {
+            let m = self.workspaces();
+            let ws = m
+                .workspace(ws_id)
+                .cloned()
+                .ok_or_else(|| AppError::workspace_not_found(ws_id))?;
+            let n = ws
+                .node(node)
+                .cloned()
+                .ok_or_else(|| AppError::node_not_found(node))?;
+            (ws, n)
+        };
+        self.terminals.stop(node);
+        self.start_terminal(&ws, &n);
+        self.notify_nodes_changed(ws_id);
+        Ok(())
+    }
+
+    /// Before a workspace is deleted: refuse when a lane holds uncommitted work, otherwise
+    /// remove every lane checkout (research R14).
+    fn remove_workspace_lanes(&self, ws: Uuid) -> AppResult<()> {
+        let lanes: Vec<(Uuid, String, crate::model::node::Lane)> = self
+            .workspaces()
+            .workspace(ws)
+            .map(|w| {
+                w.nodes
+                    .iter()
+                    .filter_map(|n| {
+                        let t = n.terminal()?;
+                        let l = t.lane.as_deref()?;
+                        (!l.is_landed()).then(|| (n.id, t.name.clone(), l.clone()))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        if lanes.is_empty() {
+            return Ok(());
+        }
+        let git = self.lane_git()?;
+        let dir = self.data_root.lane_workspace_dir(ws);
+        let mut dirty = Vec::new();
+        for (_, name, lane) in &lanes {
+            match crate::lanes::ops::prepare_removal(git, &dir, lane, false) {
+                Ok(()) => {}
+                Err(e) if e.code == ErrorCode::LaneHasChanges => {
+                    dirty.push(format!("\"{name}\" ({})", lane.branch));
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        if !dirty.is_empty() {
+            return Err(AppError::new(
+                ErrorCode::LaneHasChanges,
+                format!(
+                    "These lanes have uncommitted work: {}. Land, commit, or remove them first.",
+                    dirty.join(", ")
+                ),
+            ));
+        }
+        for (node, _, lane) in &lanes {
+            self.stop_for_lane(*node);
+            crate::lanes::ops::remove(git, &dir, lane, false, false)?;
+        }
+        Ok(())
     }
 
     /// After a land: stop the terminal, remove the checkout, mark the lane landed (FR-011).
