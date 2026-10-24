@@ -198,7 +198,7 @@ command, sandboxed 10 s run, guide file, folder actions.
 - [X] T068 [P] README `## Usage meter` in `README.md`: what is shown, where data comes from (CLI probe and its cost, Codex app server), consent, master switch, custom providers folder and guide, the sandbox; constitution-required "how to run and test" pointing to `specs/006-agent-usage/quickstart.md`
 - [ ] T069 Verify reads never block terminals (SC-004): run 8 shell terminals printing output while forcing "Refresh all" with a fake provider that sleeps 9 s; terminals keep scrolling (manual check, note result in quickstart)
 - [X] T070 Run `sh scripts/check.sh` until it passes in full; run the "No credential check" from `specs/006-agent-usage/quickstart.md` after a dev session
-- [ ] T071 `git fetch && git rebase origin/main`; resolve conflicts in shared files (`README.md`, `src-tauri/build.rs`, `src-tauri/capabilities/default.json`, `src-tauri/src/lib.rs`, `ui/src/ipc/*`, `ui/src/App.tsx`) keeping both sides; rerun `sh scripts/check.sh`
+- [X] T071 `git fetch && git rebase origin/main`; resolve conflicts in shared files (`README.md`, `src-tauri/build.rs`, `src-tauri/capabilities/default.json`, `src-tauri/src/lib.rs`, `ui/src/ipc/*`, `ui/src/App.tsx`) keeping both sides; rerun `sh scripts/check.sh`
 
 ---
 
