@@ -627,6 +627,13 @@ impl App {
     }
 
     fn start_terminal(&self, ws: &Workspace, node: &Node) {
+        // A landed terminal stays stopped until restarted; a lane whose folder is gone cannot
+        // start (feature 008, FR-011, FR-020).
+        if let Some(l) = node.terminal().and_then(|t| t.lane.as_deref())
+            && (l.is_landed() || !l.checkout_path.is_dir())
+        {
+            return;
+        }
         let Some(mut spec) = self.spawn_spec(ws, node) else {
             return;
         };
@@ -1083,6 +1090,25 @@ impl App {
                 ErrorCode::TerminalBusy,
                 "A program is still running in this terminal. Restart it anyway?",
             ));
+        }
+        if self.clear_landed_lane(node)? || !self.terminals.contains(node) {
+            let ws_id = self.workspace_of_node(node)?;
+            let (ws, n) = {
+                let m = self.workspaces();
+                let ws = m
+                    .workspace(ws_id)
+                    .cloned()
+                    .ok_or_else(|| AppError::workspace_not_found(ws_id))?;
+                let n = ws
+                    .node(node)
+                    .cloned()
+                    .ok_or_else(|| AppError::node_not_found(node))?;
+                (ws, n)
+            };
+            self.terminals.stop(node);
+            self.start_terminal(&ws, &n);
+            self.notify_nodes_changed(ws_id);
+            return Ok(());
         }
         self.terminals.restart(node)?;
         Ok(())
@@ -1927,6 +1953,133 @@ impl App {
 
     pub fn exchange_log(&self, node: Uuid) -> Vec<crate::messaging::broker::LogEntry> {
         self.broker.log(node)
+    }
+}
+
+// ---- Lanes (feature 008) ----
+
+fn confirmation_required(action: &str) -> AppError {
+    AppError::new(
+        ErrorCode::ConfirmationRequired,
+        format!("Confirm the {action} first."),
+    )
+}
+
+impl App {
+    fn lane_git(&self) -> AppResult<&crate::lanes::git::Git> {
+        self.git()
+            .map_err(|m| AppError::new(ErrorCode::LaneUnavailable, m))
+    }
+
+    /// The terminal's lane while it is active (not landed).
+    fn active_lane(&self, node: Uuid) -> AppResult<(Uuid, crate::model::node::Lane)> {
+        let ws = self.workspace_of_node(node)?;
+        let lane = self
+            .workspaces()
+            .workspace(ws)
+            .and_then(|w| w.node(node))
+            .and_then(Node::terminal)
+            .and_then(|t| t.lane.as_deref().cloned());
+        match lane {
+            Some(l) if !l.is_landed() => Ok((ws, l)),
+            _ => Err(AppError::new(
+                ErrorCode::LaneBlocked,
+                "This terminal has no active lane.",
+            )),
+        }
+    }
+
+    fn set_lane(
+        &self,
+        ws: Uuid,
+        node: Uuid,
+        lane: Option<crate::model::node::Lane>,
+    ) -> AppResult<()> {
+        self.update_node(ws, node, |w, id| {
+            if let Some(t) = w.node_mut(id).and_then(Node::terminal_mut) {
+                t.lane = lane.map(Box::new);
+            }
+            Ok(())
+        })
+    }
+
+    /// Clears a landed lane so the terminal runs in the workspace folder again.
+    fn clear_landed_lane(&self, node: Uuid) -> AppResult<bool> {
+        let ws = self.workspace_of_node(node)?;
+        let landed = self
+            .workspaces()
+            .workspace(ws)
+            .and_then(|w| w.node(node))
+            .and_then(Node::terminal)
+            .and_then(|t| t.lane.as_deref())
+            .is_some_and(|l| l.is_landed());
+        if landed {
+            self.set_lane(ws, node, None)?;
+        }
+        Ok(landed)
+    }
+
+    /// Stops a terminal before its checkout goes away.
+    fn stop_for_lane(&self, node: Uuid) {
+        self.broker.cancel_from(self, node);
+        self.terminals.stop(node);
+        self.emit(CoreEvent::TerminalState(
+            crate::events::TerminalStateEvent {
+                node_id: node,
+                run: crate::events::RunState::Exited,
+                exit_code: None,
+                busy: false,
+                warning: None,
+            },
+        ));
+    }
+
+    pub fn lane_preview(
+        &self,
+        node: Uuid,
+        action: crate::lanes::ops::Action,
+    ) -> AppResult<crate::lanes::ops::Preview> {
+        let (_, lane) = self.active_lane(node)?;
+        Ok(crate::lanes::ops::preview(self.lane_git()?, &lane, action))
+    }
+
+    /// Merges a terminal's lane into its base branch after human confirmation (FR-008, FR-011).
+    pub fn lane_land(&self, node: Uuid, confirmed: bool) -> AppResult<u32> {
+        if !confirmed {
+            return Err(confirmation_required("land"));
+        }
+        let (ws, lane) = self.active_lane(node)?;
+        let commits = crate::lanes::ops::land(self.lane_git()?, &lane)?;
+        self.finish_land(ws, node, &lane);
+        Ok(commits)
+    }
+
+    /// After a land: stop the terminal, remove the checkout, mark the lane landed (FR-011).
+    fn finish_land(&self, ws: Uuid, node: Uuid, lane: &crate::model::node::Lane) {
+        self.stop_for_lane(node);
+        let removed = self.lane_git().and_then(|g| {
+            crate::lanes::ops::remove_checkout(
+                g,
+                &self.data_root.lane_workspace_dir(ws),
+                lane,
+                false,
+            )
+        });
+        match removed {
+            Ok(()) => {
+                let mut landed = lane.clone();
+                landed.landed_at = Some(Utc::now());
+                if let Err(e) = self.set_lane(ws, node, Some(landed)) {
+                    tracing::error!(error = %e, "could not mark the lane landed");
+                }
+            }
+            Err(e) => self.emit(CoreEvent::PersistenceWarning(format!(
+                "{} was landed, but its folder could not be removed: {} Remove the lane from \
+                 the terminal menu.",
+                lane.branch, e.message
+            ))),
+        }
+        self.notify_nodes_changed(ws);
     }
 }
 

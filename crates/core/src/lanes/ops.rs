@@ -8,6 +8,7 @@ use chrono::Utc;
 use serde::Serialize;
 
 use super::git::Git;
+use super::guard::{self, GuardError};
 use super::naming;
 use crate::error::{AppError, AppResult, ErrorCode};
 use crate::model::node::Lane;
@@ -160,4 +161,334 @@ pub fn create(git: &Git, lanes_ws_dir: &Path, folder: &Path, name: &str) -> AppR
         created_at: Utc::now(),
         landed_at: None,
     })
+}
+
+/// What a land or remove dialog shows (research R10).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Preview {
+    pub branch: String,
+    pub base_branch: String,
+    /// Commits on the lane that the base branch lacks.
+    pub commits: u32,
+    /// Uncommitted files in the lane (first 20).
+    pub changed_files: Vec<String>,
+    pub changed_total: usize,
+    /// Commits on the lane branch that no other branch contains.
+    pub unmerged_commits: u32,
+    /// Non-empty: the action cannot run, for these reasons.
+    pub blockers: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Action {
+    Land,
+    Remove,
+}
+
+const PREVIEW_FILES: usize = 20;
+const CONFLICT_FILES: usize = 10;
+
+fn count(git: &Git, dir: &Path, args: &[&str]) -> u32 {
+    git.ok(dir, args)
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0)
+}
+
+/// Uncommitted paths in `dir`; `untracked` decides whether new files count.
+pub fn changed_paths(git: &Git, dir: &Path, untracked: bool) -> Result<Vec<String>, String> {
+    let mode = if untracked {
+        "--untracked-files=normal"
+    } else {
+        "--untracked-files=no"
+    };
+    let out = git
+        .run(dir, &["status", "--porcelain=v2", "-z", mode])
+        .map_err(|e| e.to_string())?;
+    if !out.success() {
+        return Err(out.stderr.trim().to_string());
+    }
+    Ok(super::git::parse_status_z(&out.stdout))
+}
+
+fn plural(n: usize, word: &str) -> String {
+    if n == 1 {
+        format!("1 {word}")
+    } else {
+        format!("{n} {word}s")
+    }
+}
+
+pub fn preview(git: &Git, lane: &Lane, action: Action) -> Preview {
+    let mut blockers = Vec::new();
+    let main = &lane.main_checkout;
+    let branch_ok = branch_exists(git, main, &lane.branch);
+    if !branch_ok {
+        blockers.push(format!("The branch {} no longer exists.", lane.branch));
+    }
+    let checkout_ok = lane.checkout_path.is_dir();
+    let changed = if checkout_ok {
+        changed_paths(git, &lane.checkout_path, true).unwrap_or_else(|e| {
+            blockers.push(format!("Could not read the lane: {e}"));
+            Vec::new()
+        })
+    } else {
+        Vec::new()
+    };
+    let commits = if branch_ok {
+        count(
+            git,
+            main,
+            &[
+                "rev-list",
+                "--count",
+                &format!("{}..{}", lane.base_branch, lane.branch),
+            ],
+        )
+    } else {
+        0
+    };
+    let unmerged_commits = if branch_ok {
+        count(
+            git,
+            main,
+            &[
+                "rev-list",
+                "--count",
+                &lane.branch,
+                "--not",
+                &format!("--exclude=refs/heads/{}", lane.branch),
+                "--branches",
+            ],
+        )
+    } else {
+        0
+    };
+    if action == Action::Land {
+        if !checkout_ok {
+            blockers.push("The lane folder is missing.".into());
+        } else if !changed.is_empty() {
+            blockers.push(format!(
+                "The lane has {}. Commit them first.",
+                plural(changed.len(), "uncommitted file")
+            ));
+        }
+        blockers.extend(main_checkout_blockers(git, lane));
+    }
+    Preview {
+        branch: lane.branch.clone(),
+        base_branch: lane.base_branch.clone(),
+        commits,
+        changed_total: changed.len(),
+        changed_files: changed.into_iter().take(PREVIEW_FILES).collect(),
+        unmerged_commits,
+        blockers,
+    }
+}
+
+/// Why the main checkout cannot receive a land right now.
+fn main_checkout_blockers(git: &Git, lane: &Lane) -> Vec<String> {
+    let main = &lane.main_checkout;
+    if !main.is_dir() {
+        return vec![format!(
+            "The workspace's repository folder {} is missing.",
+            main.display()
+        )];
+    }
+    let mut out = Vec::new();
+    if let Ok(dir) = git.ok(main, &["rev-parse", "--absolute-git-dir"])
+        && let Some(op) = operation_in_progress(Path::new(&dir))
+    {
+        out.push(format!(
+            "A {op} is in progress in the workspace folder. Finish or abort it first."
+        ));
+    }
+    match git.ok(main, &["symbolic-ref", "-q", "--short", "HEAD"]) {
+        Ok(current) if current == lane.base_branch => {}
+        Ok(current) => out.push(format!(
+            "The workspace folder is on {current}, not {}. Switch it back to {} first.",
+            lane.base_branch, lane.base_branch
+        )),
+        Err(_) => out.push(format!(
+            "The workspace folder has no branch checked out. Check out {} first.",
+            lane.base_branch
+        )),
+    }
+    match changed_paths(git, main, false) {
+        Ok(c) if c.is_empty() => {}
+        Ok(c) => out.push(format!(
+            "The workspace folder has {}. Commit or stash them first.",
+            plural(c.len(), "uncommitted change")
+        )),
+        Err(e) => out.push(format!("Could not read the workspace folder: {e}")),
+    }
+    out
+}
+
+fn blocked(message: impl Into<String>) -> AppError {
+    AppError::new(ErrorCode::LaneBlocked, message)
+}
+
+/// One lock per repository, so lands into it run one at a time (FR-012).
+fn repo_lock(git: &Git, main: &Path) -> std::sync::Arc<std::sync::Mutex<()>> {
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex, OnceLock};
+    static LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> = OnceLock::new();
+    let key = git
+        .ok(
+            main,
+            &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+        )
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| main.to_path_buf());
+    let key = key.canonicalize().unwrap_or(key);
+    LOCKS
+        .get_or_init(Mutex::default)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .entry(key)
+        .or_default()
+        .clone()
+}
+
+/// Conflicting paths from `merge-tree --write-tree --name-only -z` (exit code 1).
+fn conflicted_paths(stdout: &[u8]) -> Vec<String> {
+    let mut paths: Vec<String> = stdout
+        .split(|b| *b == 0)
+        .skip(1)
+        .take_while(|f| !f.is_empty())
+        .map(|f| String::from_utf8_lossy(f).into_owned())
+        .collect();
+    paths.dedup();
+    paths
+}
+
+fn conflict_message(paths: &[String], base: &str) -> String {
+    let shown = paths
+        .iter()
+        .take(CONFLICT_FILES)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(", ");
+    let more = paths.len().saturating_sub(CONFLICT_FILES);
+    let more = if more > 0 {
+        format!(" and {more} more")
+    } else {
+        String::new()
+    };
+    format!(
+        "Land cancelled: conflicts in {shown}{more}. Nothing changed. Merge {base} into the \
+         lane, resolve, commit, and land again."
+    )
+}
+
+/// Merges the lane into its base branch in the main checkout (research R6). Returns the number
+/// of commits brought in.
+pub fn land(git: &Git, lane: &Lane) -> AppResult<u32> {
+    let lock = repo_lock(git, &lane.main_checkout);
+    let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
+    let p = preview(git, lane, Action::Land);
+    if !p.blockers.is_empty() {
+        return Err(blocked(p.blockers.join(" ")));
+    }
+    if p.commits == 0 {
+        return Err(blocked(format!(
+            "Nothing to land: {} already has every commit of {}.",
+            lane.base_branch, lane.branch
+        )));
+    }
+    let main = &lane.main_checkout;
+    let dry = git
+        .run(
+            main,
+            &[
+                "merge-tree",
+                "--write-tree",
+                "--name-only",
+                "-z",
+                &lane.base_branch,
+                &lane.branch,
+            ],
+        )
+        .map_err(|e| blocked(e.to_string()))?;
+    match dry.code {
+        Some(0) => {}
+        Some(1) => {
+            return Err(AppError::new(
+                ErrorCode::LaneConflict,
+                conflict_message(&conflicted_paths(&dry.stdout), &lane.base_branch),
+            ));
+        }
+        _ => return Err(blocked(format!("Land failed: {}", dry.stderr.trim()))),
+    }
+    let head = git
+        .ok(main, &["rev-parse", "HEAD"])
+        .map_err(|e| blocked(e.to_string()))?;
+    let message = format!("Merge lane {} into {}", lane.branch, lane.base_branch);
+    let merged = git
+        .run(
+            main,
+            &[
+                "merge",
+                "--no-ff",
+                "--no-edit",
+                "-m",
+                &message,
+                &lane.branch,
+            ],
+        )
+        .map_err(|e| blocked(e.to_string()))?;
+    if merged.success() {
+        return Ok(p.commits);
+    }
+    if let Ok(dir) = git.ok(main, &["rev-parse", "--absolute-git-dir"])
+        && Path::new(&dir).join("MERGE_HEAD").exists()
+    {
+        let _ = git.run(main, &["merge", "--abort"]);
+    }
+    let now = git.ok(main, &["rev-parse", "HEAD"]).unwrap_or_default();
+    let detail = format!("{} {}", merged.text(), merged.stderr.trim());
+    if now != head {
+        tracing::error!(%head, %now, "HEAD moved during a failed land");
+    }
+    Err(blocked(format!("Land failed: {}", detail.trim())))
+}
+
+/// Deletes a lane checkout through git after the removal guard passes (research R7). A folder
+/// that is already gone only gets `worktree prune`.
+pub fn remove_checkout(git: &Git, lanes_ws_dir: &Path, lane: &Lane, force: bool) -> AppResult<()> {
+    let main = &lane.main_checkout;
+    let worktrees = git
+        .run(main, &["worktree", "list", "--porcelain", "-z"])
+        .map(|o| super::git::parse_worktrees_z(&o.stdout))
+        .unwrap_or_default();
+    let path = &lane.checkout_path;
+    match guard::check_removable(lanes_ws_dir, path, lane.slug(), &worktrees) {
+        Ok(()) => {
+            let mut args: Vec<&OsStr> = vec!["worktree".as_ref(), "remove".as_ref()];
+            if force {
+                args.push("--force".as_ref());
+            }
+            args.push(path.as_os_str());
+            let out = git.run(main, &args).map_err(|e| blocked(e.to_string()))?;
+            if !out.success() {
+                return Err(blocked(format!(
+                    "Could not remove the lane folder: {}",
+                    out.stderr.trim()
+                )));
+            }
+        }
+        Err(GuardError::Missing) => {}
+        Err(e) => {
+            return Err(AppError::new(
+                ErrorCode::LaneUnsafePath,
+                format!("Refusing to delete {}: {e}.", path.display()),
+            ));
+        }
+    }
+    let _ = git.run(main, &["worktree", "prune"]);
+    let _ = std::fs::remove_dir(lanes_ws_dir);
+    Ok(())
 }
