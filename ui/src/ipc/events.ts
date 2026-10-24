@@ -35,6 +35,8 @@ export type EventMap = {
   "usage://warning": UsageWarning;
   "usage://consent": ConsentRequest;
   "lane://status": LaneStatus;
+  "lane://confirm": import("./types").LaneConfirmEvent;
+  "lane://confirm-closed": { requestId: string };
 };
 
 export function onEvent<K extends keyof EventMap>(

@@ -168,3 +168,40 @@ describe("Deleting a lane terminal", () => {
     expect(useCanvas.getState().laneDialog).toEqual({ nodeId: "t1", action: "remove", deleteNode: true });
   });
 });
+
+describe("Requests from agents", () => {
+  const request = { requestId: "r1", requestedBy: "Api", preview: preview(), deleteBranch: false };
+
+  it("shows who asked, uses the sent preview, and answers yes", async () => {
+    const onClose = vi.fn();
+    render(<LaneDialog state={{ nodeId: "t1", action: "land", request }} onClose={onClose} />);
+    expect(screen.getByText(/Requested by Api/)).toBeInTheDocument();
+    expect(ipc.lanePreview).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Land" }));
+    await waitFor(() => expect(ipc.laneConfirmAnswer).toHaveBeenCalledWith("r1", true, false, false));
+    expect(ipc.laneLand).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("answers no on cancel", async () => {
+    const onClose = vi.fn();
+    render(<LaneDialog state={{ nodeId: "t1", action: "remove", request: { ...request, deleteBranch: true } }} onClose={onClose} />);
+    expect(screen.getByRole("checkbox", { name: /Also delete the branch/ })).toBeChecked();
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(ipc.laneConfirmAnswer).toHaveBeenCalledWith("r1", false));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("opens on lane://confirm and closes when the request goes away", async () => {
+    const { useCanvas } = await import("../src/state/canvas");
+    useCanvas.setState(useCanvas.getInitialState(), true);
+    useCanvas.getState().showLaneRequest({
+      requestId: "r1", nodeId: "t1", action: "land", requestedBy: "Api", preview: preview(), deleteBranch: false,
+    });
+    expect(useCanvas.getState().laneDialog).toEqual({ nodeId: "t1", action: "land", request });
+    useCanvas.getState().closeLaneRequest("other");
+    expect(useCanvas.getState().laneDialog).not.toBeNull();
+    useCanvas.getState().closeLaneRequest("r1");
+    expect(useCanvas.getState().laneDialog).toBeNull();
+  });
+});

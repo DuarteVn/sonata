@@ -63,6 +63,7 @@ const COMMANDS: &[&str] = &[
     "lane_land",
     "lane_remove",
     "lane_forget",
+    "lane_confirm_answer",
 ];
 
 fn main() {

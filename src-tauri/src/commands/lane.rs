@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use sonata_core::app::LaneRemoval;
+use sonata_core::lanes::confirm::Answer;
 use sonata_core::lanes::ops::{Action, Availability, Preview};
 use sonata_core::{App, AppError};
 use tauri::State;
@@ -52,4 +53,22 @@ pub fn lane_remove(
 #[tauri::command]
 pub fn lane_forget(app: State<'_, Arc<App>>, node_id: Uuid) -> Result<(), AppError> {
     app.lane_forget(node_id)
+}
+
+#[tauri::command]
+pub fn lane_confirm_answer(
+    app: State<'_, Arc<App>>,
+    request_id: Uuid,
+    accepted: bool,
+    discard_changes: Option<bool>,
+    delete_branch: Option<bool>,
+) -> Result<(), AppError> {
+    app.answer_lane_confirmation(
+        request_id,
+        Answer {
+            accepted,
+            discard_changes: discard_changes.unwrap_or(false),
+            delete_branch: delete_branch.unwrap_or(false),
+        },
+    )
 }

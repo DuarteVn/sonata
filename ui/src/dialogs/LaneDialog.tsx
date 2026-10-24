@@ -29,11 +29,18 @@ export function LaneDialog({ state, onClose }: Props) {
       .catch((err) => setError(message(err)));
   }, [nodeId, action, request, state.action]);
 
+  // A request from an agent is answered, never left waiting; the app then does the work.
+  function cancel() {
+    if (request) ipc.laneConfirmAnswer(request.requestId, false).catch(() => {});
+    onClose();
+  }
+
   async function confirm() {
     setBusy(true);
     setError(null);
     try {
-      if (action === "land") await ipc.laneLand(nodeId, true);
+      if (request) await ipc.laneConfirmAnswer(request.requestId, true, discard, deleteBranch);
+      else if (action === "land") await ipc.laneLand(nodeId, true);
       else if (deleteNode)
         await useCanvas.getState().removeNode(nodeId, true, { discardChanges: discard, deleteBranch });
       else await ipc.laneRemove(nodeId, discard, deleteBranch, true);
@@ -51,9 +58,10 @@ export function LaneDialog({ state, onClose }: Props) {
   const title = action === "land" ? "Land lane" : deleteNode ? "Delete terminal and lane" : "Remove lane";
 
   return (
-    <Modal title={title} onClose={onClose}>
+    <Modal title={title} onClose={cancel}>
       {preview && (
         <div className="dialog-body lane-dialog">
+          {request && <p className="lane-requested">Requested by {request.requestedBy} with the sonata command.</p>}
           {action === "land" ? (
             <p>
               Merge <code>{preview.branch}</code> into {preview.baseBranch}: {plural(preview.commits, "commit")}. The lane
@@ -118,7 +126,7 @@ export function LaneDialog({ state, onClose }: Props) {
         </p>
       )}
       <div className="actions">
-        <button type="button" onClick={onClose}>
+        <button type="button" onClick={cancel}>
           Cancel
         </button>
         {action === "land" ? (

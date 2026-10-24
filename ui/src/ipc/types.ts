@@ -118,6 +118,16 @@ export type LaneStatus = {
 export type LaneAction = "land" | "remove";
 export type LaneRemoval = { discardChanges: boolean; deleteBranch: boolean };
 
+/** `lane://confirm`: an agent asked for a land or removal; a human must answer. */
+export type LaneConfirmEvent = {
+  requestId: string;
+  nodeId: string;
+  action: LaneAction;
+  requestedBy: string;
+  preview: LanePreview;
+  deleteBranch: boolean;
+};
+
 /** What a land or remove confirmation shows (contracts/ipc.md). */
 export type LanePreview = {
   branch: string;

@@ -52,6 +52,8 @@ export const ipc = {
   laneRemove: (nodeId: string, discardChanges: boolean, deleteBranch: boolean, confirmed: boolean) =>
     invoke<void>("lane_remove", { nodeId, discardChanges, deleteBranch, confirmed }),
   laneForget: (nodeId: string) => invoke<void>("lane_forget", { nodeId }),
+  laneConfirmAnswer: (requestId: string, accepted: boolean, discardChanges?: boolean, deleteBranch?: boolean) =>
+    invoke<void>("lane_confirm_answer", { requestId, accepted, discardChanges, deleteBranch }),
   nodeUpdateFrame: (workspaceId: string, nodeId: string, frame: Frame) =>
     invoke<Frame>("node_update_frame", { workspaceId, nodeId, frame }),
   nodeBringToFront: (workspaceId: string, nodeId: string) =>

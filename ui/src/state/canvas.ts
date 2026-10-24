@@ -7,6 +7,7 @@ import type {
   CanvasNode,
   Frame,
   LaneAction,
+  LaneConfirmEvent,
   LanePreview,
   LaneRemoval,
   LaneStatus,
@@ -64,6 +65,8 @@ type CanvasState = {
   openTerminalDialog: (mode: TerminalDialogMode | null) => void;
   laneDialog: LaneDialogState | null;
   openLaneDialog: (state: LaneDialogState | null) => void;
+  showLaneRequest: (e: LaneConfirmEvent) => void;
+  closeLaneRequest: (requestId: string) => void;
   replaceNode: (node: CanvasNode) => void;
   setNoteStyle: (id: string, style: NoteStyle) => Promise<void>;
   /** Terminal waiting for "close anyway?" confirmation. */
@@ -221,6 +224,16 @@ export const useCanvas = create<CanvasState>((set, get) => ({
     }),
   openTerminalDialog: (terminalDialog) => set({ terminalDialog }),
   openLaneDialog: (laneDialog) => set({ laneDialog }),
+  showLaneRequest: (e) =>
+    set({
+      laneDialog: {
+        nodeId: e.nodeId,
+        action: e.action,
+        request: { requestId: e.requestId, requestedBy: e.requestedBy, preview: e.preview, deleteBranch: e.deleteBranch },
+      },
+    }),
+  closeLaneRequest: (requestId) =>
+    set((s) => (s.laneDialog?.request?.requestId === requestId ? { laneDialog: null } : {})),
   confirmClose: null,
   asks: {},
   browserStates: {},
