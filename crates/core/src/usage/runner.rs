@@ -167,7 +167,19 @@ fn has_exited(pid: i32) -> bool {
     let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
     let flags = libc::WEXITED | libc::WNOHANG | libc::WNOWAIT;
     let r = unsafe { libc::waitid(libc::P_PID, pid as libc::id_t, &mut info, flags) };
-    r == 0 && info.si_pid != 0
+    r == 0 && exited_pid(&info) != 0
+}
+
+/// `si_pid` is a plain field on macOS but an accessor method in the Linux `libc` bindings.
+#[cfg(target_os = "linux")]
+fn exited_pid(info: &libc::siginfo_t) -> libc::pid_t {
+    // SAFETY: `waitid` with `WEXITED` fills the child-status variant of the union.
+    unsafe { info.si_pid() }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn exited_pid(info: &libc::siginfo_t) -> libc::pid_t {
+    info.si_pid
 }
 
 /// Reads a pipe on its own thread into a buffer of at most `cap` bytes.

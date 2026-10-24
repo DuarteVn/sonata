@@ -63,6 +63,19 @@ fn custom_command_needs_consent_again_when_it_changes() {
     let st = svc.refresh(RefreshReason::Manual, Some("fake"));
     let fake = st.providers.iter().find(|p| p.id == "fake").unwrap();
     assert_eq!(fake.consent, "granted");
+    if !std::path::Path::new(sonata_core::usage::custom::SANDBOX_EXEC).exists() {
+        // No sandbox (Linux CI): custom commands fail closed and never run.
+        assert!(fake.reading.is_none());
+        assert!(
+            fake.last_error
+                .as_deref()
+                .unwrap_or_default()
+                .contains("sandbox-exec"),
+            "{:?}",
+            fake.last_error
+        );
+        return;
+    }
     let reading = fake.reading.as_ref().unwrap();
     assert_eq!(
         reading.status,
