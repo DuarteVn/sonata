@@ -65,7 +65,10 @@ macro_rules! unary {
 
 unary!(SendTouch, TouchEvent, (), |f, m| {
     let t = &m.touches[0];
-    f.log(format!("touch {} {} {}", t.x, t.y, t.pressure));
+    f.log(format!(
+        "touch {} {} {} {}",
+        t.x, t.y, t.pressure, t.touch_major
+    ));
 });
 unary!(SendKey, KeyboardEvent, (), |f, m| {
     f.log(format!("key {:?} {:?} {}", m.key, m.text, m.event_type));
@@ -226,8 +229,9 @@ fn input_calls_carry_the_token() {
     assert_eq!(
         calls,
         vec![
-            "touch 10 20 1",
-            "touch 10 20 0",
+            // A finger: full pressure and a contact area while down (real-AVD finding).
+            "touch 10 20 1024 10",
+            "touch 10 20 0 0",
             "key \"\" \"hi\" 2",
             "key \"GoBack\" \"\" 2",
             "wheel 0 -240",
