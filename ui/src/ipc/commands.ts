@@ -79,6 +79,8 @@ export const ipc = {
   terminalSetLaunchCommand: (nodeId: string, launchCommand: string | null) =>
     invoke<void>("terminal_set_launch_command", { nodeId, launchCommand }),
   terminalRestart: (nodeId: string, confirmed = false) => invoke<void>("terminal_restart", { nodeId, confirmed }),
+  terminalStartFresh: (nodeId: string, confirmed = false) =>
+    invoke<void>("terminal_start_fresh", { nodeId, confirmed }),
   terminalUpdateSettings: (nodeId: string, settings: TerminalSettings) =>
     invoke<SettingsUpdate>("terminal_update_settings", { nodeId, settings }),
   nodeCreateBrowser: (workspaceId: string, frame: Frame, url?: string) =>

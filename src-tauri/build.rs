@@ -51,6 +51,7 @@ const COMMANDS: &[&str] = &[
     "terminal_rename",
     "terminal_set_launch_command",
     "terminal_restart",
+    "terminal_start_fresh",
     "terminal_set_save_history",
     "terminal_clear_history",
     "terminal_preview_subscribe",

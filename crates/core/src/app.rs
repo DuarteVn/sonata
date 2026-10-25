@@ -1139,12 +1139,7 @@ impl App {
 
     /// Restarts a terminal with its current settings. A busy terminal needs `confirmed`.
     pub fn restart_terminal(&self, node: Uuid, confirmed: bool) -> AppResult<()> {
-        if !confirmed && self.terminals.is_busy(node) {
-            return Err(AppError::new(
-                ErrorCode::TerminalBusy,
-                "A program is still running in this terminal. Restart it anyway?",
-            ));
-        }
+        self.check_not_busy(node, confirmed)?;
         if self.clear_landed_lane(node)? || !self.terminals.contains(node) {
             return self.start_fresh(node);
         }
@@ -1160,6 +1155,26 @@ impl App {
             self.maybe_type_instructions(&ws, &n);
         }
         Ok(())
+    }
+
+    /// A busy terminal stops only after the user confirms (`TerminalBusy`).
+    fn check_not_busy(&self, node: Uuid, confirmed: bool) -> AppResult<()> {
+        if !confirmed && self.terminals.is_busy(node) {
+            return Err(AppError::new(
+                ErrorCode::TerminalBusy,
+                "A program is still running in this terminal. Restart it anyway?",
+            ));
+        }
+        Ok(())
+    }
+
+    /// "Start fresh": forgets the terminal's conversation and restarts it, so the agent starts
+    /// a new one. The agent's own files are not touched (feature 009, research R7).
+    pub fn start_fresh_conversation(&self, node: Uuid, confirmed: bool) -> AppResult<()> {
+        let ws = self.workspace_of_node(node)?;
+        self.check_not_busy(node, confirmed)?;
+        self.set_conversation(ws, node, None)?;
+        self.restart_terminal(node, true)
     }
 
     pub fn update_terminal_settings(

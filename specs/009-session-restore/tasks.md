@@ -77,12 +77,12 @@ recording automatic; until then, test with the command).
 **Goal**: The user can forget a terminal's conversation and restart in a new one.
 **Independent Test**: quickstart D.
 
-- [ ] T025 [P] [US4] Write core tests in crates/core/tests/session_restore_record.rs for `App::start_fresh_conversation(node, confirmed)`: a busy terminal with `confirmed = false` returns `TerminalBusy` with the same message as `restart_terminal` and keeps the conversation; otherwise the conversation is removed from the node and from the file on disk, the terminal restarts, and the next `_session` has no `resume`; an unknown node returns `NodeNotFound`; the agent's files are untouched (a temp file standing for the transcript still exists)
-- [ ] T026 [US4] Implement `App::start_fresh_conversation` in crates/core/src/app.rs reusing the busy check of `restart_terminal` and the private `start_fresh` restart (research R7)
-- [ ] T027 [US4] Add the `terminal_start_fresh(node_id, confirmed)` command in src-tauri/src/commands/terminal.rs and register it in src-tauri/src/commands/mod.rs, src-tauri/src/lib.rs, src-tauri/build.rs, and src-tauri/capabilities/default.json
-- [ ] T028 [P] [US4] Add `conversation?: { agent: "claude" | "codex"; id: string; recordedAt: string }` to `TerminalContent` in ui/src/ipc/types.ts and `terminalStartFresh(nodeId, confirmed)` in ui/src/ipc/commands.ts (contracts/ipc.md)
-- [ ] T029 [P] [US4] Write tests in ui/tests/terminalMenu.test.tsx: "Start fresh" is shown only when the node has `conversation`; clicking it calls `terminalStartFresh(id, false)`; on a `TerminalBusy` error the existing restart confirmation appears and confirming calls `terminalStartFresh(id, true)`; the tooltip reads "Forget this terminal's conversation and restart the agent in a new one."
-- [ ] T030 [US4] Add the "Start fresh" item to ui/src/nodes/TerminalMenu.tsx, reusing the confirmation flow of Restart
+- [x] T025 [P] [US4] Write core tests in crates/core/tests/session_restore_record.rs for `App::start_fresh_conversation(node, confirmed)`: a busy terminal with `confirmed = false` returns `TerminalBusy` with the same message as `restart_terminal` and keeps the conversation; otherwise the conversation is removed from the node and from the file on disk, the terminal restarts, and the next `_session` has no `resume`; an unknown node returns `NodeNotFound`; the agent's files are untouched (a temp file standing for the transcript still exists)
+- [x] T026 [US4] Implement `App::start_fresh_conversation` in crates/core/src/app.rs reusing the busy check of `restart_terminal` and the private `start_fresh` restart (research R7)
+- [x] T027 [US4] Add the `terminal_start_fresh(node_id, confirmed)` command in src-tauri/src/commands/terminal.rs and register it in src-tauri/src/commands/mod.rs, src-tauri/src/lib.rs, src-tauri/build.rs, and src-tauri/capabilities/default.json
+- [x] T028 [P] [US4] Add `conversation?: { agent: "claude" | "codex"; id: string; recordedAt: string }` to `TerminalContent` in ui/src/ipc/types.ts and `terminalStartFresh(nodeId, confirmed)` in ui/src/ipc/commands.ts (contracts/ipc.md)
+- [x] T029 [P] [US4] Write tests in ui/tests/terminalMenu.test.tsx: "Start fresh" is shown only when the node has `conversation`; clicking it calls `terminalStartFresh(id, false)`; on a `TerminalBusy` error the existing restart confirmation appears and confirming calls `terminalStartFresh(id, true)`; the tooltip reads "Forget this terminal's conversation and restart the agent in a new one."
+- [x] T030 [US4] Add the "Start fresh" item to ui/src/nodes/TerminalMenu.tsx, reusing the confirmation flow of Restart
 
 **Checkpoint**: quickstart D passes.
 

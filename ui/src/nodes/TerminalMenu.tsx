@@ -1,12 +1,13 @@
 import { MoreHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ConfirmDialog, RESTART_CONFIRM } from "../dialogs/ConfirmDialog";
 import { ipc } from "../ipc/commands";
 import { isAppError, type CanvasNode } from "../ipc/types";
 import { useCanvas } from "../state/canvas";
 import { useWorkspaces } from "../state/workspaces";
 
-// Per-terminal options: history saving (FR-015a). The menu is rendered in a portal on top of
+// Per-terminal options: history saving (FR-015a), lanes (008), Start fresh (009). The menu is rendered in a portal on top of
 // everything: inside the scaled canvas it would sit under the live terminal layer.
 export function TerminalMenu({ node }: { node: CanvasNode }) {
   const initial = "terminal" in node.content ? node.content.terminal.saveHistory : true;
@@ -14,6 +15,8 @@ export function TerminalMenu({ node }: { node: CanvasNode }) {
   const laneState = useCanvas((s) => s.laneStatuses[node.id]?.state);
   const missing = laneState === "checkoutMissing";
   const activeLane = lane && !lane.landedAt && !missing ? lane : undefined;
+  const conversation = "terminal" in node.content ? node.content.terminal.conversation : undefined;
+  const [confirmFresh, setConfirmFresh] = useState(false);
   const [open, setOpen] = useState(false);
   const [saveHistory, setSaveHistory] = useState(initial);
   const ref = useRef<HTMLDivElement>(null);
@@ -23,6 +26,15 @@ export function TerminalMenu({ node }: { node: CanvasNode }) {
   const report = (err: unknown) => addWarning(isAppError(err) ? err.message : String(err));
 
   useEffect(() => setSaveHistory(initial), [initial]);
+
+  async function startFresh(confirmed: boolean) {
+    try {
+      await ipc.terminalStartFresh(node.id, confirmed);
+    } catch (err) {
+      if (isAppError(err) && err.code === "TerminalBusy") setConfirmFresh(true);
+      else report(err);
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -88,6 +100,23 @@ export function TerminalMenu({ node }: { node: CanvasNode }) {
             <span className="menu-check" aria-hidden />
             Clear saved history
           </button>
+          {conversation && (
+            <>
+              <div className="menu-separator" role="separator" />
+              <button
+                type="button"
+                role="menuitem"
+                title="Forget this terminal's conversation and restart the agent in a new one."
+                onClick={() => {
+                  setOpen(false);
+                  void startFresh(false);
+                }}
+              >
+                <span className="menu-check" aria-hidden />
+                Start fresh
+              </button>
+            </>
+          )}
           {activeLane && (
             <>
               <div className="menu-separator" role="separator" />
@@ -134,6 +163,17 @@ export function TerminalMenu({ node }: { node: CanvasNode }) {
         </div>,
           document.body,
         )}
+      {confirmFresh && (
+        <ConfirmDialog
+          {...RESTART_CONFIRM}
+          danger
+          onCancel={() => setConfirmFresh(false)}
+          onConfirm={() => {
+            setConfirmFresh(false);
+            void startFresh(true);
+          }}
+        />
+      )}
     </div>
   );
 }

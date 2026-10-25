@@ -83,6 +83,16 @@ pub fn terminal_restart(
     app.restart_terminal(node_id, confirmed)
 }
 
+/// Forgets the terminal's agent conversation and restarts it (feature 009).
+#[tauri::command]
+pub fn terminal_start_fresh(
+    app: State<'_, Arc<App>>,
+    node_id: Uuid,
+    confirmed: bool,
+) -> Result<(), AppError> {
+    app.start_fresh_conversation(node_id, confirmed)
+}
+
 #[tauri::command]
 pub fn terminal_set_save_history(
     app: State<'_, Arc<App>>,

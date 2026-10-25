@@ -59,6 +59,7 @@
     "allow-terminal-rename",
     "allow-terminal-set-launch-command",
     "allow-terminal-restart",
+    "allow-terminal-start-fresh",
     "allow-terminal-set-save-history",
     "allow-terminal-clear-history",
     "allow-terminal-preview-subscribe",

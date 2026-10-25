@@ -188,3 +188,56 @@ fn conversation_command_refuses_callers_that_are_not_terminals() {
     assert!(conversation(&app, ws, ids[0]).is_none());
     app.quit();
 }
+
+#[test]
+fn start_fresh_forgets_the_conversation_and_restarts() {
+    use common::{WAIT, wait_until};
+    use sonata_core::error::ErrorCode;
+    let sb = Sandbox::new();
+    let (app, _) = messaging_app(&sb);
+    let (ws, ids) = shells(&app, &sb, &["A"]);
+    let a = ids[0];
+    // Stands for the agent's transcript: Start fresh must not touch it.
+    let transcript = sb.tmp.path().join(format!("{ID}.jsonl"));
+    std::fs::write(&transcript, "{}\n").unwrap();
+    app.record_conversation(a, CLAUDE, Some(ID)).unwrap();
+
+    app.terminals().write(a, b"sleep 10\r").unwrap();
+    assert!(wait_until(WAIT, || app.terminals().is_busy(a)));
+    let err = app.start_fresh_conversation(a, false).unwrap_err();
+    assert_eq!(err.code, ErrorCode::TerminalBusy);
+    assert_eq!(
+        err.message,
+        app.restart_terminal(a, false).unwrap_err().message
+    );
+    assert!(conversation(&app, ws, a).is_some());
+
+    let token = app.terminals().session_token(a);
+    app.start_fresh_conversation(a, true).unwrap();
+    assert!(conversation(&app, ws, a).is_none());
+    assert!(on_disk(&sb, ws, a).is_null());
+    assert_ne!(
+        app.terminals().session_token(a),
+        token,
+        "terminal restarted"
+    );
+    assert!(wait_until(WAIT, || !app.terminals().is_busy(a)));
+    let hook = common::cli_bin().display().to_string();
+    let out = sonata_as(&app, a, &["_session", "claude", &hook, "--json"]);
+    let v: Value = serde_json::from_str(&out.stdout).unwrap();
+    assert!(v["data"].get("resume").is_none(), "{v}");
+    assert!(transcript.exists());
+
+    // An idle terminal needs no confirmation.
+    app.record_conversation(a, CLAUDE, Some(ID)).unwrap();
+    app.start_fresh_conversation(a, false).unwrap();
+    assert!(conversation(&app, ws, a).is_none());
+
+    assert_eq!(
+        app.start_fresh_conversation(Uuid::new_v4(), true)
+            .unwrap_err()
+            .code,
+        ErrorCode::NodeNotFound
+    );
+    app.quit();
+}

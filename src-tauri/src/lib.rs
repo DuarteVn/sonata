@@ -132,6 +132,7 @@ pub fn run() {
             commands::terminal::terminal_rename,
             commands::terminal::terminal_set_launch_command,
             commands::terminal::terminal_restart,
+            commands::terminal::terminal_start_fresh,
             commands::terminal::terminal_set_save_history,
             commands::terminal::terminal_clear_history,
             commands::terminal::terminal_preview_subscribe,
