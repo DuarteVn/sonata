@@ -32,6 +32,16 @@ fn agents() -> &'static Path {
                 dir.display()
             ),
         );
+        // A Claude Code whose resume always fails; a fresh start reports a new, empty session.
+        common::fake_bin::fake_bin(
+            &dir,
+            "claude",
+            &format!(
+                "if [ \"$1\" = --resume ]; then echo 'No conversation found' >&2; exit 1; fi\n\
+                 echo '{{\"session_id\":\"new\",\"source\":\"startup\"}}' | '{}' _hook session-start",
+                common::cli_bin().display()
+            ),
+        );
         // SAFETY: runs once, before any test thread starts an app or reads the environment.
         unsafe { std::env::set_var("SONATA_AGENT_BIN_DIR", &dir) };
         dir
@@ -170,5 +180,48 @@ fn resumed_session_gets_the_same_files_and_typed_instructions_once() {
     assert!(typed(2), "screen: {:?}", app.terminals().screen_text(codex));
     std::thread::sleep(Duration::from_secs(3));
     assert!(typed(2), "typed more than once");
+    app.quit();
+}
+
+#[test]
+fn failed_resume_is_not_offered_again_after_reopen() {
+    agents();
+    let sb = Sandbox::new();
+    let (ws, a) = {
+        let (app, _) = messaging_app(&sb);
+        let (ws, ids) = shells(&app, &sb, &["A"]);
+        let a = ids[0];
+        app.record_conversation(a, ConversationAgent::Claude, Some(ID))
+            .unwrap();
+        restart(&app, a);
+        let out = std::process::Command::new(common::cli_bin())
+            .args(["run", "claude"])
+            .env("SONATA_SOCKET", app.socket_path().unwrap())
+            .env("SONATA_TERMINAL_ID", a.to_string())
+            .env("SONATA_TOKEN", app.terminals().session_token(a).unwrap())
+            .env_remove("SONATA_CONVERSATION")
+            .output()
+            .unwrap();
+        assert_eq!(out.status.code(), Some(0), "{out:?}");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(
+            stderr.matches("could not be resumed").count(),
+            1,
+            "{stderr}"
+        );
+        let stored = app
+            .workspaces()
+            .workspace(ws)
+            .and_then(|w| w.node(a).cloned())
+            .and_then(|n| n.terminal().and_then(|t| t.conversation.clone()));
+        assert!(stored.is_none(), "{stored:?}");
+        app.quit();
+        (ws, a)
+    };
+    let (app, _) = messaging_app(&sb);
+    app.open_workspace(ws).unwrap();
+    assert!(wait_until(WAIT, || app
+        .terminal_ready(a, std::time::Duration::from_millis(300))));
+    assert!(session(&app, a, "claude").get("resume").is_none());
     app.quit();
 }

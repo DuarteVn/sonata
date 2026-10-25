@@ -91,10 +91,10 @@ recording automatic; until then, test with the command).
 **Goal**: A failed resume prints one notice and starts a fresh conversation, never a loop.
 **Independent Test**: quickstart E.
 
-- [ ] T031 [P] [US5] Write wrapper tests in crates/core/tests/session_restore_run.rs: a fake `claude` that exits 1 at once when its first arguments are `--resume <id>` and stays 0 otherwise makes `sonata run claude` print exactly `sonata: the previous conversation could not be resumed; starting a new one.` once on stderr and then run `claude` with the original arguments (args file has two lines); a fake that exits 1 after 11 s with `--resume` is not retried and its status is returned; a fake that exits 0 within 10 s is not retried; same for `codex resume <id>`
-- [ ] T032 [US5] Implement the 10-second failure window and fallback `exec` in crates/cli/src/run.rs (research R4); the window defaults to 10 000 ms and is read from `SONATA_RESUME_WINDOW_MS` when set, so tests can shorten it (T031 uses 500 ms and a 1 s fake instead of 11 s)
-- [ ] T033 [P] [US5] Write an integration test in crates/core/tests/session_restore_offer.rs that after a failed resume the fresh start's `SessionStart` (`source=startup`) clears the conversation, so the next app reopen offers nothing (no second notice)
-- [ ] T034 [US5] Make T033 pass (expected to pass with T022 and T032; fix gaps if not)
+- [x] T031 [P] [US5] Write wrapper tests in crates/core/tests/session_restore_run.rs: a fake `claude` that exits 1 at once when its first arguments are `--resume <id>` and stays 0 otherwise makes `sonata run claude` print exactly `sonata: the previous conversation could not be resumed; starting a new one.` once on stderr and then run `claude` with the original arguments (args file has two lines); a fake that exits 1 after 11 s with `--resume` is not retried and its status is returned; a fake that exits 0 within 10 s is not retried; same for `codex resume <id>`
+- [x] T032 [US5] Implement the 10-second failure window and fallback `exec` in crates/cli/src/run.rs (research R4); the window defaults to 10 000 ms and is read from `SONATA_RESUME_WINDOW_MS` when set, so tests can shorten it (T031 uses 500 ms and a 1 s fake instead of 11 s)
+- [x] T033 [P] [US5] Write an integration test in crates/core/tests/session_restore_offer.rs that after a failed resume the fresh start's `SessionStart` (`source=startup`) clears the conversation, so the next app reopen offers nothing (no second notice)
+- [x] T034 [US5] Make T033 pass (expected to pass with T022 and T032; fix gaps if not)
 
 **Checkpoint**: quickstart E passes.
 

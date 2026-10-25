@@ -4,7 +4,8 @@
 
 use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitCode};
+use std::process::{Command, ExitCode, ExitStatus};
+use std::time::{Duration, Instant};
 
 use crate::client;
 
@@ -138,23 +139,52 @@ pub fn main(args: Vec<String>) -> ExitCode {
         cmd
     };
     if let Some(id) = resume.filter(|_| may_resume(&agent, rest)) {
-        return match run_child(command(&resume_args(&agent, &id))) {
-            Ok(code) => ExitCode::from(code),
+        // An error exit soon after start means the conversation could not be resumed (files
+        // gone, agent updated, folder changed): say so once and start a new one (research R4).
+        // The new conversation's start clears the stored one, so it is never tried again.
+        let started = Instant::now();
+        match run_child(command(&resume_args(&agent, &id))) {
+            Ok(status) if status.code().is_some_and(|c| c != 0) && started.elapsed() < window() => {
+                eprintln!(
+                    "sonata: the previous conversation could not be resumed; starting a new one."
+                );
+            }
+            Ok(status) => return ExitCode::from(exit_code(status)),
             Err(err) => {
                 eprintln!("sonata: could not start {agent}: {err}");
-                ExitCode::from(126)
+                return ExitCode::from(126);
             }
-        };
+        }
     }
     let err = command(&[]).exec();
     eprintln!("sonata: could not start {agent}: {err}");
     ExitCode::from(126)
 }
 
-/// Runs the agent as a child and returns its exit code (128 + signal when killed). Like
-/// `system(3)`, the wrapper ignores Ctrl+C and Ctrl+\ while it waits, so only the agent gets
-/// them (research R4).
-fn run_child(mut cmd: Command) -> std::io::Result<u8> {
+/// How long after start an error exit counts as a failed resume. `SONATA_RESUME_WINDOW_MS`
+/// shortens it for tests.
+fn window() -> Duration {
+    std::env::var("SONATA_RESUME_WINDOW_MS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .map(Duration::from_millis)
+        .unwrap_or(RESUME_WINDOW)
+}
+
+const RESUME_WINDOW: Duration = Duration::from_secs(10);
+
+/// The wrapper's exit code for the agent's status: its code, or 128 + signal when killed.
+fn exit_code(status: ExitStatus) -> u8 {
+    match (status.code(), status.signal()) {
+        (Some(code), _) => code as u8,
+        (None, Some(sig)) => 128u8.saturating_add(sig as u8),
+        _ => 1,
+    }
+}
+
+/// Runs the agent as a child and waits. Like `system(3)`, the wrapper ignores Ctrl+C and
+/// Ctrl+\ while it waits, so only the agent gets them (research R4).
+fn run_child(mut cmd: Command) -> std::io::Result<ExitStatus> {
     // SAFETY: only async-signal-safe `signal` calls between fork and exec.
     unsafe {
         cmd.pre_exec(|| {
@@ -176,12 +206,7 @@ fn run_child(mut cmd: Command) -> std::io::Result<u8> {
         libc::signal(libc::SIGINT, int);
         libc::signal(libc::SIGQUIT, quit);
     }
-    let status = status?;
-    Ok(match (status.code(), status.signal()) {
-        (Some(code), _) => code as u8,
-        (None, Some(sig)) => 128u8.saturating_add(sig as u8),
-        _ => 1,
-    })
+    status
 }
 
 #[cfg(test)]

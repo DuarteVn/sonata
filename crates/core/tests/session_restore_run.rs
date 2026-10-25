@@ -167,3 +167,78 @@ fn print_mode_turns_conversation_reports_off() {
     assert!(!off(&["claude", "--model", "x"]));
     app.quit();
 }
+
+const NOTICE: &str = "sonata: the previous conversation could not be resumed; starting a new one.";
+
+/// A fake agent that exits 1 after `delay` when its first argument is `first`, else 0 at once.
+fn failing_resume(bin: &Path, name: &str, first: &str, delay: &str) {
+    let log = bin.join(format!("{name}.args"));
+    common::fake_bin::fake_bin(
+        bin,
+        name,
+        &format!(
+            "echo \"$*\" >> '{}'\nif [ \"$1\" = \"{first}\" ]; then sleep {delay}; exit 1; fi\nexit 0",
+            log.display()
+        ),
+    );
+}
+
+#[test]
+fn failed_resume_prints_one_notice_and_starts_a_new_conversation() {
+    let sb = Sandbox::new();
+    let bin = sb.tmp.path().join("bin");
+    failing_resume(&bin, "claude", "--resume", "0");
+    failing_resume(&bin, "codex", "resume", "0");
+    let (app, _) = messaging_app(&sb);
+    let (_, ids) = shells(&app, &sb, &["A"]);
+    let window = [("SONATA_RESUME_WINDOW_MS", "500")];
+
+    offered(&app, ids[0], ConversationAgent::Claude, ID);
+    let out = run_as(&app, ids[0], &bin, &["claude", "--model", "x"], &window);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(stderr.matches(NOTICE).count(), 1, "{stderr}");
+    let args = fake_agent_args(&bin, "claude");
+    assert_eq!(args.len(), 2, "{args:?}");
+    assert!(args[0].starts_with(&format!("--resume {ID} ")));
+    assert!(!args[1].contains("--resume") && args[1].contains("--settings"));
+    assert!(args[1].ends_with("--model x"), "{args:?}");
+
+    offered(&app, ids[0], ConversationAgent::Codex, "c3");
+    let out = run_as(&app, ids[0], &bin, &["codex"], &window);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stderr).matches(NOTICE).count(),
+        1
+    );
+    let args = fake_agent_args(&bin, "codex");
+    assert_eq!(args.len(), 2, "{args:?}");
+    assert!(args[0].starts_with("resume c3 ") && !args[1].contains("resume"));
+    app.quit();
+}
+
+#[test]
+fn late_failures_and_successes_are_not_retried() {
+    let sb = Sandbox::new();
+    let bin = sb.tmp.path().join("bin");
+    failing_resume(&bin, "claude", "--resume", "1");
+    install_fake_agent(&bin, "codex", 0, 0);
+    let (app, _) = messaging_app(&sb);
+    let (_, ids) = shells(&app, &sb, &["A"]);
+    let window = [("SONATA_RESUME_WINDOW_MS", "500")];
+
+    // Exits with an error after the window: a normal session that ended badly.
+    offered(&app, ids[0], ConversationAgent::Claude, ID);
+    let out = run_as(&app, ids[0], &bin, &["claude"], &window);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(!String::from_utf8_lossy(&out.stderr).contains(NOTICE));
+    assert_eq!(fake_agent_args(&bin, "claude").len(), 1);
+
+    // Exits cleanly within the window: the user quit.
+    offered(&app, ids[0], ConversationAgent::Codex, "c3");
+    let out = run_as(&app, ids[0], &bin, &["codex"], &window);
+    assert_eq!(out.status.code(), Some(0));
+    assert!(!String::from_utf8_lossy(&out.stderr).contains(NOTICE));
+    assert_eq!(fake_agent_args(&bin, "codex").len(), 1);
+    app.quit();
+}
