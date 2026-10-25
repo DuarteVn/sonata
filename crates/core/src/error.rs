@@ -32,6 +32,7 @@ pub enum ErrorCode {
     DeviceInUse,
     DeviceNotRunning,
     ToolMissing,
+    InvalidConversation,
     Io,
     Internal,
 }

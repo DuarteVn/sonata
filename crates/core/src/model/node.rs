@@ -188,6 +188,9 @@ pub struct TerminalContent {
     /// The terminal's own git checkout and branch (feature 008); set only at creation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lane: Option<Box<Lane>>,
+    /// The agent conversation to resume when the terminal starts again (feature 009).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conversation: Option<Conversation>,
 }
 
 impl TerminalContent {
@@ -205,7 +208,61 @@ impl TerminalContent {
             recruited_by: None,
             send_instructions: None,
             lane: None,
+            conversation: None,
         }
+    }
+}
+
+/// An agent conversation remembered for a terminal (feature 009, data-model.md).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Conversation {
+    pub agent: ConversationAgent,
+    pub id: String,
+    pub recorded_at: DateTime<Utc>,
+}
+
+/// Agents whose conversations Sonata can resume (the agents `sonata run` wraps).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ConversationAgent {
+    Claude,
+    Codex,
+}
+
+impl ConversationAgent {
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "claude" => Some(Self::Claude),
+            "codex" => Some(Self::Codex),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Claude => "claude",
+            Self::Codex => "codex",
+        }
+    }
+}
+
+pub const CONVERSATION_ID_MAX_CHARS: usize = 128;
+
+/// A conversation id becomes a command-line argument, so only 1–128 characters of
+/// `[A-Za-z0-9_-]` are accepted.
+pub fn validate_conversation_id(id: &str) -> Result<(), String> {
+    let ok = !id.is_empty()
+        && id.len() <= CONVERSATION_ID_MAX_CHARS
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_');
+    if ok {
+        Ok(())
+    } else {
+        Err(format!(
+            "A conversation id is 1–{CONVERSATION_ID_MAX_CHARS} characters of letters, digits, \"-\", and \"_\"."
+        ))
     }
 }
 
@@ -294,4 +351,74 @@ fn default_text_size() -> u8 {
 
 fn default_true() -> bool {
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    const ID: &str = "7294d08d-ac3c-4e7e-925e-16750c04c269";
+
+    #[test]
+    fn conversation_round_trips_with_camel_case_keys() {
+        let mut t = TerminalContent::new("Api".into());
+        t.conversation = Some(Conversation {
+            agent: ConversationAgent::Claude,
+            id: ID.into(),
+            recorded_at: "2026-10-24T13:05:00Z".parse().unwrap(),
+        });
+        let v = serde_json::to_value(&t).unwrap();
+        assert_eq!(
+            v["conversation"],
+            json!({"agent": "claude", "id": ID, "recordedAt": "2026-10-24T13:05:00Z"})
+        );
+        let back: TerminalContent = serde_json::from_value(v).unwrap();
+        assert_eq!(back, t);
+    }
+
+    #[test]
+    fn terminal_without_conversation_omits_the_field() {
+        let v = serde_json::to_value(TerminalContent::new("Api".into())).unwrap();
+        assert!(v.get("conversation").is_none(), "{v}");
+        let back: TerminalContent = serde_json::from_value(v).unwrap();
+        assert!(back.conversation.is_none());
+    }
+
+    #[test]
+    fn conversation_agent_is_claude_or_codex() {
+        for (text, agent) in [
+            ("claude", ConversationAgent::Claude),
+            ("codex", ConversationAgent::Codex),
+        ] {
+            let c: Conversation = serde_json::from_value(
+                json!({"agent": text, "id": "a", "recordedAt": "2026-10-24T13:05:00Z"}),
+            )
+            .unwrap();
+            assert_eq!(c.agent, agent);
+            assert_eq!(ConversationAgent::parse(text), Some(agent));
+            assert_eq!(agent.as_str(), text);
+        }
+        for bad in ["gemini", "Claude", ""] {
+            assert!(
+                serde_json::from_value::<Conversation>(
+                    json!({"agent": bad, "id": "a", "recordedAt": "2026-10-24T13:05:00Z"})
+                )
+                .is_err()
+            );
+            assert_eq!(ConversationAgent::parse(bad), None);
+        }
+    }
+
+    #[test]
+    fn conversation_ids_are_validated() {
+        assert!(validate_conversation_id(ID).is_ok());
+        assert!(validate_conversation_id("a_B-9").is_ok());
+        assert!(validate_conversation_id(&"x".repeat(128)).is_ok());
+        assert!(validate_conversation_id("").is_err());
+        assert!(validate_conversation_id(&"x".repeat(129)).is_err());
+        for bad in ["a b", "a;b", "a/b", "$x", "a\nb", "é"] {
+            assert!(validate_conversation_id(bad).is_err(), "{bad:?}");
+        }
+    }
 }

@@ -14,6 +14,7 @@ use crate::error::{AppError, AppResult, ErrorCode};
 use crate::events::{CoreEvent, EventSink};
 use crate::model::link::Link;
 use crate::model::node::NOTE_TEXT_SIZES;
+use crate::model::node::{Conversation, ConversationAgent, validate_conversation_id};
 use crate::model::node::{
     FONT_SIZE_RANGE, Frame, Node, NodeContent, ROLE_TEXT_MAX_CHARS, RoleRef,
     TERMINAL_NAME_MAX_CHARS, TerminalContent,
@@ -1597,6 +1598,72 @@ impl App {
             &info,
             hook,
         )?)
+    }
+
+    /// The conversation a terminal's agent reported, or `None` when it reported "no
+    /// conversation" (feature 009, research R6). `None` only forgets a conversation of the same
+    /// agent. A change is saved at once; a repeat does nothing. Returns whether it changed.
+    pub fn record_conversation(
+        &self,
+        node: Uuid,
+        agent: ConversationAgent,
+        id: Option<&str>,
+    ) -> AppResult<bool> {
+        if let Some(id) = id {
+            validate_conversation_id(id)
+                .map_err(|m| AppError::new(ErrorCode::InvalidConversation, m))?;
+        }
+        let ws = self.workspace_of_node(node)?;
+        let current = self
+            .workspaces()
+            .workspace(ws)
+            .and_then(|w| w.node(node))
+            .and_then(Node::terminal)
+            .ok_or_else(|| AppError::node_not_found(node))?
+            .conversation
+            .clone();
+        let next = match id {
+            Some(id)
+                if current
+                    .as_ref()
+                    .is_some_and(|c| c.agent == agent && c.id == id) =>
+            {
+                return Ok(false);
+            }
+            Some(id) => Some(Conversation {
+                agent,
+                id: id.to_string(),
+                recorded_at: Utc::now(),
+            }),
+            None if current.as_ref().is_some_and(|c| c.agent == agent) => None,
+            None => return Ok(false),
+        };
+        self.set_conversation(ws, node, next)?;
+        Ok(true)
+    }
+
+    /// Stores a terminal's conversation, saves its workspace at once, and tells the UI.
+    fn set_conversation(
+        &self,
+        ws: Uuid,
+        node: Uuid,
+        conversation: Option<Conversation>,
+    ) -> AppResult<()> {
+        self.update_node(ws, node, |w, id| {
+            let t = w
+                .node_mut(id)
+                .and_then(Node::terminal_mut)
+                .ok_or_else(|| AppError::node_not_found(id))?;
+            t.conversation = conversation;
+            Ok(())
+        })?;
+        if let Err(err) = self.workspaces().save(ws) {
+            self.emit(CoreEvent::PersistenceWarning(format!(
+                "Could not save: {err}"
+            )));
+        }
+        self.notify_nodes_changed(ws);
+        Ok(())
     }
 
     /// Types a short instruction into agents that cannot get session instructions (FR-019).
