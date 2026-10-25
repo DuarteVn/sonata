@@ -241,3 +241,23 @@ pub fn commit_file(dir: &Path, file: &str, content: &str, message: &str) {
     git(dir, &["add", "-A"]);
     git(dir, &["commit", "-q", "-m", message]);
 }
+
+/// Writes `dir/name` as a fake agent: it appends its arguments (one line, space-joined) to
+/// `dir/<name>.args`, waits `delay_ms`, and exits with `exit_code`. No test runs a real agent.
+pub fn install_fake_agent(dir: &Path, name: &str, exit_code: i32, delay_ms: u64) -> PathBuf {
+    let log = dir.join(format!("{name}.args"));
+    let body = format!(
+        "echo \"$*\" >> '{}'\nsleep {}.{:03}\nexit {exit_code}",
+        log.display(),
+        delay_ms / 1000,
+        delay_ms % 1000
+    );
+    fake_bin::fake_bin(dir, name, &body)
+}
+
+/// Lines written so far by a fake agent from `install_fake_agent`.
+pub fn fake_agent_args(dir: &Path, name: &str) -> Vec<String> {
+    std::fs::read_to_string(dir.join(format!("{name}.args")))
+        .map(|s| s.lines().map(str::to_string).collect())
+        .unwrap_or_default()
+}
