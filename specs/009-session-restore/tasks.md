@@ -51,10 +51,10 @@ recording automatic; until then, test with the command).
 **Goal**: No terminal inherits agent session markers.
 **Independent Test**: quickstart B. Independent of every other phase.
 
-- [ ] T015 [P] [US2] Write tests in crates/core/tests/session_restore_env.rs: with `CLAUDECODE=1`, `CLAUDE_CODE_CHILD_SESSION=1`, `CLAUDE_CODE_MESSAGING_TOKEN=secret`, `CLAUDE_PID=1`, `CODEX_SANDBOX=seatbelt`, `CLAUDE_CODE_USE_BEDROCK=1`, and `ANTHROPIC_MODEL=x` set in the test process, a spawned terminal running `env` prints none of the markers and still prints `CLAUDE_CODE_USE_BEDROCK=1` and `ANTHROPIC_MODEL=x`; `SONATA_TERMINAL_ID` is still set. Run in one test function because it changes the process environment
-- [ ] T016 [US2] Add `pub const AGENT_SESSION_MARKERS: [&str; 12]` with exactly `CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_EXECPATH`, `CLAUDE_CODE_SESSION_ID`, `CLAUDE_CODE_CHILD_SESSION`, `CLAUDE_CODE_SESSION_ATTENDED`, `CLAUDE_CODE_MESSAGING_SOCKET`, `CLAUDE_CODE_MESSAGING_TOKEN`, `CLAUDE_PID`, `CLAUDE_EFFORT`, `CODEX_SANDBOX`, `CODEX_SANDBOX_NETWORK_DISABLED` (research R5) in crates/core/src/terminal/pty.rs and call `cmd.env_remove` for each next to `SONATA_HOME`, before Sonata's own variables
-- [ ] T017 [P] [US2] Write a test that the usage runner's child does not see the markers (fake provider command that prints `env`) in crates/core/tests/session_restore_env.rs
-- [ ] T018 [US2] Remove `AGENT_SESSION_MARKERS` from the child environment in crates/core/src/usage/runner.rs
+- [x] T015 [P] [US2] Write tests in crates/core/tests/session_restore_env.rs: with `CLAUDECODE=1`, `CLAUDE_CODE_CHILD_SESSION=1`, `CLAUDE_CODE_MESSAGING_TOKEN=secret`, `CLAUDE_PID=1`, `CODEX_SANDBOX=seatbelt`, `CLAUDE_CODE_USE_BEDROCK=1`, and `ANTHROPIC_MODEL=x` set in the test process, a spawned terminal running `env` prints none of the markers and still prints `CLAUDE_CODE_USE_BEDROCK=1` and `ANTHROPIC_MODEL=x`; `SONATA_TERMINAL_ID` is still set. Run in one test function because it changes the process environment
+- [x] T016 [US2] Add `pub const AGENT_SESSION_MARKERS: [&str; 12]` with exactly `CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_EXECPATH`, `CLAUDE_CODE_SESSION_ID`, `CLAUDE_CODE_CHILD_SESSION`, `CLAUDE_CODE_SESSION_ATTENDED`, `CLAUDE_CODE_MESSAGING_SOCKET`, `CLAUDE_CODE_MESSAGING_TOKEN`, `CLAUDE_PID`, `CLAUDE_EFFORT`, `CODEX_SANDBOX`, `CODEX_SANDBOX_NETWORK_DISABLED` (research R5) in crates/core/src/terminal/pty.rs and call `cmd.env_remove` for each next to `SONATA_HOME`, before Sonata's own variables
+- [x] T017 [P] [US2] Write a test that the usage runner's child does not see the markers (fake provider command that prints `env`) in crates/core/tests/session_restore_env.rs
+- [x] T018 [US2] Remove `AGENT_SESSION_MARKERS` from the child environment in crates/core/src/usage/runner.rs
 
 **Checkpoint**: quickstart B passes.
 

@@ -101,6 +101,9 @@ pub fn run(spec: &RunSpec) -> Result<RunOutput, RunError> {
     for (key, value) in &spec.env {
         cmd.env(key, value);
     }
+    for key in crate::terminal::pty::AGENT_SESSION_MARKERS {
+        cmd.env_remove(key);
+    }
     let mut child = cmd.spawn().map_err(|e| match e.kind() {
         std::io::ErrorKind::NotFound => RunError::NotFound,
         _ => RunError::Spawn(e.to_string()),
