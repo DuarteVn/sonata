@@ -211,6 +211,16 @@ impl TerminalContent {
             conversation: None,
         }
     }
+
+    /// Settings for a new terminal made from this one (duplicate, template, clone, import). A
+    /// copy starts its own conversation and has no lane (feature 009 FR-010, research R8).
+    pub fn copy_for_new_node(&self) -> Self {
+        Self {
+            conversation: None,
+            lane: None,
+            ..self.clone()
+        }
+    }
 }
 
 /// An agent conversation remembered for a terminal (feature 009, data-model.md).
@@ -408,6 +418,30 @@ mod tests {
             );
             assert_eq!(ConversationAgent::parse(bad), None);
         }
+    }
+
+    #[test]
+    fn copies_of_a_terminal_start_without_conversation_or_lane() {
+        let mut t = TerminalContent::new("Api".into());
+        t.launch_command = Some("claude".into());
+        t.conversation = Some(Conversation {
+            agent: ConversationAgent::Claude,
+            id: ID.into(),
+            recorded_at: Utc::now(),
+        });
+        t.lane = Some(Box::new(Lane {
+            branch: "lane/api".into(),
+            base_branch: "main".into(),
+            main_checkout: "/r".into(),
+            checkout_path: "/d/api".into(),
+            subdirectory: None,
+            created_at: Utc::now(),
+            landed_at: None,
+        }));
+        let copy = t.copy_for_new_node();
+        assert!(copy.conversation.is_none() && copy.lane.is_none());
+        assert_eq!(copy.launch_command.as_deref(), Some("claude"));
+        assert_eq!(copy.name, "Api");
     }
 
     #[test]

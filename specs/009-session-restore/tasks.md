@@ -100,9 +100,9 @@ recording automatic; until then, test with the command).
 
 ## Phase 8: Polish & Cross-Cutting
 
-- [ ] T035 [P] Add a unit test that copying a terminal node for any future duplicate/template path clears `conversation` (research R8): add `TerminalContent::copy_for_new_node()` that returns a clone with `conversation: None` and `lane: None`, in crates/core/src/model/node.rs
-- [ ] T036 [P] Add a "Session restore" section to README.md: agents resume their conversation after reopen, Start fresh, what happens when resume fails, and that Sonata stores only the conversation id
-- [ ] T037 Update `--help` text if any user-visible CLI text changed, in crates/cli/src/main.rs (internal commands stay hidden)
+- [x] T035 [P] Add a unit test that copying a terminal node for any future duplicate/template path clears `conversation` (research R8): add `TerminalContent::copy_for_new_node()` that returns a clone with `conversation: None` and `lane: None`, in crates/core/src/model/node.rs
+- [x] T036 [P] Add a "Session restore" section to README.md: agents resume their conversation after reopen, Start fresh, what happens when resume fails, and that Sonata stores only the conversation id
+- [x] T037 Update `--help` text if any user-visible CLI text changed, in crates/cli/src/main.rs (internal commands stay hidden)
 - [ ] T038 Run `sh scripts/check.sh` (fmt, clippy, Rust tests, typecheck, Vitest, release tests) and fix every failure
 - [ ] T039 Manual: run quickstart scenarios A–E in a dev build with throwaway `SONATA_HOME` and record results in specs/009-session-restore/quickstart.md
 - [ ] T040 Manual, when Codex is installed: quickstart F, confirming `thread-id` works with `codex resume <id>` (research R2)

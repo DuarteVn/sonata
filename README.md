@@ -33,6 +33,8 @@ between them live side by side, organized into as many workspaces as you need.
   signal so answers return as soon as the agent finishes. Your global agent settings are never
   changed. In zsh terminals, typing `claude` or `codex` by hand does the same (your own
   `.zshrc` still loads; Sonata only adds two shell functions inside its terminals).
+- Agent terminals come back in their conversation after you quit and reopen Sonata or restart
+  the terminal. See [Session restore](#session-restore).
 - Browser nodes (tool `B`): real web pages on the canvas, with back/forward/reload, address bar,
   developer tools, and "open in default browser". Pages are live at a readable zoom and show a
   card with the last image otherwise. Browsers in the same workspace share logins. Linked agents
@@ -131,6 +133,24 @@ turn it off per terminal (terminal menu → Save history) for sessions that prin
   can only reach the terminals and notes it is linked to.
 - Waiting loops (A waits on B while B asks A) are refused; asks time out after 10 minutes by
   default (`--timeout`, up to 60 minutes) and are never sent twice.
+
+## Session restore
+
+When a Claude Code or Codex terminal starts again (app reopen, workspace opened, Restart), the
+agent resumes the conversation it was in (`claude --resume <id>`, `codex resume <id>`), with
+the same folder, role, lane, and Sonata instructions. The remembered conversation follows the
+agent: `/clear`, `/resume`, or a new session inside the agent update it. Codex conversations are
+remembered after their first finished turn.
+
+- **Start fresh** (terminal menu, shown when a conversation is remembered) forgets it and
+  restarts the agent in a new conversation. The agent's own conversation files are not touched.
+- If resuming fails (conversation files deleted, agent updated, folder changed), the terminal
+  prints `sonata: the previous conversation could not be resumed; starting a new one.` and
+  starts a new conversation. The failed one is not tried again.
+- Your own arguments win: a launch command with `--resume`, `--continue`, `-p`, a subcommand,
+  and similar starts exactly what you asked for.
+- Sonata stores only the conversation id (in `workspace.json`). The conversation itself stays in
+  the agent's own files.
 
 ## Usage meter
 
