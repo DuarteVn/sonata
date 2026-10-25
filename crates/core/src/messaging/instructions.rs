@@ -123,6 +123,7 @@ pub fn write_session(
     let quoted = format!("'{}'", hook.replace('\'', "'\\''"));
     let settings = json!({
         "hooks": {
+            "SessionStart": [{"hooks": [{"type": "command", "command": format!("{quoted} _hook session-start")}]}],
             "Stop": [{"hooks": [{"type": "command", "command": format!("{quoted} _hook claude-stop")}]}],
             "UserPromptSubmit": [{"hooks": [{"type": "command", "command": format!("{quoted} _hook turn-start")}]}]
         }
@@ -176,6 +177,21 @@ mod tests {
         assert!(with.contains("commit"));
         let without = instructions(&info(None));
         assert!(!without.contains("sonata lane"));
+    }
+
+    #[test]
+    fn settings_report_session_start_next_to_turn_hooks() {
+        let dir = tempfile::tempdir().unwrap();
+        let files = write_session(dir.path(), &info(None), "/bin/sonata").unwrap();
+        let v: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(files.settings).unwrap()).unwrap();
+        let command = |event: &str| v["hooks"][event][0]["hooks"][0]["command"].clone();
+        assert_eq!(command("SessionStart"), "'/bin/sonata' _hook session-start");
+        assert_eq!(command("Stop"), "'/bin/sonata' _hook claude-stop");
+        assert_eq!(
+            command("UserPromptSubmit"),
+            "'/bin/sonata' _hook turn-start"
+        );
     }
 
     #[test]

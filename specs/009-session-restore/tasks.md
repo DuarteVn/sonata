@@ -63,12 +63,12 @@ recording automatic; until then, test with the command).
 **Goal**: Hooks report every conversation switch automatically.
 **Independent Test**: quickstart C.
 
-- [ ] T019 [P] [US3] Write a unit test in crates/core/src/messaging/instructions.rs (`#[cfg(test)]`) that the settings file has a `SessionStart` hook running `'<sonata>' _hook session-start`, next to the existing `Stop` and `UserPromptSubmit` hooks
-- [ ] T020 [US3] Add the `SessionStart` hook to `write_session` in crates/core/src/messaging/instructions.rs
-- [ ] T021 [P] [US3] Write hook tests in crates/core/tests/session_restore_hooks.rs (fake terminal through `sonata_as`): `_hook session-start` with stdin `{"session_id":"a1","source":"resume"}` stores `claude/a1`; with `source` `startup` or `clear` removes a stored claude conversation; with `compact` changes nothing; `_hook turn-start` with `{"session_id":"b2"}` still reports turn start and stores `claude/b2`; `_hook codex-notify '{"type":"agent-turn-complete","thread-id":"c3","last-assistant-message":"x"}'` still reports completion and stores `codex/c3`; with `SONATA_CONVERSATION=off` none of them changes the conversation; malformed JSON changes nothing and every hook exits 0
-- [ ] T022 [US3] Implement `session-start`, the `session_id` read in `turn-start`, and the `thread-id` read in `codex-notify` in crates/cli/src/hook.rs, sending `_conversation <agent> <id|none>` after the existing `_turn` report and honoring `SONATA_CONVERSATION=off` (contracts/cli.md hooks table)
-- [ ] T023 [P] [US3] Write a wrapper test in crates/core/tests/session_restore_run.rs: `sonata run claude -p hi` and `--print` start the child with `SONATA_CONVERSATION=off` (fake agent prints its env); interactive runs do not set it
-- [ ] T024 [US3] Set `SONATA_CONVERSATION=off` for print-mode children in crates/cli/src/run.rs (research R9)
+- [x] T019 [P] [US3] Write a unit test in crates/core/src/messaging/instructions.rs (`#[cfg(test)]`) that the settings file has a `SessionStart` hook running `'<sonata>' _hook session-start`, next to the existing `Stop` and `UserPromptSubmit` hooks
+- [x] T020 [US3] Add the `SessionStart` hook to `write_session` in crates/core/src/messaging/instructions.rs
+- [x] T021 [P] [US3] Write hook tests in crates/core/tests/session_restore_hooks.rs (fake terminal through `sonata_as`): `_hook session-start` with stdin `{"session_id":"a1","source":"resume"}` stores `claude/a1`; with `source` `startup` or `clear` removes a stored claude conversation; with `compact` changes nothing; `_hook turn-start` with `{"session_id":"b2"}` still reports turn start and stores `claude/b2`; `_hook codex-notify '{"type":"agent-turn-complete","thread-id":"c3","last-assistant-message":"x"}'` still reports completion and stores `codex/c3`; with `SONATA_CONVERSATION=off` none of them changes the conversation; malformed JSON changes nothing and every hook exits 0
+- [x] T022 [US3] Implement `session-start`, the `session_id` read in `turn-start`, and the `thread-id` read in `codex-notify` in crates/cli/src/hook.rs, sending `_conversation <agent> <id|none>` after the existing `_turn` report and honoring `SONATA_CONVERSATION=off` (contracts/cli.md hooks table)
+- [x] T023 [P] [US3] Write a wrapper test in crates/core/tests/session_restore_run.rs: `sonata run claude -p hi` and `--print` start the child with `SONATA_CONVERSATION=off` (fake agent prints its env); interactive runs do not set it
+- [x] T024 [US3] Set `SONATA_CONVERSATION=off` for print-mode children in crates/cli/src/run.rs (research R9)
 
 **Checkpoint**: quickstart A and C pass end to end without calling `_conversation` by hand.
 

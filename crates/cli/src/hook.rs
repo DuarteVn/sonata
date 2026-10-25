@@ -1,4 +1,4 @@
-//! End-of-turn hooks called by agents (research R5). They report to the app for the terminal
+//! End-of-turn and conversation hooks called by agents (research R5; feature 009). They report to the app for the terminal
 //! they run in; agents never call them directly.
 
 use std::io::{BufRead, BufReader, Read};
@@ -34,12 +34,32 @@ pub fn last_assistant_text(transcript: &str) -> String {
     parts.join("\n\n")
 }
 
-fn report(kind: &str, text: Option<String>) -> ExitCode {
-    // Hooks must never break the agent: report quietly and always succeed.
+/// Sends one request quietly: hooks must never break the agent.
+fn send(args: &[&str], text: Option<String>) {
     if let Ok(env) = client::env() {
-        let _ = client::request(&env, &["_turn".to_string(), kind.to_string()], text, |_| {});
+        let args: Vec<String> = args.iter().map(|a| a.to_string()).collect();
+        let _ = client::request(&env, &args, text, |_| {});
     }
+}
+
+fn report(kind: &str, text: Option<String>) -> ExitCode {
+    send(&["_turn", kind], text);
     ExitCode::SUCCESS
+}
+
+/// Reports the conversation the agent is in (`None`: a new, empty one) so the terminal can
+/// resume it later (feature 009). Print-mode runs set `SONATA_CONVERSATION=off`.
+fn report_conversation(agent: &str, id: Option<&str>) {
+    if std::env::var("SONATA_CONVERSATION").is_ok_and(|v| v == "off") {
+        return;
+    }
+    send(&["_conversation", agent, id.unwrap_or("none")], None);
+}
+
+fn stdin_json() -> Value {
+    let mut input = String::new();
+    let _ = std::io::stdin().read_to_string(&mut input);
+    serde_json::from_str(&input).unwrap_or(Value::Null)
 }
 
 pub fn main(args: Vec<String>) -> ExitCode {
@@ -64,9 +84,22 @@ pub fn main(args: Vec<String>) -> ExitCode {
             report("complete", text)
         }
         Some("turn-start") => {
-            let mut sink = String::new();
-            let _ = std::io::stdin().read_to_string(&mut sink);
-            report("start", None)
+            let v = stdin_json();
+            report("start", None);
+            if let Some(id) = v["session_id"].as_str() {
+                report_conversation("claude", Some(id));
+            }
+            ExitCode::SUCCESS
+        }
+        Some("session-start") => {
+            // `resume`: a conversation with messages; `startup`/`clear`: a new, empty one.
+            let v = stdin_json();
+            match (v["source"].as_str(), v["session_id"].as_str()) {
+                (Some("resume"), Some(id)) => report_conversation("claude", Some(id)),
+                (Some("startup" | "clear"), _) => report_conversation("claude", None),
+                _ => {}
+            }
+            ExitCode::SUCCESS
         }
         Some("codex-notify") => {
             let payload = args.get(1).cloned().unwrap_or_default();
@@ -77,7 +110,11 @@ pub fn main(args: Vec<String>) -> ExitCode {
             report(
                 "complete",
                 v["last-assistant-message"].as_str().map(str::to_string),
-            )
+            );
+            if let Some(id) = v["thread-id"].as_str() {
+                report_conversation("codex", Some(id));
+            }
+            ExitCode::SUCCESS
         }
         _ => ExitCode::SUCCESS,
     }

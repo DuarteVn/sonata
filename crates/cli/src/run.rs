@@ -127,9 +127,14 @@ pub fn main(args: Vec<String>) -> ExitCode {
         }
     }
 
+    // A one-shot `claude -p` must not replace or clear the terminal's conversation (R9).
+    let print_mode = agent == "claude" && rest.iter().any(|a| a == "-p" || a == "--print");
     let command = |lead: &[String]| {
         let mut cmd = Command::new(&real);
         cmd.arg0(&agent).args(lead).args(&session).args(rest);
+        if print_mode {
+            cmd.env("SONATA_CONVERSATION", "off");
+        }
         cmd
     };
     if let Some(id) = resume.filter(|_| may_resume(&agent, rest)) {

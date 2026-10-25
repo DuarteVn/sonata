@@ -24,7 +24,7 @@ const FAKE_CODEX: &str = r#"#!/bin/sh
 echo "$@" > "$FAKE_LOG/codex.args"
 while IFS= read -r line; do
   echo "$line" >> "$FAKE_LOG/codex.lines"
-  sonata _hook codex-notify "{\"type\":\"agent-turn-complete\",\"last-assistant-message\":\"codex:$line\"}"
+  sonata _hook codex-notify "{\"type\":\"agent-turn-complete\",\"thread-id\":\"t1\",\"last-assistant-message\":\"codex:$line\"}"
 done
 "#;
 
@@ -115,7 +115,7 @@ fn agents_get_session_instructions_and_report_turns() {
     let settings: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(file_after("--settings")).unwrap()).unwrap();
     let hooks: Vec<&String> = settings["hooks"].as_object().unwrap().keys().collect();
-    assert_eq!(hooks, ["Stop", "UserPromptSubmit"]);
+    assert_eq!(hooks, ["SessionStart", "Stop", "UserPromptSubmit"]);
     assert_eq!(
         settings.as_object().unwrap().len(),
         1,

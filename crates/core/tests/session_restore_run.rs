@@ -144,3 +144,26 @@ fn without_an_offer_arguments_and_exit_status_are_unchanged() {
     assert!(!args[0].contains("--resume") && args[0].ends_with("--model x"));
     app.quit();
 }
+
+#[test]
+fn print_mode_turns_conversation_reports_off() {
+    let sb = Sandbox::new();
+    let bin = sb.tmp.path().join("bin");
+    let env_file = bin.join("claude.env");
+    common::fake_bin::fake_bin(&bin, "claude", &format!("env > '{}'", env_file.display()));
+    let (app, _) = messaging_app(&sb);
+    let (_, ids) = shells(&app, &sb, &["A"]);
+    let off = |args: &[&str]| {
+        let _ = std::fs::remove_file(&env_file);
+        run_as(&app, ids[0], &bin, args, &[]);
+        std::fs::read_to_string(&env_file)
+            .unwrap()
+            .lines()
+            .any(|l| l == "SONATA_CONVERSATION=off")
+    };
+    assert!(off(&["claude", "-p", "hi"]));
+    assert!(off(&["claude", "--print", "hi"]));
+    assert!(!off(&["claude"]));
+    assert!(!off(&["claude", "--model", "x"]));
+    app.quit();
+}
