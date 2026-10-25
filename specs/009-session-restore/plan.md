@@ -68,12 +68,12 @@ crates/core/src/messaging/instructions.rs # SessionStart hook in the settings fi
 crates/core/tests/session_restore_*.rs   # env, record, offer, persistence, start fresh
 crates/cli/src/run.rs                    # resume flags, child + 10 s fallback, print mode (R3, R4, R9)
 crates/cli/src/hook.rs                   # session-start, turn-start session_id, codex thread-id
-crates/cli/tests/run_resume.rs           # fake agents
+crates/core/tests/session_restore_run.rs # wrapper with fake agents, like agent_hooks.rs
 src-tauri/src/commands/terminal.rs       # terminal_start_fresh
 src-tauri/build.rs, capabilities/default.json, src/lib.rs
 ui/src/ipc/{commands,types}.ts
 ui/src/nodes/TerminalMenu.tsx            # Start fresh
-ui/tests/terminalMenu.test.tsx
+ui/tests/terminalMenu.test.tsx           # new
 README.md                                # Session restore section
 ```
 
