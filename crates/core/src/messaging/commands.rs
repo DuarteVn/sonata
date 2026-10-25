@@ -1025,12 +1025,18 @@ fn link(ctx: &Ctx<'_>, a: &str, b: &str, create: bool) -> Reply {
 
 fn session(ctx: &Ctx<'_>, agent: &str, hook: &str) -> Reply {
     match ctx.app.prepare_agent_session(ctx.me, hook) {
-        Ok(files) => Reply::ok("").with_data(json!({
-            "agent": agent,
-            "instructionsFile": files.instructions,
-            "settingsFile": files.settings,
-            "codexNotify": super::instructions::codex_notify(hook),
-        })),
+        Ok(files) => {
+            let mut data = json!({
+                "agent": agent,
+                "instructionsFile": files.instructions,
+                "settingsFile": files.settings,
+                "codexNotify": super::instructions::codex_notify(hook),
+            });
+            if let Some(c) = ctx.app.take_resume_offer(ctx.me, agent) {
+                data["resume"] = json!({"agent": c.agent, "id": c.id});
+            }
+            Reply::ok("").with_data(data)
+        }
         Err(e) => Reply::err(EXIT_ERROR, e.message),
     }
 }

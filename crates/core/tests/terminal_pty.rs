@@ -25,6 +25,7 @@ fn spec(cwd: PathBuf) -> SpawnSpec {
         session_env: Vec::new(),
         wrap_agents: false,
         zsh_dir: None,
+        resume: None,
     }
 }
 

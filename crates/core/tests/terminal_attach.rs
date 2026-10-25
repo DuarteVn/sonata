@@ -43,6 +43,7 @@ fn start(sb: &Sandbox) -> (TerminalManager, Uuid) {
         session_env: Vec::new(),
         wrap_agents: false,
         zsh_dir: None,
+        resume: None,
     };
     let id = spec.node_id;
     m.start(spec).unwrap();

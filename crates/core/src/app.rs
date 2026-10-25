@@ -651,6 +651,7 @@ impl App {
                 .socket_path
                 .as_ref()
                 .map(|_| self.data_root.path().join("run").join("zsh")),
+            resume: term.conversation.clone(),
         })
     }
 
@@ -1148,6 +1149,16 @@ impl App {
             return self.start_fresh(node);
         }
         self.terminals.restart(node)?;
+        // A restarted agent gets its typed instructions again, like any start (003 FR-019).
+        let ws_id = self.workspace_of_node(node)?;
+        let found = {
+            let m = self.workspaces();
+            m.workspace(ws_id)
+                .and_then(|ws| ws.node(node).cloned().map(|n| (ws.clone(), n)))
+        };
+        if let Some((ws, n)) = found {
+            self.maybe_type_instructions(&ws, &n);
+        }
         Ok(())
     }
 
@@ -1642,6 +1653,14 @@ impl App {
         Ok(true)
     }
 
+    /// The conversation the first `sonata run` of this terminal start should resume. Any agent
+    /// uses up the offer; only the agent that owns the conversation gets it (research R3).
+    pub fn take_resume_offer(&self, node: Uuid, agent: &str) -> Option<Conversation> {
+        self.terminals
+            .take_resume_offer(node)
+            .filter(|c| c.agent.as_str() == agent)
+    }
+
     /// Stores a terminal's conversation, saves its workspace at once, and tells the UI.
     fn set_conversation(
         &self,
@@ -1654,9 +1673,10 @@ impl App {
                 .node_mut(id)
                 .and_then(Node::terminal_mut)
                 .ok_or_else(|| AppError::node_not_found(id))?;
-            t.conversation = conversation;
+            t.conversation = conversation.clone();
             Ok(())
         })?;
+        self.terminals.set_resume(node, conversation);
         if let Err(err) = self.workspaces().save(ws) {
             self.emit(CoreEvent::PersistenceWarning(format!(
                 "Could not save: {err}"
