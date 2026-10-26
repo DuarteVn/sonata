@@ -163,17 +163,19 @@ export function TerminalMenu({ node }: { node: CanvasNode }) {
         </div>,
           document.body,
         )}
-      {confirmFresh && (
-        <ConfirmDialog
-          {...RESTART_CONFIRM}
-          danger
-          onCancel={() => setConfirmFresh(false)}
-          onConfirm={() => {
-            setConfirmFresh(false);
-            void startFresh(true);
-          }}
-        />
-      )}
+      {confirmFresh &&
+        createPortal(
+          <ConfirmDialog
+            {...RESTART_CONFIRM}
+            danger
+            onCancel={() => setConfirmFresh(false)}
+            onConfirm={() => {
+              setConfirmFresh(false);
+              void startFresh(true);
+            }}
+          />,
+          document.body,
+        )}
     </div>
   );
 }

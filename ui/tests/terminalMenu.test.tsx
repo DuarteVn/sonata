@@ -51,7 +51,10 @@ describe("Start fresh", () => {
     ipc.terminalStartFresh.mockRejectedValueOnce({ code: "TerminalBusy", message: "busy" });
     await openMenu(terminal({ conversation }));
     await userEvent.click(screen.getByRole("menuitem", { name: "Start fresh" }));
-    expect(await screen.findByText("Restart terminal?")).toBeInTheDocument();
+    const title = await screen.findByText("Restart terminal?");
+    // Outside the node: inside the scaled canvas it would sit under the live terminal layer.
+    expect(title.closest(".menu-anchor")).toBeNull();
+    expect(screen.getByRole("dialog").parentElement?.parentElement).toBe(document.body);
     await userEvent.click(screen.getByRole("button", { name: "Restart" }));
     expect(ipc.terminalStartFresh).toHaveBeenLastCalledWith("t1", true);
   });
