@@ -84,7 +84,10 @@
     "allow-lane-land",
     "allow-lane-remove",
     "allow-lane-forget",
-    "allow-lane-confirm-answer"
+    "allow-lane-confirm-answer",
+    "allow-kimi-integration",
+    "allow-dismiss-kimi-notice",
+    "allow-kimi-open-settings"
   ],
   "webviews": [
     "main"

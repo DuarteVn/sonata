@@ -2,6 +2,8 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import type { DeviceInput } from "../nodes/devicePointer";
 import type {
   ExchangeEntry,
+  KimiIntegration,
+  KimiNoticeDismissed,
   LaneAction,
   LaneAvailability,
   LanePreview,
@@ -138,6 +140,12 @@ export const ipc = {
     invoke<UsageState>("usage_answer_consent", { providerId, allow, command }),
   usageOpenSettings: () => invoke<void>("usage_open_settings"),
   usageProvidersFolder: () => invoke<{ path: string }>("usage_providers_folder"),
+  kimiIntegration: () => invoke<KimiIntegration>("kimi_integration"),
+  kimiIntegrationApply: () => invoke<KimiIntegration>("kimi_integration_apply"),
+  kimiIntegrationRemove: () => invoke<KimiIntegration>("kimi_integration_remove"),
+  dismissKimiNotice: (status: KimiNoticeDismissed) => invoke<void>("dismiss_kimi_notice", { status }),
+  kimiWatch: (on: boolean) => invoke<void>("kimi_watch", { on }),
+  kimiOpenSettings: () => invoke<void>("kimi_open_settings"),
 };
 
 export type Ipc = typeof ipc;

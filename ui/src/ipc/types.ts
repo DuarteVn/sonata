@@ -41,6 +41,22 @@ export type Preferences = {
   historyMaxRows: number;
   /** Omitted when on (feature 005). */
   autoUpdateCheck?: boolean;
+  /** Kimi integration status the notice was dismissed for (feature 010). */
+  kimiNoticeDismissed?: KimiNoticeDismissed;
+};
+
+// ---- Kimi Code integration (feature 010) ----
+
+export type KimiStatus = "on" | "outdated" | "off" | "unavailable";
+export type KimiNoticeDismissed = "off" | "outdated";
+export type KimiIntegration = {
+  status: KimiStatus;
+  configPath: string;
+  block: string;
+  message?: string;
+  canApply: boolean;
+  lastBackup?: string;
+  validated: boolean;
 };
 
 export type LoadFailureReason =

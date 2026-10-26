@@ -8,6 +8,7 @@ kimiIntegrationApply(): Promise<KimiIntegration>;          // UI confirms before
 kimiIntegrationRemove(): Promise<KimiIntegration>;         // UI confirms before calling
 dismissKimiNotice(status: "off" | "outdated"): Promise<void>;
 kimiWatch(on: boolean): Promise<void>;                     // Settings open/closed (research R9)
+kimiOpenSettings(): Promise<void>;                         // notice's Set up: Settings at Agents
 ```
 
 `kimiWatch(true)` keeps the config file watched while the Settings window shows the Kimi
@@ -28,8 +29,10 @@ Every change writes a backup first; the returned value carries `lastBackup`.
 
 ## Event
 
-`KimiIntegrationChanged { integration: KimiIntegration }`: sent when the computed status changes
-(after Apply/Remove, or when the file changes on disk while watched).
+`kimi://integration` (`KimiIntegrationChanged`, payload `KimiIntegration`): sent when the computed
+status changes (after Apply/Remove, or when the file changes on disk while watched).
+`settings://section` (payload `"usage" | "agents"`): sent to an open Settings window to switch
+section.
 
 ## Types (`ui/src/ipc/types.ts`)
 
@@ -54,7 +57,7 @@ agent: "claude" | "codex" | "kimi";
 
 - **New-terminal dialog**: preset "Kimi Code" (command `kimi`), with the same "not found" hint as
   other presets.
-- **Terminal node notice** (Kimi terminals only, status `off` or `outdated`, not dismissed for
+- **Terminal node notice** (in the title bar of Kimi terminals only, status `off` or `outdated`, not dismissed for
   that status): one line, "Kimi: busy/done tracking and conversation restore are off." (or "…are
   out of date.") with **Set up** (opens Settings › Agents › Kimi Code) and **Dismiss**.
 - **Settings › Agents › Kimi Code** (new section in the Settings window):

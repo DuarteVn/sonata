@@ -311,6 +311,11 @@ textarea { resize: vertical; }
 .settings-tag { font-size: 10px; padding: 1px 6px; border-radius: 999px; background: var(--bg-hover); color: var(--text-dim); font-weight: normal; }
 .settings-actions { white-space: nowrap; }
 .settings-actions > * { vertical-align: middle; margin-left: 6px; }
+.settings-code { font-family: ui-monospace, Menlo, monospace; font-size: 11px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; overflow-x: auto; white-space: pre; }
+/* Kimi setup notice in the terminal title bar (feature 010); the live terminal covers the body. */
+.kimi-notice { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 11px; color: var(--text-dim); }
+.kimi-notice span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+.kimi-notice .link-button { font-size: 11px; white-space: nowrap; }
 .settings-color { width: 26px; height: 22px; padding: 0; border: 1px solid var(--border); border-radius: 5px; background: none; cursor: pointer; }
 .settings-folder { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .settings-folder code { flex: 1 1 100%; font-size: 11px; color: var(--text-dim); word-break: break-all; }

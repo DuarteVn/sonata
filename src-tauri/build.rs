@@ -78,6 +78,12 @@ const COMMANDS: &[&str] = &[
     "lane_remove",
     "lane_forget",
     "lane_confirm_answer",
+    "kimi_integration",
+    "kimi_integration_apply",
+    "kimi_integration_remove",
+    "dismiss_kimi_notice",
+    "kimi_watch",
+    "kimi_open_settings",
 ];
 
 fn main() {

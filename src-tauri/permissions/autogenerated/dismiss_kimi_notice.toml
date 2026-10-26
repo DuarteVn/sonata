@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dismiss-kimi-notice"
+description = "Enables the dismiss_kimi_notice command without any pre-configured scope."
+commands.allow = ["dismiss_kimi_notice"]
+
+[[permission]]
+identifier = "deny-dismiss-kimi-notice"
+description = "Denies the dismiss_kimi_notice command without any pre-configured scope."
+commands.deny = ["dismiss_kimi_notice"]
