@@ -54,3 +54,24 @@ is accepted by `codex resume <id>` (research R2).
 ## Automated gate
 
 `sh scripts/check.sh` passes.
+
+## Results (2026-10-26, dev build `dev.sonata.app.test009`, throwaway `SONATA_HOME`)
+
+Claude Code v2.1.310. The dev app was started from a Claude Code terminal (all R5 markers set).
+Messages were sent with `sonata ask` from a linked shell terminal. "Quit" was SIGTERM to the
+dev process instead of Cmd+Q: the conversation is saved when it changes, not at quit.
+
+- **A**: pass. After reopen the terminal ran `claude --resume <id> --append-system-prompt-file …`
+  with the old messages on screen and answered PELICAN. `workspace.json` held `conversation`
+  right after the first message.
+- **B**: pass. No `CLAUDE*` or `CODEX*` variable in a terminal. Claude started without the
+  "Transcript saving is off" warning.
+- **C**: pass. `/clear` removed `conversation`, and the first message stored the new id; reopen
+  answered OTTER. `/resume` → PELICAN put the old id back; reopen answered PELICAN.
+- **D**: not run. It needs clicks in the terminal menu, and UI scripting has no Accessibility
+  permission here. Covered by core and UI tests (T025, T029).
+- **E**: partial. With the conversation file moved away, the app started a new conversation by
+  itself (no `--resume` in the new process, `conversation` cleared), and the next reopen tried
+  nothing. The notice line was **not visible**: Claude Code clears the screen when it starts,
+  which removes the line the wrapper printed just before. Open question: show the notice
+  another way.
