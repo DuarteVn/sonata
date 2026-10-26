@@ -14,7 +14,8 @@ tracking need a one-time, user-confirmed Apply in Settings that appends a marked
 `[[hooks]]` tables (with a backup, a `kimi doctor` check, and Remove). The hooks call
 `sonata _hook kimi …` only inside Sonata terminals. Until a Kimi process proves its hooks work, the
 broker treats it with the quiet-screen rule; after the first hook report it waits for Kimi's
-`Stop`. Session restore reuses feature 009 with `kimi --session <id>`. See
+`Stop`, with no quiet cut-off while a turn is active, and the terminal's working/idle state
+follows Kimi's turns. Session restore reuses feature 009 with `kimi --session <id>`. See
 [research.md](research.md).
 
 ## Technical Context
@@ -54,7 +55,7 @@ the model context).
 | Principle | Result |
 |---|---|
 | I Clean room | Pass: own design and text; uses Kimi's public flags, agent-file format, and hook events. |
-| II Core/shell | Pass: config parsing and editing, status, agent file, hooked state, and broker rule in `core`; the CLI maps the session reply to flags and hook payloads to reports; `src-tauri` forwards four commands and one event; the UI renders status and sends intents. |
+| II Core/shell | Pass: config parsing and editing, status, agent file, hooked state, and broker rule in `core`; the CLI maps the session reply to flags and hook payloads to reports; `src-tauri` forwards five commands and one event; the UI renders status and sends intents. |
 | III Test-first | Pass: fake `kimi`, fake payloads, config fixtures; tests written and failing first. Config tests never touch `~/.kimi-code`. |
 | IV Files | Pass: one optional preference, omitted when unset; atomic writes; Sonata's own files keep the envelope. Kimi's file is not Sonata state and keeps its format. |
 | V Security | Pass with a recorded exception: changing the agent's global config is a user-confirmed action in the UI with a backup (spec clarification 2026-10-25; Complexity Tracking). Node chosen from caller identity. No secret in arguments. Config permission bits preserved. Hooks never block Kimi (`; exit 0`). |
@@ -86,7 +87,7 @@ crates/core/src/agents/kimi.rs             # config path, status, block, apply/r
 crates/core/src/messaging/instructions.rs  # kimi-agent.md writer; no `${` in instructions; recruit text lists kimi
 crates/core/src/messaging/broker.rs        # TargetKind::Probing → Hooked once hooked (R5)
 crates/core/src/messaging/commands.rs      # `_session kimi` reply, `_turn start` busy + hooked, recruit kimi
-crates/core/src/terminal/manager.rs        # hooked flag per process generation
+crates/core/src/terminal/manager.rs        # hooked and turn_active flags per process generation
 crates/core/src/model/preferences.rs       # kimiNoticeDismissed
 crates/core/src/model/node.rs              # Conversation.agent kimi (needs 009)
 crates/core/src/app.rs                     # Kimi integration methods, watcher, events
@@ -96,7 +97,7 @@ crates/core/tests/agent_hooks.rs           # `_hook kimi …` and wrapper flags 
 crates/core/tests/fixtures/kimi/           # config.toml fixtures
 crates/cli/src/run.rs                      # kimi flags: --agent-file, --session, choose detection, -p guard
 crates/cli/src/hook.rs                     # kimi session-start | prompt-submit | stop | stop-failure | interrupt
-src-tauri/src/commands/agents.rs           # kimi_integration, _apply, _remove, dismiss_kimi_notice
+src-tauri/src/commands/agents.rs           # kimi_integration, _apply, _remove, dismiss_kimi_notice, kimi_watch
 src-tauri/build.rs, capabilities/default.json, src/lib.rs, src/commands/mod.rs
 ui/src/ipc/{commands,types,events}.ts
 ui/src/settings/SettingsApp.tsx            # Agents section in the nav

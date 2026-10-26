@@ -7,7 +7,11 @@ kimiIntegration(): Promise<KimiIntegration>;              // status, path, block
 kimiIntegrationApply(): Promise<KimiIntegration>;          // UI confirms before calling
 kimiIntegrationRemove(): Promise<KimiIntegration>;         // UI confirms before calling
 dismissKimiNotice(status: "off" | "outdated"): Promise<void>;
+kimiWatch(on: boolean): Promise<void>;                     // Settings open/closed (research R9)
 ```
+
+`kimiWatch(true)` keeps the config file watched while the Settings window shows the Kimi
+section; the app also watches while any Kimi terminal exists.
 
 Errors (`AppError` codes):
 
@@ -15,6 +19,8 @@ Errors (`AppError` codes):
   first", or the read error).
 - `KimiHooksConflict`: the file defines `hooks` in a form Sonata cannot add to. Text names the
   line.
+- `KimiConfigInvalid`: `kimi doctor` rejected the file before any change; nothing was written.
+  Text includes Kimi's message.
 - `KimiCheckFailed`: `kimi doctor` rejected the new file; the backup was restored. Text includes
   Kimi's message.
 
@@ -36,6 +42,7 @@ interface KimiIntegration {
   message?: string;
   canApply: boolean;
   lastBackup?: string;
+  validated: boolean;
 }
 // Preferences
 kimiNoticeDismissed?: "off" | "outdated";

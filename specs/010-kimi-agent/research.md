@@ -163,9 +163,14 @@ own hooks. A TOML syntax error fails the whole file.
   file's permission bits, because the file can hold API keys. A missing file is created with mode
   `0600` only when the Kimi folder exists; when the folder is missing, Apply says "Run Kimi once
   first" and does nothing.
-- **Check after write**: when `kimi` is on the login shell's `PATH`, run `kimi doctor` (validates
-  `config.toml`) with a 10 s timeout. A failure restores the backup and reports Kimi's message.
-  Unverified live: `kimi doctor` exit codes; the quickstart checks them.
+- **Check before write**: when `kimi` is on the login shell's `PATH`, run `kimi doctor`
+  (validates `config.toml`) with a 10 s timeout before changing anything. A failure means the
+  user's file is already invalid: Apply and Remove stop with `KimiConfigInvalid` and Kimi's
+  message, and change nothing, so Sonata never appends to a broken file or blames its own lines.
+- **Check after write**: run `kimi doctor` again. A failure restores the backup and reports
+  `KimiCheckFailed` with Kimi's message. Without `kimi` on `PATH`, both checks are skipped and the
+  status view says the file was not validated. Unverified live: `kimi doctor` exit codes; the
+  quickstart checks them.
 
 **Rationale**: The edit is append-or-remove of whole tables Sonata owns, which line editing does
 safely; a TOML library would be a new direct dependency (constitution VII) and would reformat the
@@ -188,8 +193,18 @@ make every ask 20 s slow. So the target kind of a Kimi terminal is decided per r
 - `UserPromptSubmit` waits for the hook, so `_turn start` arrives before the model starts, well
   before 3 s of quiet. An ask sent to a hooked Kimi therefore switches to `Hooked` within its
   first tick and waits for `Stop`, `StopFailure`, or `Interrupt`.
-- `_turn start` (today a no-op reply) now marks the terminal busy, which the canvas already shows
-  for Claude Code.
+- **Turn state**: `_turn start` (today a no-op reply) sets `turn_active` for the calling
+  terminal's process; `_turn complete` clears it. Today "busy" means "a program other than the
+  shell owns the terminal" (`terminal/busy.rs`), which is always true while an agent runs. For
+  hooked Kimi terminals, `turn_active` replaces that check in `sonata list` (`working`/`idle`)
+  and in the canvas activity indicator (`App::check_activity`, feature 002). Claude Code and
+  Codex keep today's rule; changing them is out of scope.
+- **No quiet cut-off during a turn**: the hooked quiet fallback (`HOOKED_QUIET_FALLBACK`, 20 s)
+  exists for agents whose end-of-turn signal may never arrive. For a `Probing` target that is
+  hooked, the broker ignores the quiet fallback while `turn_active` is set, so a turn with a long
+  silent tool run (SC-003) ends only on `Stop`, `StopFailure`, `Interrupt`, or the ask's timeout.
+  The fallback applies again only if `turn_active` was never set for the ask (the prompt hook did
+  not fire).
 
 **Rationale**: Uses Kimi's own signal when present and costs nothing when absent; no config file
 read at ask time.

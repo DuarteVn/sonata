@@ -53,11 +53,14 @@ An unknown `<event>` or unreadable payload exits 0 without reporting.
 
 ## `_turn start` (changed)
 
-Marks the calling terminal busy and its process "hooked" (data-model). Reply `ok`.
+Marks the calling terminal's process "hooked" and sets its `turn_active` (data-model). Only for
+Kimi terminals does `turn_active` change the `working`/`idle` status and the canvas activity;
+Claude Code and Codex keep today's foreground-process rule. Reply `ok`.
 
 ## `_turn complete`, `_conversation …` (changed)
 
-Also mark the calling terminal's process "hooked". Otherwise as in features 003 and 009.
+Also mark the calling terminal's process "hooked"; `_turn complete` clears `turn_active`.
+Otherwise as in features 003 and 009.
 
 ## `sonata recruit kimi …` (changed)
 

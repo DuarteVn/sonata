@@ -20,6 +20,7 @@ KimiIntegration {
   message?: string,            // why unavailable, or why Apply would be refused
   canApply: boolean,           // false when the file defines `hooks` in another form, or unavailable
   lastBackup?: string,         // path of the newest Sonata backup, if any
+  validated: boolean,          // false when `kimi` is not on PATH, so `kimi doctor` could not check the file
 }
 ```
 
@@ -61,11 +62,14 @@ stops (feature 003):
 | `settings.json` | Claude Code | existing |
 | `kimi-agent.md` | Kimi | agent file: frontmatter `name: sonata-session`, `description`; body `${base_prompt}`, `${plugin_sections}`, Sonata instructions (research R2) |
 
-## Hooked state (in memory, per running terminal)
+## Hooked and turn state (in memory, per running terminal)
 
-`hooked: bool` per process generation. Starts `false`; set to `true` by the first `_turn` or
-`_conversation` report from that process. Decides whether a Kimi target is `Probing` or `Hooked`
-(research R5). Reset on Restart, reopen, and Start fresh.
+Per process generation, reset on Restart, reopen, and Start fresh (research R5):
+
+| Field | Type | Rule |
+|---|---|---|
+| `hooked` | bool | Starts `false`; set to `true` by the first `_turn` or `_conversation` report from that process. Decides whether a Kimi target behaves as `Other` or `Hooked`. |
+| `turn_active` | bool | Set by `_turn start`, cleared by `_turn complete`. For hooked Kimi terminals: drives `working`/`idle` in `sonata list` and the canvas activity indicator, and suspends the broker's quiet fallback. |
 
 ## Constants
 

@@ -204,6 +204,10 @@ terminal and list its environment: none of those markers are present.
   busy state beyond the run itself and do not replace the remembered conversation.
 - **Kimi started with a user-chosen conversation or agent file**: Sonata does not add its own resume
   and does not override the user's choice.
+- **New conversation from inside Kimi** (`/new`, `/clear`): Kimi starts it with its default
+  setup, so it has no Sonata instructions until the terminal restarts. Sonata does not type into
+  the user's input to fix this. The README documents the gap, and Restart restores the
+  instructions.
 - **Typed instruction message opt-in** (feature 003): for Kimi terminals, Sonata's own instruction
   delivery replaces the typed message, so instructions are never given twice.
 
@@ -220,8 +224,10 @@ terminal and list its environment: none of those markers are present.
 
 **Session instructions**
 
-- **FR-004**: Every new Kimi conversation started in Sonata MUST receive Sonata's session
-  instructions and the terminal's role without user action.
+- **FR-004**: Every new Kimi conversation started by Sonata's agent launcher (terminal start,
+  Restart, reopen, Start fresh, or `kimi` typed in a Sonata terminal) MUST receive Sonata's
+  session instructions and the terminal's role without user action. Conversations started from
+  inside Kimi (`/new`, `/clear`) are covered by the edge case below.
 - **FR-005**: Delivering instructions MUST NOT prevent resuming a conversation, and MUST NOT add a
   repeated instruction message to a conversation each time it is resumed.
 - **FR-006**: Delivering instructions MUST NOT write to the user's project folder or to Kimi's own
