@@ -26,6 +26,17 @@ pub struct Preferences {
     /// Android SDK folder chosen in a device node (feature 007, FR-009).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub android_sdk_path: Option<PathBuf>,
+    /// Kimi integration status the user dismissed the terminal notice for (feature 010, FR-008).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kimi_notice_dismissed: Option<KimiNoticeDismissed>,
+}
+
+/// The integration status shown when the Kimi notice was dismissed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum KimiNoticeDismissed {
+    Off,
+    Outdated,
 }
 
 /// Usage meter switches and per-provider choices (data-model "UsagePreferences").
@@ -108,6 +119,7 @@ impl Default for Preferences {
             auto_update_check: true,
             usage: UsagePreferences::default(),
             android_sdk_path: None,
+            kimi_notice_dismissed: None,
         }
     }
 }
@@ -121,6 +133,7 @@ impl Preferences {
             auto_update_check: self.auto_update_check,
             usage: self.usage.compacted(),
             android_sdk_path: self.android_sdk_path,
+            kimi_notice_dismissed: self.kimi_notice_dismissed,
         }
     }
 }

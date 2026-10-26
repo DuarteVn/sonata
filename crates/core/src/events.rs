@@ -108,6 +108,8 @@ pub enum CoreEvent {
     /// The request timed out or went away; the UI closes its dialog.
     LaneConfirmClosed(Uuid),
     DeviceState(crate::device::DeviceStateEvent),
+    /// Sonata's Kimi integration status changed (feature 010).
+    KimiIntegrationChanged(crate::agents::kimi::KimiIntegration),
 }
 
 impl CoreEvent {
@@ -130,6 +132,7 @@ impl CoreEvent {
             Self::LaneConfirm(_) => "lane://confirm",
             Self::LaneConfirmClosed(_) => "lane://confirm-closed",
             Self::DeviceState(_) => "device://state",
+            Self::KimiIntegrationChanged(_) => "kimi://integration",
         }
     }
 
@@ -152,6 +155,7 @@ impl CoreEvent {
             Self::LaneConfirm(e) => serde_json::to_value(e),
             Self::LaneConfirmClosed(id) => Ok(serde_json::json!({ "requestId": id })),
             Self::DeviceState(e) => serde_json::to_value(e),
+            Self::KimiIntegrationChanged(i) => serde_json::to_value(i),
         };
         v.unwrap_or(Value::Null)
     }

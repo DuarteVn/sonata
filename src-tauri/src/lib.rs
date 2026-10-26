@@ -51,6 +51,7 @@ pub fn run() {
                 cli_dir: cli_dir(tauri_app.handle()),
                 socket: true,
                 usage_extra_path: None,
+                kimi_home: None,
             };
             let data_root = root.path().to_path_buf();
             let core = App::start_with(root, sink, options)?;
