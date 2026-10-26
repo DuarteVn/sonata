@@ -78,6 +78,10 @@ struct Terminal {
     token: String,
     /// Conversation offered to the first `sonata run` of the current start (feature 009).
     resume_offer: Option<Conversation>,
+    /// An agent hook reported from this process (feature 010, research R5).
+    agent_hooked: bool,
+    /// Between the agent's turn-start and turn-end reports.
+    turn_active: bool,
 }
 
 impl Terminal {
@@ -99,6 +103,22 @@ impl Terminal {
         self.pending.clear();
         if !connected {
             self.sink = None;
+        }
+    }
+
+    /// Busy as the canvas and `sonata list` show it: a hooked Kimi follows its turns, because
+    /// Kimi owns the terminal even while it waits for input (feature 010, research R5).
+    fn working(&self) -> bool {
+        let kimi = self
+            .spec
+            .launch_command
+            .as_deref()
+            .and_then(|c| c.split_whitespace().next())
+            == Some("kimi");
+        if kimi && self.agent_hooked && matches!(self.status, RunStatus::Running { .. }) {
+            self.turn_active
+        } else {
+            self.busy()
         }
     }
 
@@ -168,6 +188,8 @@ impl TerminalManager {
             last_output: std::time::Instant::now(),
             token: String::new(),
             resume_offer: None,
+            agent_hooked: false,
+            turn_active: false,
         }));
         lock(&self.terminals).insert(id, terminal.clone());
         self.launch(id, &terminal)
@@ -180,6 +202,8 @@ impl TerminalManager {
             t.status = RunStatus::Starting;
             t.token = new_token();
             t.resume_offer = t.spec.resume.clone();
+            t.agent_hooked = false;
+            t.turn_active = false;
             (t.spec.clone(), t.generation, t.token.clone())
         };
         let mut env = spec.session_env.clone();
@@ -355,6 +379,31 @@ impl TerminalManager {
         self.get(id).is_ok_and(|t| lock(&t).busy())
     }
 
+    /// Busy for display (`sonata list`, activity); confirmations keep using [`Self::is_busy`].
+    pub fn is_working(&self, id: Uuid) -> bool {
+        self.get(id).is_ok_and(|t| lock(&t).working())
+    }
+
+    /// Records an agent hook report from the terminal's current process: it is hooked from now
+    /// on, and `turn` (when given) starts or ends its turn (feature 010).
+    pub fn report_agent_hook(&self, id: Uuid, turn: Option<bool>) {
+        if let Ok(t) = self.get(id) {
+            let mut t = lock(&t);
+            t.agent_hooked = true;
+            if let Some(active) = turn {
+                t.turn_active = active;
+            }
+        }
+    }
+
+    pub fn agent_hooked(&self, id: Uuid) -> bool {
+        self.get(id).is_ok_and(|t| lock(&t).agent_hooked)
+    }
+
+    pub fn turn_active(&self, id: Uuid) -> bool {
+        self.get(id).is_ok_and(|t| lock(&t).turn_active)
+    }
+
     pub fn screen_text(&self, id: Uuid) -> Option<String> {
         self.get(id)
             .ok()
@@ -484,7 +533,7 @@ fn state_event(id: Uuid, t: &Terminal) -> TerminalStateEvent {
         node_id: id,
         run,
         exit_code,
-        busy: t.busy(),
+        busy: t.working(),
         warning: t.warning.clone(),
     }
 }

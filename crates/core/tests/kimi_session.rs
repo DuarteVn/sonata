@@ -3,7 +3,7 @@
 
 mod common;
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use common::{Sandbox, install_fake_kimi, messaging_app, shells, sonata_as, wait_until};
 use sonata_core::App;
@@ -76,5 +76,52 @@ fn kimi_terminals_get_instructions_and_end_turns() {
     let out = sonata_as(&app, asker, &["ask", "Kimi", "ping"]);
     assert_eq!(out.code, 0, "{}", out.stderr);
     assert!(out.stdout.contains("kimi:ping"), "{}", out.stdout);
+
+    // T046: a hooked turn with a 25 s silence (longer than the 20 s hooked fallback) ends only on
+    // Kimi's stop hook, with the full answer. This terminal's first ask starts as `Probing` and
+    // switches when the prompt hook arrives.
+    unsafe { std::env::set_var("FAKE_KIMI_PAUSE", "25") };
+    let slow = kimi_terminal(&app, ws, "Slow", 1400.0, None);
+    app.create_link(ws, asker, slow).unwrap();
+    assert!(wait_until(Duration::from_secs(10), || app
+        .terminal_ready(slow, Duration::from_millis(500))));
+    let start = Instant::now();
+    let out = sonata_as(&app, asker, &["ask", "Slow", "think"]);
+    let took = start.elapsed();
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stdout.contains("kimi:think"), "{}", out.stdout);
+    assert!(
+        took >= Duration::from_secs(25) && took < Duration::from_secs(29),
+        "{took:?}"
+    );
+    unsafe { std::env::remove_var("FAKE_KIMI_PAUSE") };
+
+    // Without hooks, Kimi answers by the quiet-screen rule (3 s).
+    unsafe { std::env::set_var("FAKE_KIMI_NO_HOOKS", "1") };
+    let plain = kimi_terminal(&app, ws, "Plain", 2100.0, None);
+    app.create_link(ws, asker, plain).unwrap();
+    assert!(wait_until(Duration::from_secs(10), || app
+        .terminal_ready(plain, Duration::from_millis(500))));
+    let start = Instant::now();
+    let out = sonata_as(&app, asker, &["ask", "Plain", "hi"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(out.stdout.contains("kimi:hi"), "{}", out.stdout);
+    assert!(
+        start.elapsed() < Duration::from_secs(10),
+        "{:?}",
+        start.elapsed()
+    );
+
+    // A hooked Kimi whose prompt hook does not fire for an ask still ends by the hooked fallback.
+    assert_eq!(sonata_as(&app, plain, &["_turn", "complete"]).code, 0);
+    let start = Instant::now();
+    let out = sonata_as(&app, asker, &["ask", "Plain", "again"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let took = start.elapsed();
+    assert!(
+        took >= Duration::from_secs(19) && took < Duration::from_secs(25),
+        "{took:?}"
+    );
+    unsafe { std::env::remove_var("FAKE_KIMI_NO_HOOKS") };
     app.quit();
 }

@@ -1167,7 +1167,7 @@ impl App {
             let mut last = self.activity_last.lock().unwrap_or_else(|e| e.into_inner());
             last.retain(|id, _| monitored.contains(id));
             for id in monitored {
-                let busy = self.terminals.is_busy(id);
+                let busy = self.terminals.is_working(id);
                 if last.insert(id, busy).is_some_and(|prev| prev != busy) {
                     changed.push(id);
                 }
@@ -1863,7 +1863,9 @@ impl App {
             .and_then(|c| c.split_whitespace().next());
         let automatic = match kind {
             crate::messaging::broker::TargetKind::Shell => false,
-            crate::messaging::broker::TargetKind::Other => first != Some("kimi"),
+            crate::messaging::broker::TargetKind::Other => true,
+            // Kimi gets instructions in its agent file (feature 010, research R2).
+            crate::messaging::broker::TargetKind::Probing => false,
             // Codex has no verified session-instructions option yet (research 003 R4).
             crate::messaging::broker::TargetKind::Hooked => first == Some("codex"),
         };

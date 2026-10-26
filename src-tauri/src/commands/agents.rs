@@ -25,9 +25,7 @@ pub async fn kimi_integration(app: State<'_, Arc<App>>) -> Result<KimiIntegratio
 
 /// The UI asks the user to confirm before calling this (FR-010).
 #[tauri::command]
-pub async fn kimi_integration_apply(
-    app: State<'_, Arc<App>>,
-) -> Result<KimiIntegration, AppError> {
+pub async fn kimi_integration_apply(app: State<'_, Arc<App>>) -> Result<KimiIntegration, AppError> {
     blocking(&app, App::kimi_integration_apply).await
 }
 

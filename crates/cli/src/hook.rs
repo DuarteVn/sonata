@@ -62,6 +62,22 @@ fn stdin_json() -> Value {
     serde_json::from_str(&input).unwrap_or(Value::Null)
 }
 
+/// Kimi Code hooks (feature 010, contracts/cli.md). Kimi adds `UserPromptSubmit` output to the
+/// model's context, so these print nothing; a bad payload reports nothing.
+fn kimi(event: Option<&str>) -> ExitCode {
+    let mut input = String::new();
+    let _ = std::io::stdin().read_to_string(&mut input);
+    let Ok(v) = serde_json::from_str::<Value>(&input) else {
+        return ExitCode::SUCCESS;
+    };
+    let _session = v["session_id"].as_str();
+    match event {
+        Some("prompt-submit") => report("start", None),
+        Some("stop" | "stop-failure" | "interrupt") => report("complete", None),
+        _ => ExitCode::SUCCESS,
+    }
+}
+
 pub fn main(args: Vec<String>) -> ExitCode {
     match args.first().map(String::as_str) {
         Some("claude-stop") => {
@@ -101,6 +117,7 @@ pub fn main(args: Vec<String>) -> ExitCode {
             }
             ExitCode::SUCCESS
         }
+        Some("kimi") => kimi(args.get(1).map(String::as_str)),
         Some("codex-notify") => {
             let payload = args.get(1).cloned().unwrap_or_default();
             let v: Value = serde_json::from_str(&payload).unwrap_or(Value::Null);

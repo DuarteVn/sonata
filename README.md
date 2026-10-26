@@ -16,8 +16,8 @@ between them live side by side, organized into as many workspaces as you need.
 - Terminals keep running when you switch workspaces or scroll them off screen. Off-screen or
   zoomed-out terminals show a light text preview.
 - A tool bar (Select `V`, Terminal `T`, Note `N`), a New Terminal dialog with quick starts for
-  Claude Code, Codex, OpenCode, Gemini CLI, and Shell, plus accent color, font size, roles, and
-  an Orchestrator flag.
+  Claude Code, Codex, OpenCode, Gemini CLI, Kimi Code, and Shell, plus accent color, font size,
+  roles, and an Orchestrator flag.
 - Links between terminals and notes: drag from the dot on a selected item onto another one, or use
   the link button in its floating toolbar. Select a link and press Delete to remove it.
 - Floating toolbars for a selected note (color, size, Markdown formatting, pictures) or terminal
@@ -31,10 +31,12 @@ between them live side by side, organized into as many workspaces as you need.
 - Claude Code and Codex started from the presets run as `sonata run claude|codex`: they get
   Sonata instructions (and the terminal's role) for that session only, plus an end-of-turn
   signal so answers return as soon as the agent finishes. Your global agent settings are never
-  changed. In zsh terminals, typing `claude` or `codex` by hand does the same (your own
-  `.zshrc` still loads; Sonata only adds two shell functions inside its terminals).
+  changed. In zsh terminals, typing `claude`, `codex`, or `kimi` by hand does the same (your
+  own `.zshrc` still loads; Sonata only adds three shell functions inside its terminals).
 - Agent terminals come back in their conversation after you quit and reopen Sonata or restart
   the terminal. See [Session restore](#session-restore).
+- Kimi Code (`kimi`) runs the same way, with Sonata instructions from the first launch. Exact
+  busy/done tracking needs a one-time setup in Settings; see [Kimi Code](#kimi-code).
 - Browser nodes (tool `B`): real web pages on the canvas, with back/forward/reload, address bar,
   developer tools, and "open in default browser". Pages are live at a readable zoom and show a
   card with the last image otherwise. Browsers in the same workspace share logins. Linked agents
@@ -151,6 +153,25 @@ remembered after their first finished turn.
   and similar starts exactly what you asked for.
 - Sonata stores only the conversation id (in `workspace.json`). The conversation itself stays in
   the agent's own files.
+
+## Kimi Code
+
+- **Without setup**: the Kimi Code preset (or `kimi` typed in a Sonata terminal) starts Kimi with
+  Sonata's instructions and the terminal's role in a session-only agent file
+  (`--agent-file`, which wraps Kimi's own default prompt). Other agents can ask it questions;
+  Sonata treats a quiet screen as the end of Kimi's answer.
+- **Setup** (Settings › Agents › Kimi Code, or Set up in the line shown on Kimi terminals): Kimi
+  reads hooks only from `~/.kimi-code/config.toml` (or `$KIMI_CODE_HOME/config.toml`), so this is
+  the one place where Sonata changes an agent's own settings, and only after you confirm Apply.
+  Sonata saves a backup next to the file (`config.toml.sonata-backup-<date>`, the three newest
+  are kept), appends a marked block with five hooks (`SessionStart`, `UserPromptSubmit`, `Stop`,
+  `StopFailure`, `Interrupt`), keeps the file's permissions, and runs `kimi doctor` before and
+  after, putting the old file back if Kimi rejects the new one. The hooks run `sonata` only
+  inside Sonata terminals; Kimi elsewhere is not affected. Remove takes out only Sonata's lines.
+- **After setup**: restart running Kimi terminals. Asks to Kimi then return as soon as Kimi ends
+  its turn, even after long silent tool runs, and the activity dot follows Kimi's turns.
+- **Known gap**: `/new` or `/clear` inside Kimi starts a conversation with Kimi's default agent,
+  without Sonata's instructions. Restart the terminal to get them back.
 
 ## Usage meter
 

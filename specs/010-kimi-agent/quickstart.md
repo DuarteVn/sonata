@@ -6,8 +6,9 @@ Kimi Code CLI 2.3+ (`npm i -g @moonshot-ai/kimi-code`, then `kimi login`).
 ## Automated
 
 ```sh
-cargo test -p sonata-core kimi_            # config edit, status, agent file, presets, markers
-cargo test -p sonata-core agent_hooks      # `_hook kimi …` with fake payloads, wrapper with a fake `kimi`
+cargo test -p sonata-core --test kimi_config   # config edit, status, backups, kimi doctor, App
+cargo test -p sonata-core --test kimi_hooks    # agent file, wrapper flags, recruit, `_hook kimi …`
+cargo test -p sonata-core --test kimi_session  # fake `kimi` in terminals: instructions, how asks end
 npm test -- kimi                           # notice, Settings section, preset
 scripts/check.sh                           # fmt, clippy, all tests, type check
 ```

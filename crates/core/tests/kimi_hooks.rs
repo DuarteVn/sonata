@@ -214,3 +214,160 @@ fn orchestrator_recruits_kimi() {
     assert!(usage.stderr.contains("kimi"), "{}", usage.stderr);
     app.quit();
 }
+
+fn quiet(out: &CliOut, what: &str) {
+    assert_eq!(out.code, 0, "{what}: {}", out.stderr);
+    assert!(out.stdout.is_empty(), "{what}: stdout {:?}", out.stdout);
+    assert!(out.stderr.is_empty(), "{what}: stderr {:?}", out.stderr);
+}
+
+/// The `sonata list` state word for `name`, as seen by `asker`.
+fn listed_state(app: &App, asker: Uuid, name: &str) -> String {
+    let out = sonata_as(app, asker, &["list"]);
+    out.stdout
+        .lines()
+        .find(|l| l.split_whitespace().nth(1) == Some(name))
+        .and_then(|l| {
+            ["working", "idle", "exited", "starting"]
+                .into_iter()
+                .find(|w| l.split_whitespace().any(|x| x == *w))
+        })
+        .unwrap_or_else(|| panic!("{name} not in: {}", out.stdout))
+        .to_string()
+}
+
+#[test]
+fn kimi_hooks_report_turns_quietly() {
+    use common::{WAIT, sonata_with, wait_until};
+    use sonata_core::app::NewTerminal;
+    use std::time::Duration;
+
+    let sb = Sandbox::new();
+    let (app, _) = messaging_app(&sb);
+    let (ws, ids) = shells(&app, &sb, &["Asker"]);
+    let asker = ids[0];
+    let new = |name: &str, cmd: &str, x: f64| {
+        let id = app
+            .create_terminal(
+                ws,
+                NewTerminal {
+                    frame: sonata_core::model::node::Frame {
+                        x,
+                        y: 500.0,
+                        width: 640.0,
+                        height: 400.0,
+                    },
+                    name: Some(name.into()),
+                    launch_command: Some(cmd.into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .id;
+        app.create_link(ws, asker, id).unwrap();
+        // No `kimi` here: the wrapper says so and the shell stays at its prompt.
+        assert!(
+            wait_until(WAIT, || app
+                .terminals()
+                .screen_text(id)
+                .is_some_and(|s| s.contains("was not found"))),
+            "{name}: {:?}",
+            app.terminals().screen_text(id)
+        );
+        assert!(wait_until(WAIT, || app.terminal_ready(id, Duration::from_millis(300))));
+        id
+    };
+    let k = new("K", "kimi", 0.0);
+    let payload = r#"{"hook_event_name":"UserPromptSubmit","session_id":"session_a","cwd":"."}"#;
+
+    assert!(!app.terminals().agent_hooked(k));
+    assert_eq!(listed_state(&app, asker, "K"), "idle");
+
+    let out = sonata_with(&app, k, &["_hook", "kimi", "prompt-submit"], Some(payload));
+    quiet(&out, "prompt-submit");
+    assert!(app.terminals().agent_hooked(k));
+    assert!(app.terminals().turn_active(k));
+    assert_eq!(listed_state(&app, asker, "K"), "working");
+
+    for event in ["stop", "stop-failure", "interrupt"] {
+        quiet(
+            &sonata_with(&app, k, &["_hook", "kimi", "prompt-submit"], Some(payload)),
+            event,
+        );
+        assert!(app.terminals().turn_active(k), "{event}");
+        let out = sonata_with(
+            &app,
+            k,
+            &["_hook", "kimi", event],
+            Some(r#"{"session_id":"session_a"}"#),
+        );
+        quiet(&out, event);
+        assert!(!app.terminals().turn_active(k), "{event}");
+        assert_eq!(listed_state(&app, asker, "K"), "idle", "{event}");
+    }
+
+    // Unknown events and bad payloads report nothing and never fail.
+    quiet(
+        &sonata_with(&app, k, &["_hook", "kimi", "nope"], Some("{}")),
+        "unknown",
+    );
+    quiet(
+        &sonata_with(
+            &app,
+            k,
+            &["_hook", "kimi", "prompt-submit"],
+            Some("not json"),
+        ),
+        "bad json",
+    );
+    assert!(!app.terminals().turn_active(k), "bad json reports nothing");
+
+    // Outside a Sonata terminal, or with Sonata gone: silent success.
+    for env in [
+        vec![],
+        vec![
+            ("SONATA_TERMINAL_ID", "x"),
+            ("SONATA_SOCKET", "/nonexistent/s"),
+        ],
+    ] {
+        let mut cmd = Command::new(cli_bin());
+        cmd.args(["_hook", "kimi", "stop"])
+            .env_remove("SONATA_TERMINAL_ID")
+            .env_remove("SONATA_SOCKET")
+            .env_remove("SONATA_TOKEN")
+            .stdin(Stdio::null());
+        for (key, value) in &env {
+            cmd.env(key, value);
+        }
+        let out = cmd.output().unwrap();
+        assert!(out.status.success(), "{env:?}");
+        assert!(
+            out.stdout.is_empty() && out.stderr.is_empty(),
+            "{env:?}: {out:?}"
+        );
+    }
+
+    // A restart is a new process: not hooked until its hooks report again.
+    app.restart_terminal(k, true).unwrap();
+    assert!(!app.terminals().agent_hooked(k));
+    assert!(!app.terminals().turn_active(k));
+
+    // Other terminals keep the foreground-program status even when a turn hook reports. (A
+    // plain shell stands in for Claude Code, which must not really start in tests.)
+    let s = app
+        .create_terminal(
+            ws,
+            NewTerminal {
+                name: Some("S".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .id;
+    app.create_link(ws, asker, s).unwrap();
+    assert!(wait_until(WAIT, || app.terminal_ready(s, Duration::from_millis(300))));
+    assert_eq!(sonata_as(&app, s, &["_turn", "start"]).code, 0);
+    assert!(app.terminals().turn_active(s));
+    assert_eq!(listed_state(&app, asker, "S"), "idle");
+    app.quit();
+}
