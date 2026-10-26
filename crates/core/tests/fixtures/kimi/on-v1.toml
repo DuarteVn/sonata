@@ -1,0 +1,39 @@
+# My Kimi settings
+default_model = "kimi-k2"
+
+[providers.moonshot]
+type = "kimi"
+api_key_env = "MOONSHOT_API_KEY"
+
+[[hooks]]
+event = "Notification"
+matcher = "task\\.completed"
+command = "terminal-notifier -title Kimi -message 'Task done'"
+
+# >>> Sonata integration (v1). Managed by Sonata: Settings > Agents > Kimi Code. >>>
+# These hooks only act inside Sonata terminals; elsewhere they exit at once.
+[[hooks]]
+event = "SessionStart"
+command = "test -n \"$SONATA_TERMINAL_ID\" && sonata _hook kimi session-start; exit 0"
+timeout = 5
+
+[[hooks]]
+event = "UserPromptSubmit"
+command = "test -n \"$SONATA_TERMINAL_ID\" && sonata _hook kimi prompt-submit; exit 0"
+timeout = 5
+
+[[hooks]]
+event = "Stop"
+command = "test -n \"$SONATA_TERMINAL_ID\" && sonata _hook kimi stop; exit 0"
+timeout = 5
+
+[[hooks]]
+event = "StopFailure"
+command = "test -n \"$SONATA_TERMINAL_ID\" && sonata _hook kimi stop-failure; exit 0"
+timeout = 5
+
+[[hooks]]
+event = "Interrupt"
+command = "test -n \"$SONATA_TERMINAL_ID\" && sonata _hook kimi interrupt; exit 0"
+timeout = 5
+# <<< Sonata integration <<<

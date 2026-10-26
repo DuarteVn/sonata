@@ -1714,7 +1714,7 @@ impl App {
             .and_then(|c| c.split_whitespace().next());
         let automatic = match kind {
             crate::messaging::broker::TargetKind::Shell => false,
-            crate::messaging::broker::TargetKind::Other => true,
+            crate::messaging::broker::TargetKind::Other => first != Some("kimi"),
             // Codex has no verified session-instructions option yet (research 003 R4).
             crate::messaging::broker::TargetKind::Hooked => first == Some("codex"),
         };

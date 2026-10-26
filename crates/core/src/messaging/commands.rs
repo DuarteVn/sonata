@@ -255,6 +255,8 @@ pub fn target_kind(node: &Node) -> TargetKind {
     let cmd = node.terminal().and_then(|t| t.launch_command.as_deref());
     match cmd.and_then(|c| c.split_whitespace().next()) {
         None => TargetKind::Shell,
+        // Kimi has end-of-turn hooks only after the user sets them up (feature 010).
+        Some("kimi") => TargetKind::Other,
         Some(a) if crate::terminal::pty::WRAPPED_AGENTS.contains(&a) => TargetKind::Hooked,
         Some(_) => TargetKind::Other,
     }
@@ -709,7 +711,7 @@ fn recruit(ctx: &Ctx<'_>, rest: &[&str]) -> Reply {
     let Some(what) = what else {
         return Reply::err(
             EXIT_USAGE,
-            "Usage: sonata recruit <claude|codex|opencode|gemini|shell|\"<command>\"> [--name N] [--role R | --role-text T] [--folder F | --lane]",
+            "Usage: sonata recruit <claude|codex|kimi|opencode|gemini|shell|\"<command>\"> [--name N] [--role R | --role-text T] [--folder F | --lane]",
         );
     };
     if lane && folder.is_some() {
@@ -1025,6 +1027,10 @@ fn link(ctx: &Ctx<'_>, a: &str, b: &str, create: bool) -> Reply {
 
 fn session(ctx: &Ctx<'_>, agent: &str, hook: &str) -> Reply {
     match ctx.app.prepare_agent_session(ctx.me, hook) {
+        Ok(files) if agent == "kimi" => Reply::ok("").with_data(json!({
+            "agent": agent,
+            "agentFile": files.kimi_agent,
+        })),
         Ok(files) => {
             let mut data = json!({
                 "agent": agent,

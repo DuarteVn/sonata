@@ -33,6 +33,10 @@ pub enum ErrorCode {
     DeviceNotRunning,
     ToolMissing,
     InvalidConversation,
+    KimiUnavailable,
+    KimiHooksConflict,
+    KimiConfigInvalid,
+    KimiCheckFailed,
     Io,
     Internal,
 }

@@ -38,7 +38,7 @@ Everyone:
   sonata device install <device> <file.apk | file.app>
 
 Orchestrator only:
-  sonata recruit <claude|codex|opencode|gemini|shell|\"<command>\"> [--name N] [--role R | --role-text T] [--folder F | --lane]
+  sonata recruit <claude|codex|kimi|opencode|gemini|shell|\"<command>\"> [--name N] [--role R | --role-text T] [--folder F | --lane]
   sonata lane status|land|remove <name>        the same for a linked terminal
   sonata dismiss <name>
   sonata note new \"<title>\" [\"<text>\"]       create a note linked to you

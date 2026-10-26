@@ -52,14 +52,14 @@ pub struct SpawnOptions<'a> {
     pub cols: u16,
     /// Extra environment (Sonata session identity, socket, CLI folder on PATH).
     pub env: &'a [(String, String)],
-    /// Start Claude Code and Codex through `sonata run` (feature 003, research R4).
+    /// Start Claude Code, Codex, and Kimi through `sonata run` (feature 003, research R4).
     pub wrap_agents: bool,
     /// Sonata's zsh startup files (see `terminal::zsh`); used when the shell is zsh.
     pub zsh_dir: Option<&'a Path>,
 }
 
 /// Agents that `sonata run` knows how to start with session instructions and hooks.
-pub const WRAPPED_AGENTS: [&str; 2] = ["claude", "codex"];
+pub const WRAPPED_AGENTS: [&str; 3] = ["claude", "codex", "kimi"];
 
 /// Environment variables that mark a process as running inside an agent session (research R5).
 /// Terminals and the usage probe drop them, so an agent started there is a fresh, top-level
@@ -160,4 +160,19 @@ pub fn spawn(opts: SpawnOptions<'_>) -> io::Result<Spawned> {
         pid,
         warning,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kimi_is_wrapped() {
+        assert!(WRAPPED_AGENTS.contains(&"kimi"));
+        assert_eq!(
+            wrap_launch_command("kimi --yolo", true),
+            "sonata run kimi --yolo"
+        );
+        assert_eq!(wrap_launch_command("kimi", false), "kimi");
+    }
 }

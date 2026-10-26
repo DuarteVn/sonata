@@ -1,0 +1,2 @@
+default_model = "kimi-k2"
+hooks = []

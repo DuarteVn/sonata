@@ -74,9 +74,50 @@ fn resume_args(agent: &str, id: &str) -> Vec<String> {
     }
 }
 
+/// Kimi arguments that pick a conversation, an agent, or a non-interactive mode (contracts/cli.md).
+const KIMI_CHOOSING_FLAGS: [&str; 11] = [
+    "-S",
+    "--session",
+    "-r",
+    "--resume",
+    "-c",
+    "--continue",
+    "-C",
+    "--agent",
+    "--agent-file",
+    "-p",
+    "--prompt",
+];
+const KIMI_SUBCOMMANDS: [&str; 14] = [
+    "login",
+    "acp",
+    "web",
+    "app",
+    "install-desktop",
+    "doctor",
+    "export",
+    "fork",
+    "session",
+    "provider",
+    "vis",
+    "migrate",
+    "upgrade",
+    "update",
+];
+
+/// True when the user's own Kimi arguments already choose what to run, so Sonata adds nothing.
+fn kimi_chooses(args: &[String]) -> bool {
+    args.first()
+        .is_some_and(|a| KIMI_SUBCOMMANDS.contains(&a.as_str()))
+        || args.iter().any(|a| {
+            let flag = a.split_once('=').map_or(a.as_str(), |(f, _)| f);
+            KIMI_CHOOSING_FLAGS.contains(&flag)
+        })
+}
+
 pub fn main(args: Vec<String>) -> ExitCode {
     let Some(agent) = args.first().cloned() else {
-        eprintln!("sonata: usage: sonata run <claude|codex> [args…]");
+        eprintln!("sonata: usage: sonata run <claude|codex|kimi> [args…]");
         return ExitCode::from(crate::EXIT_USAGE);
     };
     let rest = &args[1..];
@@ -108,6 +149,13 @@ pub fn main(args: Vec<String>) -> ExitCode {
                     "codex" => {
                         if let Some(n) = data["codexNotify"].as_str() {
                             session.extend(["-c".into(), format!("notify={n}")]);
+                        }
+                    }
+                    // Kimi binds the agent file to a new conversation; it cannot be combined
+                    // with a resume or a user-chosen agent (feature 010, research R2).
+                    "kimi" if !kimi_chooses(rest) => {
+                        if let Some(f) = data["agentFile"].as_str() {
+                            session.extend(["--agent-file".into(), f.into()]);
                         }
                     }
                     _ => {}
@@ -211,7 +259,7 @@ fn run_child(mut cmd: Command) -> std::io::Result<ExitStatus> {
 
 #[cfg(test)]
 mod tests {
-    use super::{may_resume, valid_id};
+    use super::{kimi_chooses, may_resume, valid_id};
 
     fn args(a: &[&str]) -> Vec<String> {
         a.iter().map(|s| s.to_string()).collect()
@@ -233,5 +281,16 @@ mod tests {
         assert!(!valid_id(""));
         assert!(!valid_id("a b"));
         assert!(!valid_id(&"x".repeat(129)));
+    }
+
+    #[test]
+    fn kimi_choice_detection() {
+        assert!(!kimi_chooses(&args(&[])));
+        assert!(!kimi_chooses(&args(&["--yolo", "-m", "k2"])));
+        assert!(kimi_chooses(&args(&["--session=session_x"])));
+        assert!(kimi_chooses(&args(&["--yolo", "-c"])));
+        assert!(kimi_chooses(&args(&["doctor"])));
+        // A subcommand name later in the arguments is an argument value, not a subcommand.
+        assert!(!kimi_chooses(&args(&["-m", "doctor"])));
     }
 }

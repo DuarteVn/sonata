@@ -72,7 +72,7 @@ pub fn instructions(info: &SessionInfo<'_>) -> String {
         s.push_str(
             "\n## You are the Orchestrator\n\n\
              You can build your team:\n\n\
-             - `sonata recruit <claude|codex|opencode|gemini|shell> --name <Name> [--role-text \
+             - `sonata recruit <claude|codex|kimi|opencode|gemini|shell> --name <Name> [--role-text \
              \"<what they do>\"] [--folder <path> | --lane]` — start a new agent linked to you (`--lane`: in its own git checkout and branch).\n\
              - `sonata dismiss <name>` — close an agent you recruited.\n\
              - `sonata note new \"<title>\" [\"<text>\"]` — create a note linked to you.\n\
@@ -109,6 +109,23 @@ pub struct SessionFiles {
     pub dir: PathBuf,
     pub instructions: PathBuf,
     pub settings: PathBuf,
+    /// Kimi agent file (feature 010, research R2).
+    pub kimi_agent: PathBuf,
+}
+
+/// Kimi agent file for `--agent-file`: Kimi's own default prompt plus Sonata's instructions.
+/// Kimi binds it to the conversation and restores it on resume (feature 010, research R2).
+pub fn kimi_agent_file(info: &SessionInfo<'_>) -> String {
+    format!(
+        "---\n\
+         name: sonata-session\n\
+         description: Kimi's default agent, with Sonata session instructions.\n\
+         ---\n\n\
+         ${{base_prompt}}\n\n\
+         ${{plugin_sections}}\n\n\
+         {}",
+        instructions(info)
+    )
 }
 
 /// Writes the files for one agent session. `hook` is the absolute path of the `sonata` binary.
@@ -135,10 +152,13 @@ pub fn write_session(
             .unwrap_or_default()
             .as_slice(),
     )?;
+    let kimi_path = run_dir.join("kimi-agent.md");
+    atomic::write(&kimi_path, kimi_agent_file(info).as_bytes())?;
     Ok(SessionFiles {
         dir: run_dir.to_path_buf(),
         instructions: instructions_path,
         settings: settings_path,
+        kimi_agent: kimi_path,
     })
 }
 
@@ -177,6 +197,42 @@ mod tests {
         assert!(with.contains("commit"));
         let without = instructions(&info(None));
         assert!(!without.contains("sonata lane"));
+    }
+
+    fn full_info() -> SessionInfo<'static> {
+        SessionInfo {
+            name: "Api",
+            workspace: "W",
+            role: Some("You review diffs."),
+            orchestrator: true,
+            lane: Some(LANE),
+        }
+    }
+
+    #[test]
+    fn instructions_are_safe_in_a_kimi_template() {
+        // Kimi renders the agent-file body as a template: `${…}` would be replaced (research R2).
+        for info in [info(None), full_info()] {
+            assert!(!instructions(&info).contains("${"));
+        }
+    }
+
+    #[test]
+    fn kimi_agent_file_wraps_the_default_prompt() {
+        let file = kimi_agent_file(&full_info());
+        assert!(
+            file.starts_with("---\nname: sonata-session\ndescription: "),
+            "{file}"
+        );
+        let (front, body) = file[4..].split_once("\n---\n").expect("frontmatter end");
+        assert!(!front.contains("tools"), "{front}");
+        let base = body.find("${base_prompt}").expect("base prompt");
+        let plugins = body.find("${plugin_sections}").expect("plugin sections");
+        let sonata = body
+            .find("You are running inside Sonata")
+            .expect("instructions");
+        assert!(base < plugins && plugins < sonata, "{body}");
+        assert!(body.contains("You review diffs.") && body.contains("sonata list"));
     }
 
     #[test]

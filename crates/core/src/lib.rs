@@ -3,6 +3,7 @@
 //! This crate has no Tauri dependency (constitution principle II). The desktop shell
 //! calls into [`App`] and receives [`events::CoreEvent`]s through an [`events::EventSink`].
 
+pub mod agents;
 pub mod app;
 pub mod autosave;
 pub mod browser;

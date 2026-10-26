@@ -26,6 +26,10 @@ export type ErrorCode =
   | "DeviceInUse"
   | "DeviceNotRunning"
   | "ToolMissing"
+  | "KimiUnavailable"
+  | "KimiHooksConflict"
+  | "KimiConfigInvalid"
+  | "KimiCheckFailed"
   | "Io"
   | "Internal";
 
