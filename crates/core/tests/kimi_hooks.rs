@@ -371,3 +371,101 @@ fn kimi_hooks_report_turns_quietly() {
     assert_eq!(listed_state(&app, asker, "S"), "idle");
     app.quit();
 }
+
+/// Runs `sonata _hook kimi <event>` as terminal `id` with `payload` on stdin; `off` sets
+/// `SONATA_CONVERSATION=off` like a `kimi -p` run.
+fn kimi_hook(app: &App, id: Uuid, event: &str, payload: &str, off: bool) -> CliOut {
+    use std::io::Write;
+    let mut cmd = Command::new(cli_bin());
+    cmd.args(["_hook", "kimi", event])
+        .env("SONATA_SOCKET", app.socket_path().expect("socket"))
+        .env("SONATA_TERMINAL_ID", id.to_string())
+        .env("SONATA_TOKEN", app.terminals().session_token(id).unwrap())
+        .env_remove("SONATA_CONVERSATION")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if off {
+        cmd.env("SONATA_CONVERSATION", "off");
+    }
+    let mut child = cmd.spawn().unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(payload.as_bytes())
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    CliOut {
+        code: out.status.code().unwrap_or(-1),
+        stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+    }
+}
+
+#[test]
+fn kimi_hooks_report_the_conversation() {
+    use sonata_core::model::node::ConversationAgent;
+
+    let sb = Sandbox::new();
+    let (app, _) = messaging_app(&sb);
+    let (ws, ids) = shells(&app, &sb, &["K"]);
+    let k = ids[0];
+    let stored = || {
+        app.workspaces()
+            .workspace(ws)
+            .and_then(|w| w.node(k).cloned())
+            .and_then(|n| n.terminal().and_then(|t| t.conversation.clone()))
+            .map(|c| (c.agent, c.id))
+    };
+    let start = |source: &str, id: &str| {
+        format!(r#"{{"hook_event_name":"SessionStart","source":"{source}","session_id":"{id}"}}"#)
+    };
+    let kimi = |id: &str| Some((ConversationAgent::Kimi, id.to_string()));
+
+    // SessionStart: `resume` records the session, `startup` clears it, others do nothing.
+    quiet(
+        &kimi_hook(&app, k, "session-start", &start("resume", "session_r"), false),
+        "resume",
+    );
+    assert_eq!(stored(), kimi("session_r"));
+    quiet(
+        &kimi_hook(&app, k, "session-start", &start("other", "session_o"), false),
+        "other",
+    );
+    assert_eq!(stored(), kimi("session_r"));
+    quiet(
+        &kimi_hook(&app, k, "session-start", &start("startup", "session_n"), false),
+        "startup",
+    );
+    assert_eq!(stored(), None);
+
+    // UserPromptSubmit starts the turn and records the session it runs in.
+    let prompt = r#"{"hook_event_name":"UserPromptSubmit","session_id":"session_p","cwd":"."}"#;
+    quiet(&kimi_hook(&app, k, "prompt-submit", prompt, false), "prompt");
+    assert!(app.terminals().turn_active(k));
+    assert_eq!(stored(), kimi("session_p"));
+    quiet(
+        &kimi_hook(&app, k, "stop", r#"{"session_id":"session_p"}"#, false),
+        "stop",
+    );
+
+    // `kimi -p` runs report turns but never touch the stored conversation.
+    let other = r#"{"hook_event_name":"UserPromptSubmit","session_id":"session_x","cwd":"."}"#;
+    quiet(&kimi_hook(&app, k, "prompt-submit", other, true), "off");
+    assert!(app.terminals().turn_active(k));
+    assert_eq!(stored(), kimi("session_p"));
+    quiet(
+        &kimi_hook(&app, k, "session-start", &start("startup", "s"), true),
+        "off start",
+    );
+    assert_eq!(stored(), kimi("session_p"));
+
+    // An id Sonata would refuse is not reported, and the hook still succeeds quietly.
+    quiet(
+        &kimi_hook(&app, k, "session-start", &start("resume", "a;b"), false),
+        "bad id",
+    );
+    assert_eq!(stored(), kimi("session_p"));
+    app.quit();
+}

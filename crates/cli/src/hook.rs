@@ -65,17 +65,30 @@ fn stdin_json() -> Value {
 /// Kimi Code hooks (feature 010, contracts/cli.md). Kimi adds `UserPromptSubmit` output to the
 /// model's context, so these print nothing; a bad payload reports nothing.
 fn kimi(event: Option<&str>) -> ExitCode {
-    let mut input = String::new();
-    let _ = std::io::stdin().read_to_string(&mut input);
-    let Ok(v) = serde_json::from_str::<Value>(&input) else {
+    let v = stdin_json();
+    if v.is_null() {
         return ExitCode::SUCCESS;
-    };
-    let _session = v["session_id"].as_str();
-    match event {
-        Some("prompt-submit") => report("start", None),
-        Some("stop" | "stop-failure" | "interrupt") => report("complete", None),
-        _ => ExitCode::SUCCESS,
     }
+    let session = v["session_id"].as_str();
+    match event {
+        Some("prompt-submit") => {
+            report("start", None);
+            if let Some(id) = session {
+                report_conversation("kimi", Some(id));
+            }
+        }
+        Some("stop" | "stop-failure" | "interrupt") => {
+            report("complete", None);
+        }
+        // `resume`: an existing conversation; `startup`: a new, empty one (research R6).
+        Some("session-start") => match (v["source"].as_str(), session) {
+            (Some("resume"), Some(id)) => report_conversation("kimi", Some(id)),
+            (Some("startup"), _) => report_conversation("kimi", None),
+            _ => {}
+        },
+        _ => {}
+    }
+    ExitCode::SUCCESS
 }
 
 pub fn main(args: Vec<String>) -> ExitCode {
