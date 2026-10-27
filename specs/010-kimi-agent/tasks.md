@@ -102,8 +102,8 @@ quiet rule stays.
 ## Phase 6: User Story 4 — Kimi conversations come back after Sonata reopens (P2) — needs 009
 
 **Goal**: Feature 009's restore works for Kimi with `kimi --session <id>`.
-**Independent Test**: quickstart live check 5. Start only after 009 is on `main` and this branch
-is rebased (`git rebase main`).
+**Independent Test**: quickstart live check 5. Done on top of the local `009-session-restore`
+branch before 009 merged (T048); after 009 merges, this branch is rebased on `main` once more.
 
 - [X] T048 [US4] Rebase `010-kimi-agent` on the local `009-session-restore` branch (its commits only; 009 is not on `main` yet); run `sh scripts/check.sh` and fix conflicts in crates/cli/src/run.rs, crates/cli/src/hook.rs, crates/core/src/messaging/commands.rs. The pre-rebase state is kept in branch `010-kimi-agent-pre-rebase`. **Later**: after 009 merges, rebase once more on `main` and rerun `sh scripts/check.sh`
 - [X] T049 [P] [US4] Write tests in 009's conversation model tests (crates/core/tests/session_restore_*.rs): `Conversation { agent: "kimi", id: "session_3f2a0c1e-…" }` round-trips; `_conversation kimi session_x` stores it; `_conversation kimi none` clears only a `kimi` conversation
@@ -138,7 +138,9 @@ is rebased (`git rebase main`).
 - US2 core (T022–T035) does not depend on US1 code and can run beside it; US2 UI needs T035.
 - US3 needs US1 (wrapper) and the block of US2 for live testing; automated tests call the hooks
   directly, so T042–T047 need only US1.
-- US4 and US5 need 009 on `main` (T048 first). Phases 1–5 can merge as one PR before 009.
+- US4 and US5 need 009 (T048 first). They were built stacked on the local `009-session-restore`
+  branch; this branch now contains 009's commits, so it merges after 009, and the final
+  `git rebase main` comes after 009 is on `main`.
 - Within a story: tests → core → CLI → shell commands → UI.
 
 ## Parallel Examples
@@ -155,5 +157,6 @@ is rebased (`git rebase main`).
 1. MVP = Phases 1–3 (US1): Kimi usable on the canvas with instructions, no config change.
    Validate quickstart live check 1 when Kimi is available.
 2. Add US2 (setup), then US3 (exact busy/done). Open the PR for phases 1–5.
-3. After 009 merges: rebase, US4, US5, polish.
+3. US4, US5 stacked on the local 009 branch (done); after 009 merges: rebase on `main`, rerun
+   `sh scripts/check.sh`.
 4. Commit after each task or small group; Conventional Commits; no push without the user's ask.
