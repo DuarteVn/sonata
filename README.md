@@ -138,11 +138,13 @@ turn it off per terminal (terminal menu → Save history) for sessions that prin
 
 ## Session restore
 
-When a Claude Code or Codex terminal starts again (app reopen, workspace opened, Restart), the
-agent resumes the conversation it was in (`claude --resume <id>`, `codex resume <id>`), with
+When a Claude Code, Codex, or Kimi Code terminal starts again (app reopen, workspace opened,
+Restart), the agent resumes the conversation it was in (`claude --resume <id>`,
+`codex resume <id>`, `kimi --session <id>`), with
 the same folder, role, lane, and Sonata instructions. The remembered conversation follows the
 agent: `/clear`, `/resume`, or a new session inside the agent update it. Codex conversations are
-remembered after their first finished turn.
+remembered after their first finished turn. Kimi conversations are remembered only after the
+Kimi setup (see [Kimi Code](#kimi-code)).
 
 - **Start fresh** (terminal menu, shown when a conversation is remembered) forgets it and
   restarts the agent in a new conversation. The agent's own conversation files are not touched.
@@ -169,9 +171,13 @@ remembered after their first finished turn.
   after, putting the old file back if Kimi rejects the new one. The hooks run `sonata` only
   inside Sonata terminals; Kimi elsewhere is not affected. Remove takes out only Sonata's lines.
 - **After setup**: restart running Kimi terminals. Asks to Kimi then return as soon as Kimi ends
-  its turn, even after long silent tool runs, and the activity dot follows Kimi's turns.
+  its turn, even after long silent tool runs, and the activity dot follows Kimi's turns. The
+  terminal also remembers Kimi's conversation and resumes it with `kimi --session <id>` when it
+  starts again (see [Session restore](#session-restore)). A resumed conversation keeps the
+  Sonata instructions it started with.
 - **Known gap**: `/new` or `/clear` inside Kimi starts a conversation with Kimi's default agent,
-  without Sonata's instructions. Restart the terminal to get them back.
+  without Sonata's instructions. Use Start fresh in the terminal menu to get them back (after the
+  setup, a plain restart resumes that same conversation).
 
 ## Usage meter
 

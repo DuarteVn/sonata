@@ -41,6 +41,7 @@ asked, exits 1 with `Session "<id>" not found.`. Config tests use fixture files 
 6. **Remove**: Settings › Remove → confirm. The block is gone, the rest of the file is unchanged,
    the status is off, and a second backup exists.
 7. **Known gap**: `/clear` inside Kimi, then ask "what is Sonata?". Expected: Kimi does not know
-   (research R2). Restart the terminal: it knows again.
+   (research R2). Start fresh (terminal menu): it knows again. With the setup on, a plain Restart
+   resumes the cleared conversation and still does not know.
 8. **Environment (US5)**: `KIMI_PLUGIN_ROOT=/x open -n Sonata.app`; in a terminal, `env | grep KIMI`
    shows no `KIMI_PLUGIN_ROOT`; a user-set `KIMI_CODE_HOME` is kept.

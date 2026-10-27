@@ -206,8 +206,9 @@ terminal and list its environment: none of those markers are present.
   and does not override the user's choice.
 - **New conversation from inside Kimi** (`/new`, `/clear`): Kimi starts it with its default
   setup, so it has no Sonata instructions until the terminal restarts. Sonata does not type into
-  the user's input to fix this. The README documents the gap, and Restart restores the
-  instructions.
+  the user's input to fix this. The README documents the gap. Without the setup, Restart restores
+  the instructions; with it, Restart resumes that same conversation (feature 009), so Start fresh
+  restores them.
 - **Typed instruction message opt-in** (feature 003): for Kimi terminals, Sonata's own instruction
   delivery replaces the typed message, so instructions are never given twice.
 

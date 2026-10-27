@@ -78,7 +78,7 @@ pub const AGENT_SESSION_MARKERS: [&str; 14] = [
     "CLAUDE_EFFORT",
     "CODEX_SANDBOX",
     "CODEX_SANDBOX_NETWORK_DISABLED",
-    // Kimi Code (feature 010, research R8).
+    // Kimi Code (feature 010, research R7).
     "KIMI_PLUGIN_ROOT",
     "KIMI_CODE_UPDATE_REEXEC",
 ];

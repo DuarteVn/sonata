@@ -59,7 +59,8 @@ Claude Code. The per-terminal "send instructions" switch still overrides it.
 **Known gap**: `/new` and `/clear` inside the same Kimi process start a conversation with Kimi's
 default agent, so that conversation has no Sonata instructions until the terminal restarts
 (`kimi:apps/kimi-code/src/tui/kimi-tui.ts:3249`). Recorded in the quickstart and README; the
-Restart action fixes it. Typing instructions after `/clear` was rejected: Kimi creates the session
+Restart action fixes it without the setup; with the setup, the new session is recorded and a
+restart resumes it, so Start fresh (009) fixes it. Typing instructions after `/clear` was rejected: Kimi creates the session
 when the user submits a prompt, so Sonata would type into the user's input.
 
 **Alternatives considered**: `AGENTS.md` in the project or `$KIMI_CODE_HOME`: writes to user
