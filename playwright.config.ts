@@ -4,11 +4,11 @@ import { defineConfig, devices } from "@playwright/test";
 // The full Tauri app cannot be driven by WebDriver on macOS; see quickstart.md.
 export default defineConfig({
   testDir: "e2e",
-  use: { baseURL: "http://localhost:5173" },
+  use: { baseURL: "http://localhost:1420" },
   projects: [{ name: "webkit", use: { ...devices["Desktop Safari"] } }],
   webServer: {
     command: "npm run dev",
-    url: "http://localhost:5173",
+    url: "http://localhost:1420",
     reuseExistingServer: true,
   },
 });
