@@ -1056,9 +1056,11 @@ fn conversation(ctx: &Ctx<'_>, agent: &str, id: &str) -> Reply {
     let Some(agent) = ConversationAgent::parse(agent) else {
         return Reply::err(
             EXIT_USAGE,
-            "Usage: sonata _conversation <claude|codex> <id|none>",
+            "Usage: sonata _conversation <claude|codex|kimi> <id|none>",
         );
     };
+    // A conversation report is an agent hook too (feature 010, contracts/cli.md).
+    ctx.app.terminals().report_agent_hook(ctx.me, None);
     let id = (id != "none").then_some(id);
     match ctx.app.record_conversation(ctx.me, agent, id) {
         Ok(_) => Reply::ok(""),

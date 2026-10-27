@@ -163,6 +163,34 @@ fn conversation_command_records_for_the_calling_terminal_only() {
 }
 
 #[test]
+fn kimi_conversations_are_stored_and_cleared() {
+    // Feature 010 (T049): Kimi session ids look like `session_<uuid>`.
+    const KIMI_ID: &str = "session_3f2a0c1e-7b5d-4e2a-9c1f-0a1b2c3d4e5f";
+    let sb = Sandbox::new();
+    let (app, _) = messaging_app(&sb);
+    let (ws, ids) = shells(&app, &sb, &["A"]);
+    let a = ids[0];
+
+    let out = sonata_as(&app, a, &["_conversation", "kimi", KIMI_ID]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let c = conversation(&app, ws, a).unwrap();
+    assert_eq!((c.agent, c.id.as_str()), (ConversationAgent::Kimi, KIMI_ID));
+    assert_eq!(on_disk(&sb, ws, a)["agent"], "kimi");
+
+    // "No conversation" from another agent leaves it; from Kimi it clears it.
+    assert_eq!(sonata_as(&app, a, &["_conversation", "claude", "none"]).code, 0);
+    assert!(conversation(&app, ws, a).is_some());
+    assert_eq!(sonata_as(&app, a, &["_conversation", "kimi", "none"]).code, 0);
+    assert!(conversation(&app, ws, a).is_none());
+
+    // A stored Claude conversation is not cleared by Kimi's "none".
+    app.record_conversation(a, CLAUDE, Some(ID)).unwrap();
+    assert_eq!(sonata_as(&app, a, &["_conversation", "kimi", "none"]).code, 0);
+    assert_eq!(conversation(&app, ws, a).unwrap().agent, CLAUDE);
+    app.quit();
+}
+
+#[test]
 fn conversation_command_refuses_callers_that_are_not_terminals() {
     let sb = Sandbox::new();
     let (app, _) = messaging_app(&sb);

@@ -111,7 +111,7 @@ export type TerminalContent = {
   sendInstructions?: boolean;
   lane?: Lane;
   /** The agent conversation the terminal resumes when it starts again (feature 009). */
-  conversation?: { agent: "claude" | "codex"; id: string; recordedAt: string };
+  conversation?: { agent: "claude" | "codex" | "kimi"; id: string; recordedAt: string };
 };
 
 /** A terminal's own git checkout and branch (feature 008). */
