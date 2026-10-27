@@ -264,7 +264,10 @@ fn kimi_resumes_with_session_and_without_the_agent_file() {
     // The offer is used up: the next run starts a new conversation with the agent file.
     run_as(&app, ids[0], &bin, &["kimi", "--yolo"], &[]);
     let w = words(&fake_agent_args(&bin, "kimi")[1]).join(" ");
-    assert!(w.starts_with("--agent-file ") && w.ends_with("kimi-agent.md --yolo"), "{w}");
+    assert!(
+        w.starts_with("--agent-file ") && w.ends_with("kimi-agent.md --yolo"),
+        "{w}"
+    );
     app.quit();
 }
 
@@ -304,7 +307,10 @@ fn kimi_arguments_that_choose_run_unchanged_and_use_up_the_offer() {
     offered(&app, ids[0], ConversationAgent::Claude, ID);
     run_as(&app, ids[0], &bin, &["kimi"], &[]);
     let last = fake_agent_args(&bin, "kimi").pop().unwrap();
-    assert!(last.starts_with("--agent-file ") && !last.contains(ID), "{last}");
+    assert!(
+        last.starts_with("--agent-file ") && !last.contains(ID),
+        "{last}"
+    );
     install_fake_agent(&bin, "claude", 0, 0);
     run_as(&app, ids[0], &bin, &["claude"], &[]);
     let last = fake_agent_args(&bin, "claude").pop().unwrap();

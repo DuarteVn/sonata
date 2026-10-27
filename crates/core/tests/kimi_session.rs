@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use common::{Sandbox, install_fake_kimi, messaging_app, shells, sonata_as, wait_until};
 use sonata_core::App;
 use sonata_core::app::{NewTerminal, TerminalSettings};
-use sonata_core::model::node::Frame;
+use sonata_core::model::node::{ConversationAgent, Frame};
 use uuid::Uuid;
 
 fn kimi_terminal(app: &App, ws: Uuid, name: &str, x: f64, send: Option<bool>) -> Uuid {
@@ -64,6 +64,33 @@ fn kimi_terminals_get_instructions_and_end_turns() {
     std::thread::sleep(Duration::from_secs(6));
     let lines = std::fs::read_to_string(log.join("kimi.lines")).unwrap_or_default();
     assert!(!lines.contains("running inside Sonata"), "{lines}");
+
+    // T055: a restart resumes the stored Kimi conversation through the shell helper; Start
+    // fresh forgets it, and the new start gets the agent file and no `--session`.
+    let restarted_with = |restart: &dyn Fn()| {
+        let _ = std::fs::remove_file(log.join("kimi.args"));
+        restart();
+        assert!(wait_until(Duration::from_secs(10), || log
+            .join("kimi.args")
+            .exists()));
+        std::fs::read_to_string(log.join("kimi.args")).unwrap()
+    };
+    app.record_conversation(kimi, ConversationAgent::Kimi, Some("session_abc"))
+        .unwrap();
+    let args = restarted_with(&|| app.restart_terminal(kimi, true).unwrap());
+    assert_eq!(args.trim(), "--session session_abc");
+    let args = restarted_with(&|| app.start_fresh_conversation(kimi, true).unwrap());
+    assert!(
+        args.starts_with("--agent-file ") && !args.contains("--session"),
+        "{args}"
+    );
+    assert!(
+        app.workspaces()
+            .workspace(ws)
+            .and_then(|w| w.node(kimi).cloned())
+            .and_then(|n| n.terminal().and_then(|t| t.conversation.clone()))
+            .is_none()
+    );
 
     let typed = kimi_terminal(&app, ws, "Typed", 700.0, Some(true));
     assert!(wait_until(Duration::from_secs(15), || {

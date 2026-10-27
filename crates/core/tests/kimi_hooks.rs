@@ -425,24 +425,45 @@ fn kimi_hooks_report_the_conversation() {
 
     // SessionStart: `resume` records the session, `startup` clears it, others do nothing.
     quiet(
-        &kimi_hook(&app, k, "session-start", &start("resume", "session_r"), false),
+        &kimi_hook(
+            &app,
+            k,
+            "session-start",
+            &start("resume", "session_r"),
+            false,
+        ),
         "resume",
     );
     assert_eq!(stored(), kimi("session_r"));
     quiet(
-        &kimi_hook(&app, k, "session-start", &start("other", "session_o"), false),
+        &kimi_hook(
+            &app,
+            k,
+            "session-start",
+            &start("other", "session_o"),
+            false,
+        ),
         "other",
     );
     assert_eq!(stored(), kimi("session_r"));
     quiet(
-        &kimi_hook(&app, k, "session-start", &start("startup", "session_n"), false),
+        &kimi_hook(
+            &app,
+            k,
+            "session-start",
+            &start("startup", "session_n"),
+            false,
+        ),
         "startup",
     );
     assert_eq!(stored(), None);
 
     // UserPromptSubmit starts the turn and records the session it runs in.
     let prompt = r#"{"hook_event_name":"UserPromptSubmit","session_id":"session_p","cwd":"."}"#;
-    quiet(&kimi_hook(&app, k, "prompt-submit", prompt, false), "prompt");
+    quiet(
+        &kimi_hook(&app, k, "prompt-submit", prompt, false),
+        "prompt",
+    );
     assert!(app.terminals().turn_active(k));
     assert_eq!(stored(), kimi("session_p"));
     quiet(

@@ -178,14 +178,23 @@ fn kimi_conversations_are_stored_and_cleared() {
     assert_eq!(on_disk(&sb, ws, a)["agent"], "kimi");
 
     // "No conversation" from another agent leaves it; from Kimi it clears it.
-    assert_eq!(sonata_as(&app, a, &["_conversation", "claude", "none"]).code, 0);
+    assert_eq!(
+        sonata_as(&app, a, &["_conversation", "claude", "none"]).code,
+        0
+    );
     assert!(conversation(&app, ws, a).is_some());
-    assert_eq!(sonata_as(&app, a, &["_conversation", "kimi", "none"]).code, 0);
+    assert_eq!(
+        sonata_as(&app, a, &["_conversation", "kimi", "none"]).code,
+        0
+    );
     assert!(conversation(&app, ws, a).is_none());
 
     // A stored Claude conversation is not cleared by Kimi's "none".
     app.record_conversation(a, CLAUDE, Some(ID)).unwrap();
-    assert_eq!(sonata_as(&app, a, &["_conversation", "kimi", "none"]).code, 0);
+    assert_eq!(
+        sonata_as(&app, a, &["_conversation", "kimi", "none"]).code,
+        0
+    );
     assert_eq!(conversation(&app, ws, a).unwrap().agent, CLAUDE);
     app.quit();
 }

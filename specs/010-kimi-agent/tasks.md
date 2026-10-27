@@ -112,7 +112,7 @@ is rebased (`git rebase main`).
 - [X] T052 [US4] Add the `session-start` arm and the `_conversation` reports to the `kimi` arm in crates/cli/src/hook.rs
 - [X] T053 [P] [US4] Write wrapper tests in crates/core/tests/session_restore_run.rs with the fake `kimi`: a resume offer starts `kimi --session <id> [args…]` with no `--agent-file`; args that choose (T014 list) consume the offer and run unchanged; `--session session_missing` fails → stderr has `sonata: the previous conversation could not be resumed; starting a new one.` once and the next start is `kimi --agent-file <f> [args…]`; `-p` sets `SONATA_CONVERSATION=off` in the child
 - [X] T054 [US4] Map the 009 resume offer to `kimi --session <id>` (never with `--agent-file`) and the `-p`/`--prompt` guard in crates/cli/src/run.rs, reusing 009's child-and-fallback code
-- [ ] T055 [P] [US4] Write a test in crates/core/tests/kimi_session.rs that Start fresh on a Kimi terminal clears its conversation and the restart gets `--agent-file` and no `--session`
+- [X] T055 [P] [US4] Write a test in crates/core/tests/kimi_session.rs that Start fresh on a Kimi terminal clears its conversation and the restart gets `--agent-file` and no `--session`
 
 **Checkpoint**: Kimi restore matches Claude Code and Codex.
 
