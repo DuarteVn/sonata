@@ -53,6 +53,7 @@ fn may_resume(agent: &str, args: &[String]) -> bool {
             let flag = a.split('=').next().unwrap_or(a);
             CLAUDE_OWN_CHOICE.contains(&flag)
         }),
+        "kimi" => !kimi_chooses(args),
         _ => true,
     }
 }
@@ -70,6 +71,7 @@ fn valid_id(id: &str) -> bool {
 fn resume_args(agent: &str, id: &str) -> Vec<String> {
     match agent {
         "claude" => vec!["--resume".into(), id.into()],
+        "kimi" => vec!["--session".into(), id.into()],
         _ => vec!["resume".into(), id.into()],
     }
 }
@@ -176,11 +178,22 @@ pub fn main(args: Vec<String>) -> ExitCode {
         }
     }
 
-    // A one-shot `claude -p` must not replace or clear the terminal's conversation (R9).
-    let print_mode = agent == "claude" && rest.iter().any(|a| a == "-p" || a == "--print");
-    let command = |lead: &[String]| {
+    // A one-shot `claude -p` or `kimi -p` must not replace or clear the terminal's
+    // conversation (R9; feature 010).
+    let print_flags: &[&str] = match agent.as_str() {
+        "claude" => &["-p", "--print"],
+        "kimi" => &["-p", "--prompt"],
+        _ => &[],
+    };
+    let print_mode = rest.iter().any(|a| {
+        let flag = a.split_once('=').map_or(a.as_str(), |(f, _)| f);
+        print_flags.contains(&flag)
+    });
+    // Kimi's agent file only applies to a new conversation, so a resume runs without it.
+    let resume_session: &[String] = if agent == "kimi" { &[] } else { &session };
+    let command = |lead: &[String], session: &[String]| {
         let mut cmd = Command::new(&real);
-        cmd.arg0(&agent).args(lead).args(&session).args(rest);
+        cmd.arg0(&agent).args(lead).args(session).args(rest);
         if print_mode {
             cmd.env("SONATA_CONVERSATION", "off");
         }
@@ -191,7 +204,7 @@ pub fn main(args: Vec<String>) -> ExitCode {
         // gone, agent updated, folder changed): say so once and start a new one (research R4).
         // The new conversation's start clears the stored one, so it is never tried again.
         let started = Instant::now();
-        match run_child(command(&resume_args(&agent, &id))) {
+        match run_child(command(&resume_args(&agent, &id), resume_session)) {
             Ok(status) if status.code().is_some_and(|c| c != 0) && started.elapsed() < window() => {
                 eprintln!(
                     "sonata: the previous conversation could not be resumed; starting a new one."
@@ -204,7 +217,7 @@ pub fn main(args: Vec<String>) -> ExitCode {
             }
         }
     }
-    let err = command(&[]).exec();
+    let err = command(&[], &session).exec();
     eprintln!("sonata: could not start {agent}: {err}");
     ExitCode::from(126)
 }

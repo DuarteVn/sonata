@@ -242,3 +242,120 @@ fn late_failures_and_successes_are_not_retried() {
     assert_eq!(fake_agent_args(&bin, "codex").len(), 1);
     app.quit();
 }
+
+// ---- Kimi Code (feature 010, T053) ----
+
+const KIMI_ID: &str = "session_3f2a0c1e-7b5d-4e2a-9c1f-0a1b2c3d4e5f";
+
+#[test]
+fn kimi_resumes_with_session_and_without_the_agent_file() {
+    let sb = Sandbox::new();
+    let bin = sb.tmp.path().join("bin");
+    install_fake_agent(&bin, "kimi", 0, 0);
+    let (app, _) = messaging_app(&sb);
+    let (_, ids) = shells(&app, &sb, &["A"]);
+    offered(&app, ids[0], ConversationAgent::Kimi, KIMI_ID);
+
+    let out = run_as(&app, ids[0], &bin, &["kimi", "--yolo"], &[]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let args = fake_agent_args(&bin, "kimi");
+    assert_eq!(args, [format!("--session {KIMI_ID} --yolo")]);
+
+    // The offer is used up: the next run starts a new conversation with the agent file.
+    run_as(&app, ids[0], &bin, &["kimi", "--yolo"], &[]);
+    let w = words(&fake_agent_args(&bin, "kimi")[1]).join(" ");
+    assert!(w.starts_with("--agent-file ") && w.ends_with("kimi-agent.md --yolo"), "{w}");
+    app.quit();
+}
+
+#[test]
+fn kimi_arguments_that_choose_run_unchanged_and_use_up_the_offer() {
+    let sb = Sandbox::new();
+    let bin = sb.tmp.path().join("bin");
+    install_fake_agent(&bin, "kimi", 0, 0);
+    let (app, _) = messaging_app(&sb);
+    let (_, ids) = shells(&app, &sb, &["A"]);
+    let cases: &[&[&str]] = &[
+        &["-S", "session_x"],
+        &["--session=session_x"],
+        &["-r"],
+        &["--resume", "session_x"],
+        &["-c"],
+        &["--continue"],
+        &["-C"],
+        &["--agent", "okabe"],
+        &["--agent-file", "/a.md"],
+        &["-p", "hi"],
+        &["--prompt", "hi"],
+        &["doctor"],
+    ];
+    for case in cases {
+        offered(&app, ids[0], ConversationAgent::Kimi, KIMI_ID);
+        let mut args = vec!["kimi"];
+        args.extend_from_slice(case);
+        run_as(&app, ids[0], &bin, &args, &[]);
+        let last = fake_agent_args(&bin, "kimi").pop().unwrap();
+        assert_eq!(last, case.join(" "), "{case:?}");
+        run_as(&app, ids[0], &bin, &["kimi"], &[]);
+        let last = fake_agent_args(&bin, "kimi").pop().unwrap();
+        assert!(!last.contains(KIMI_ID), "{case:?}: {last}");
+    }
+    // A Claude conversation is not offered to Kimi, but Kimi's start uses the offer up.
+    offered(&app, ids[0], ConversationAgent::Claude, ID);
+    run_as(&app, ids[0], &bin, &["kimi"], &[]);
+    let last = fake_agent_args(&bin, "kimi").pop().unwrap();
+    assert!(last.starts_with("--agent-file ") && !last.contains(ID), "{last}");
+    install_fake_agent(&bin, "claude", 0, 0);
+    run_as(&app, ids[0], &bin, &["claude"], &[]);
+    let last = fake_agent_args(&bin, "claude").pop().unwrap();
+    assert!(!last.contains("--resume"), "{last}");
+    app.quit();
+}
+
+#[test]
+fn kimi_failed_resume_prints_one_notice_and_starts_with_the_agent_file() {
+    let sb = Sandbox::new();
+    let bin = sb.tmp.path().join("bin");
+    failing_resume(&bin, "kimi", "--session", "0");
+    let (app, _) = messaging_app(&sb);
+    let (_, ids) = shells(&app, &sb, &["A"]);
+    offered(&app, ids[0], ConversationAgent::Kimi, KIMI_ID);
+
+    let window = [("SONATA_RESUME_WINDOW_MS", "500")];
+    let out = run_as(&app, ids[0], &bin, &["kimi", "--yolo"], &window);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(stderr.matches(NOTICE).count(), 1, "{stderr}");
+    let args = fake_agent_args(&bin, "kimi");
+    assert_eq!(args.len(), 2, "{args:?}");
+    assert_eq!(args[0], format!("--session {KIMI_ID} --yolo"));
+    assert!(
+        args[1].starts_with("--agent-file ") && args[1].ends_with(" --yolo"),
+        "{args:?}"
+    );
+    app.quit();
+}
+
+#[test]
+fn kimi_prompt_mode_turns_conversation_reports_off() {
+    let sb = Sandbox::new();
+    let bin = sb.tmp.path().join("bin");
+    let env_file = bin.join("kimi.env");
+    common::fake_bin::fake_bin(&bin, "kimi", &format!("env > '{}'", env_file.display()));
+    let (app, _) = messaging_app(&sb);
+    let (_, ids) = shells(&app, &sb, &["A"]);
+    let off = |args: &[&str]| {
+        let _ = std::fs::remove_file(&env_file);
+        run_as(&app, ids[0], &bin, args, &[]);
+        std::fs::read_to_string(&env_file)
+            .unwrap()
+            .lines()
+            .any(|l| l == "SONATA_CONVERSATION=off")
+    };
+    assert!(off(&["kimi", "-p", "hi"]));
+    assert!(off(&["kimi", "--prompt", "hi"]));
+    assert!(off(&["kimi", "--prompt=hi"]));
+    assert!(!off(&["kimi"]));
+    assert!(!off(&["kimi", "-m", "k2"]));
+    app.quit();
+}
