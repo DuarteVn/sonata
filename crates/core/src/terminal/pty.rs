@@ -65,7 +65,7 @@ pub const WRAPPED_AGENTS: [&str; 3] = ["claude", "codex", "kimi"];
 /// Terminals and the usage probe drop them, so an agent started there is a fresh, top-level
 /// session and an outer agent's messaging secret never leaks. User settings such as
 /// `CLAUDE_CODE_USE_BEDROCK` or `ANTHROPIC_*` are not on the list.
-pub const AGENT_SESSION_MARKERS: [&str; 12] = [
+pub const AGENT_SESSION_MARKERS: [&str; 14] = [
     "CLAUDECODE",
     "CLAUDE_CODE_ENTRYPOINT",
     "CLAUDE_CODE_EXECPATH",
@@ -78,6 +78,9 @@ pub const AGENT_SESSION_MARKERS: [&str; 12] = [
     "CLAUDE_EFFORT",
     "CODEX_SANDBOX",
     "CODEX_SANDBOX_NETWORK_DISABLED",
+    // Kimi Code (feature 010, research R8).
+    "KIMI_PLUGIN_ROOT",
+    "KIMI_CODE_UPDATE_REEXEC",
 ];
 
 /// `claude --foo` becomes `sonata run claude --foo` when wrapping is on.

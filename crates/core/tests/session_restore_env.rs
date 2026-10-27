@@ -11,7 +11,7 @@ use sonata_core::model::node::Frame;
 use sonata_core::terminal::pty::AGENT_SESSION_MARKERS;
 use sonata_core::usage::runner::{RunSpec, run};
 
-const SET: [(&str, &str); 7] = [
+const SET: [(&str, &str); 11] = [
     ("CLAUDECODE", "1"),
     ("CLAUDE_CODE_CHILD_SESSION", "1"),
     ("CLAUDE_CODE_MESSAGING_TOKEN", "secret"),
@@ -19,6 +19,11 @@ const SET: [(&str, &str); 7] = [
     ("CODEX_SANDBOX", "seatbelt"),
     ("CLAUDE_CODE_USE_BEDROCK", "1"),
     ("ANTHROPIC_MODEL", "x"),
+    // Kimi Code (feature 010): two markers of a running Kimi, two user settings.
+    ("KIMI_PLUGIN_ROOT", "/x"),
+    ("KIMI_CODE_UPDATE_REEXEC", "1"),
+    ("KIMI_CODE_HOME", "/k"),
+    ("NO_COLOR", "1"),
 ];
 
 fn has(env: &str, key: &str) -> bool {
@@ -62,6 +67,10 @@ fn agent_session_markers_are_removed_and_user_settings_kept() {
         assert!(!has(&env, key), "{key} leaked into a terminal");
     }
     assert!(has(&env, "CLAUDE_CODE_USE_BEDROCK") && has(&env, "ANTHROPIC_MODEL"));
+    for key in ["KIMI_PLUGIN_ROOT", "KIMI_CODE_UPDATE_REEXEC"] {
+        assert!(!has(&env, key), "{key} leaked into a terminal");
+    }
+    assert!(has(&env, "KIMI_CODE_HOME") && has(&env, "NO_COLOR"));
     app.quit();
 
     // The usage probe's child, even when a marker is passed on explicitly.

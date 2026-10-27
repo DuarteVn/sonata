@@ -121,8 +121,8 @@ is rebased (`git rebase main`).
 **Goal**: Kimi's markers are stripped from every terminal; user Kimi settings are kept.
 **Independent Test**: quickstart live check 8.
 
-- [ ] T056 [P] [US5] Extend 009's environment test (crates/core/tests/session_restore_env.rs or the file 009 used): with `KIMI_PLUGIN_ROOT` and `KIMI_CODE_UPDATE_REEXEC` set in the parent, a new terminal's `env` has neither; `KIMI_CODE_HOME` and `NO_COLOR` set in the parent are kept
-- [ ] T057 [US5] Add `KIMI_PLUGIN_ROOT` and `KIMI_CODE_UPDATE_REEXEC` to `AGENT_SESSION_MARKERS` in crates/core/src/terminal/pty.rs
+- [X] T056 [P] [US5] Extend 009's environment test (crates/core/tests/session_restore_env.rs or the file 009 used): with `KIMI_PLUGIN_ROOT` and `KIMI_CODE_UPDATE_REEXEC` set in the parent, a new terminal's `env` has neither; `KIMI_CODE_HOME` and `NO_COLOR` set in the parent are kept
+- [X] T057 [US5] Add `KIMI_PLUGIN_ROOT` and `KIMI_CODE_UPDATE_REEXEC` to `AGENT_SESSION_MARKERS` in crates/core/src/terminal/pty.rs
 
 ## Phase 8: Polish
 
