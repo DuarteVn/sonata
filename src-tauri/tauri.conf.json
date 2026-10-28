@@ -52,7 +52,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "REPLACE_WITH_PUBLIC_KEY",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg2Qjk2MzdBNzA3NzE0RkMKUldUOEZIZHdlbU81aHJLY1ZuZVhGdk5pQ3JPVUI0a2J3eEYybkN2a0JUZTcyc2R1cTJ1b2E3aHgK",
       "endpoints": [
         "https://github.com/DuarteVn/sonata/releases/latest/download/latest.json"
       ]
