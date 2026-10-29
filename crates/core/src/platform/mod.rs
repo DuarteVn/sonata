@@ -6,6 +6,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
+pub mod bwrap;
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]
@@ -153,6 +154,29 @@ pub fn git_shim() -> Option<(&'static Path, bool)> {
 pub fn machine_name() -> &'static str {
     os::MACHINE_NAME
 }
+
+/// Default Android SDK folders under `home` and fixed system folders, after the preference and
+/// the `ANDROID_HOME` / `ANDROID_SDK_ROOT` variables.
+pub fn android_sdk_defaults(home: &Path) -> Vec<PathBuf> {
+    os::android_sdk_defaults(home)
+}
+
+/// Homebrew prefixes whose `share/android-commandlinetools` may hold an SDK (none on Linux).
+pub fn brew_prefixes() -> Vec<PathBuf> {
+    os::BREW_PREFIXES.iter().map(PathBuf::from).collect()
+}
+
+/// Folders where a running emulator writes its discovery file, before the variable-based ones.
+/// `vars` is the environment detection reads.
+pub fn emulator_discovery_dirs(
+    home: &Path,
+    vars: &std::collections::HashMap<String, String>,
+) -> Vec<PathBuf> {
+    os::emulator_discovery_dirs(home, vars)
+}
+
+/// Whether iOS simulators can exist here (they need Xcode, so macOS only).
+pub const IOS_SIMULATORS: bool = os::IOS_SIMULATORS;
 
 /// The shell used when neither the user database nor `$SHELL` names one that exists.
 pub fn default_shell() -> PathBuf {

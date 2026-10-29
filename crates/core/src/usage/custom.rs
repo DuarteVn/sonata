@@ -307,13 +307,23 @@ pub fn run_custom(
     timeout: Duration,
     now: DateTime<Utc>,
 ) -> Reading {
-    let full: Vec<String> = match sandbox {
-        Some((exec, profile)) => [exec.display().to_string(), "-p".into(), profile.into()]
-            .into_iter()
-            .chain(argv.iter().cloned())
-            .collect(),
-        None => argv.to_vec(),
+    let wrapper: Vec<String> = match sandbox {
+        Some((exec, profile)) => vec![exec.display().to_string(), "-p".into(), profile.into()],
+        None => Vec::new(),
     };
+    run_wrapped(id, argv, env, &wrapper, timeout, now)
+}
+
+/// Runs `wrapper` followed by `argv` and parses the output.
+fn run_wrapped(
+    id: &str,
+    argv: &[String],
+    env: &[(String, String)],
+    wrapper: &[String],
+    timeout: Duration,
+    now: DateTime<Utc>,
+) -> Reading {
+    let full: Vec<String> = wrapper.iter().chain(argv).cloned().collect();
     let mut spec = RunSpec::new(full, timeout);
     spec.env = env.to_vec();
     match run(&spec) {
@@ -339,7 +349,8 @@ pub fn run_custom(
     }
 }
 
-/// Reads a custom provider in the sandbox (see [`sandbox_profile`]).
+/// Reads a custom provider in the OS sandbox: `sandbox-exec` on macOS (see
+/// [`sandbox_profile`]), bubblewrap on Linux (see [`read_custom_bwrap`]).
 pub fn read_custom(
     id: &str,
     argv: &[String],
@@ -348,15 +359,73 @@ pub fn read_custom(
     sonata_root: &Path,
     now: DateTime<Utc>,
 ) -> Reading {
-    read_custom_with(
-        Path::new(SANDBOX_EXEC),
-        id,
-        argv,
-        env,
-        home,
-        sonata_root,
-        now,
-    )
+    #[cfg(target_os = "macos")]
+    let exec = Path::new(SANDBOX_EXEC);
+    #[cfg(target_os = "macos")]
+    return read_custom_with(exec, id, argv, env, home, sonata_root, now);
+    #[cfg(target_os = "linux")]
+    let exec = Path::new(crate::platform::bwrap::BWRAP);
+    #[cfg(target_os = "linux")]
+    return read_custom_bwrap(exec, id, argv, env, home, sonata_root, now);
+}
+
+/// Like [`read_custom`] with bubblewrap at `bwrap` (feature 011, research R9). A short probe
+/// first checks that bubblewrap can start here (some systems block the namespaces it needs);
+/// without a working sandbox nothing runs.
+pub fn read_custom_bwrap(
+    bwrap: &Path,
+    id: &str,
+    argv: &[String],
+    env: &[(String, String)],
+    home: &Path,
+    sonata_root: &Path,
+    now: DateTime<Utc>,
+) -> Reading {
+    use crate::platform::bwrap;
+    if !is_executable_file(bwrap) {
+        return Reading::unavailable(id, now, bwrap::MISSING);
+    }
+    let runtime = std::env::var_os("XDG_RUNTIME_DIR")
+        .filter(|d| !d.is_empty())
+        .map(PathBuf::from);
+    let wrapper: Vec<String> = std::iter::once(bwrap.display().to_string())
+        .chain(bwrap::args(
+            home,
+            sonata_root,
+            runtime.as_deref(),
+            Path::exists,
+        ))
+        .collect();
+    let probe = wrapper
+        .iter()
+        .cloned()
+        .chain(["/bin/true".to_string()])
+        .collect();
+    match run(&RunSpec::new(probe, Duration::from_secs(5))) {
+        Ok(out) if out.code == Some(0) => {}
+        Ok(out) => {
+            let first = out
+                .stderr
+                .lines()
+                .next()
+                .unwrap_or("no details")
+                .trim()
+                .to_string();
+            return Reading::unavailable(
+                id,
+                now,
+                format!("Cannot run safely: bubblewrap cannot start: {first}"),
+            );
+        }
+        Err(e) => {
+            return Reading::unavailable(
+                id,
+                now,
+                format!("Cannot run safely: bubblewrap cannot start: {e}"),
+            );
+        }
+    }
+    run_wrapped(id, argv, env, &wrapper, TIMEOUT, now)
 }
 
 /// Like [`read_custom`] with a given `sandbox-exec` path. Without it, nothing runs.
