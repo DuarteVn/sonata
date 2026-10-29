@@ -30,7 +30,7 @@ STUB
 
 run() { # $1 answer, $2 tty flag
   (cd "$work" && printf '%s\n' "$1" | env HOME="$work/home" PATH="$work/stubs:/usr/bin:/bin" \
-    SONATA_ASSUME_TTY="$2" sh scripts/install.sh >"$work/out" 2>&1)
+    SONATA_ASSUME_TTY="$2" SONATA_UNAME=Darwin sh scripts/install.sh >"$work/out" 2>&1)
 }
 
 setup; run n 1; code=$?

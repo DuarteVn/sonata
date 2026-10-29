@@ -66,6 +66,12 @@ jobs:
           bundle=target/release/bundle
           sh scripts/release/tests/linux-smoke.sh "$(ls $bundle/appimage/*.AppImage)" \
             "$(ls $bundle/deb/*.deb)" screenshot.png
+      - name: Install from source for the current user
+        run: |
+          sh scripts/install.sh
+          test -x "$HOME/.local/bin/sonata-app"
+          "$HOME/.local/bin/sonata" help >/dev/null
+          grep -q '^Exec=' "$HOME/.local/share/applications/sonata.desktop"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

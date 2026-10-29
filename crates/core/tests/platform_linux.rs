@@ -48,7 +48,7 @@ fn emulator_discovery_uses_the_runtime_folder() {
 
 #[test]
 fn ios_is_not_offered() {
-    assert!(!IOS_SIMULATORS);
+    const { assert!(!IOS_SIMULATORS) };
     let tmp = tempfile::tempdir().unwrap();
     let report = detect(&env(tmp.path(), &[]), None);
     assert!(report.ios.is_none());

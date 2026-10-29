@@ -16,6 +16,7 @@ import { UsageConsentDialog } from "./dialogs/UsageConsentDialog";
 import { useUsage } from "./state/usage";
 import { UsageButton } from "./usage/UsageButton";
 import { resetText } from "./usage/meter";
+import { shortcut } from "./platform";
 
 const SIDEBAR_HIDDEN_KEY = "sonata.sidebarHidden";
 const SIDEBAR_WIDTH_KEY = "sonata.sidebarWidth";
@@ -186,7 +187,7 @@ export function App() {
             type="button"
             className="icon-button sidebar-show"
             aria-label={updatePending(updateState) ? "Show sidebar (update available)" : "Show sidebar"}
-            title="Show sidebar (⌃⌘S)"
+            title={`Show sidebar (${shortcut("toggleSidebar")})`}
             onClick={() => setSidebarHidden(false)}
           >
             <PanelLeftOpen size={16} />

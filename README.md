@@ -1,6 +1,6 @@
 # Sonata
 
-An open source macOS app: an infinite canvas where AI-agent terminals, notes, and the links
+An open source app for macOS and Linux: an infinite canvas where AI-agent terminals, notes, and the links
 between them live side by side, organized into as many workspaces as you need.
 
 > **Status:** pre-alpha, under active development. Work follows
@@ -77,6 +77,44 @@ between them live side by side, organized into as many workspaces as you need.
 The `sonata` command ships inside the app and works in every Sonata terminal; there is nothing
 else to install.
 
+### Install on Linux
+
+Sonata runs on x86_64 Linux with glibc 2.35 or later and WebKitGTK 4.1: Ubuntu 22.04 or later,
+Debian 12, Fedora 38 or later, Arch, and similar distributions, on X11 or Wayland.
+
+- **AppImage** (recommended, updates itself): download `Sonata_<version>_amd64.AppImage` from
+  the [latest release](https://github.com/DuarteVn/sonata/releases/latest), put it in a folder
+  you own (for example `~/Applications`), then:
+
+  ```sh
+  chmod +x ~/Applications/Sonata_*_amd64.AppImage
+  ~/Applications/Sonata_*_amd64.AppImage
+  ```
+
+  If it does not start, install the WebKitGTK runtime (`sudo apt install libwebkit2gtk-4.1-0`
+  on Ubuntu and Debian) and, on some distributions, FUSE 2 (`sudo apt install libfuse2`).
+- **Debian package** (Ubuntu, Debian, and derivatives): download `Sonata_<version>_amd64.deb`
+  and run `sudo apt install ./Sonata_<version>_amd64.deb`. Sonata appears in your application
+  launcher and `sonata` is installed in `/usr/bin`. The package does not update itself: when a
+  new version is out, Sonata says so and links to the release page.
+
+On Linux Sonata also keeps a copy of the `sonata` command in `~/.local/bin/sonata`, so scripts
+outside Sonata can call it (Ubuntu puts that folder on your `PATH` after the next login). It only
+replaces a file there that is a Sonata CLI.
+
+What differs on Linux:
+
+- Shortcuts use Ctrl, and Ctrl+Shift where Ctrl alone belongs to the terminal: **Ctrl+,**
+  Settings, **Ctrl+Shift+W** Close Item, **Ctrl+Shift+S** Toggle Sidebar, **Ctrl+Shift+Q** Quit,
+  **Ctrl+Shift+C** / **Ctrl+Shift+V** copy and paste in terminals. Ctrl+C, Ctrl+D, Ctrl+W, and
+  the other control keys go to the program in the terminal.
+- Typing `claude` or `codex` by hand starts them through Sonata in bash and zsh terminals (other
+  shells start normally; presets still work).
+- Custom usage commands need bubblewrap (`sudo apt install bubblewrap`); without it they do not
+  run, and Settings → Usage says so.
+- Device nodes support Android emulators; iOS simulators need a Mac and are not shown.
+- "Show in File Manager" opens the folder that holds the file.
+
 ### Updates
 
 Sonata checks for a newer release when it starts and once a day while it runs. When one exists,
@@ -86,7 +124,9 @@ Sonata then downloads the update, verifies its signature, asks before closing li
 and restarts on the new version. Your data in `~/.sonata/` is not touched.
 
 Use **Sonata → Check for Updates…** to check now, and **Sonata → Check for Updates
-Automatically** to turn the automatic check off. The check downloads one small file from GitHub
+Automatically** to turn the automatic check off. On Linux the AppImage updates the same way,
+as long as its folder is writable; the Debian package and builds from source show the notice
+with a link to the release page instead. The check downloads one small file from GitHub
 and sends nothing about you or your workspaces.
 
 ### Build from source
@@ -96,6 +136,11 @@ git clone https://github.com/DuarteVn/sonata.git
 cd sonata
 scripts/install.sh        # builds Sonata.app and copies it to /Applications
 ```
+
+On Linux the same script checks for the WebKitGTK development files (and prints the `apt`,
+`dnf`, or `pacman` command when they are missing), builds an AppImage, and installs it for your
+user: `~/.local/bin/sonata-app`, `~/.local/bin/sonata`, and a launcher entry. No `sudo` needed
+beyond the system packages.
 
 Run the same script again to update. If Rust is missing, the script offers to install it with
 the official installer (rustup) and does nothing without your "yes". An app you build yourself
@@ -114,8 +159,9 @@ turn it off per terminal (terminal menu → Save history) for sessions that prin
   enough: install `emulator`, `platform-tools`, and one system image with `sdkmanager`, then
   create a virtual device with `avdmanager` (an ARM image on Apple Silicon). `sdkmanager` and
   `avdmanager` need Java 17 or later; Sonata itself does not. Android Studio works too.
-- Sonata looks for the SDK in `ANDROID_HOME`, `ANDROID_SDK_ROOT`, `~/Library/Android/sdk`,
-  Homebrew's `android-commandlinetools`, or a folder you choose in the node ("Choose SDK
+- Sonata looks for the SDK in `ANDROID_HOME`, `ANDROID_SDK_ROOT`, `~/Library/Android/sdk`
+  and Homebrew's `android-commandlinetools` on macOS, `~/Android/Sdk`, `/opt/android-sdk`, and
+  `/usr/lib/android-sdk` on Linux, or a folder you choose in the node ("Choose SDK
   folder…"). Virtual devices come from
   `~/.android/avd` (or `ANDROID_AVD_HOME`).
 - Sonata never downloads, installs, or changes SDKs, emulators, or Xcode. When something is
@@ -174,8 +220,9 @@ its login to answer.
 
 Sonata asks before it first runs an agent's usage command and shows the exact command; it asks
 again when a custom command changes. Custom commands run without a shell, stop after 10
-seconds, and run inside a macOS sandbox that blocks the keychain, the Claude Code and Codex
-login files, and Sonata's data folder. The last readings are kept in `usage-cache.json`
+seconds, and run inside a sandbox that blocks the keychain, the Claude Code and Codex login
+files, and Sonata's data folder: `sandbox-exec` on macOS, bubblewrap on Linux (which also hides
+the desktop keyrings and the session's D-Bus folder). Without the sandbox they do not run. The last readings are kept in `usage-cache.json`
 without credentials or emails. To test it, follow `specs/006-agent-usage/quickstart.md`.
 
 ## Your data
@@ -201,8 +248,8 @@ Formats are documented in `specs/001-workspaces-canvas-terminals/contracts/file-
 
 ### Prerequisites
 
-- macOS 15 or later
-- Xcode Command Line Tools: `xcode-select --install`
+- macOS 15 or later with the Xcode Command Line Tools (`xcode-select --install`), or Linux
+  with the WebKitGTK 4.1 development packages (see "Build from source")
 - Rust via [rustup](https://rustup.rs)
 - Node.js 22 or later
 
@@ -238,7 +285,7 @@ scripts/bench-terminals.sh 30    # real app with 30 streaming terminals in a tem
 | `ui` | React + TypeScript frontend (canvas, sidebar, xterm.js). |
 | `e2e` | Playwright tests with mocked IPC. |
 | `specs` | Feature specifications, plans, and task lists. |
-| `scripts/release` | Release helpers (version check, update manifest) and their shell tests. |
+| `scripts/release` | Release helpers (version check, update manifest) and their shell tests, including the Linux smoke run. |
 
 ### Releasing
 
@@ -263,9 +310,12 @@ Each release:
 1. Set the same version in `src-tauri/tauri.conf.json`, `Cargo.toml` (`[workspace.package]`),
    and `package.json`; `scripts/release/check-version.sh v0.2.0` must pass.
 2. Commit, then `git tag v0.2.0 && git push origin v0.2.0`.
-3. The workflow runs the checks, builds the universal app, and publishes the release with the
-   disk image, the update archive and its signature, and `latest.json`. Installed apps see it on
-   their next check.
+3. The workflow runs the checks, creates a draft release, builds the universal macOS app (disk
+   image, update archive and signature) and the Linux x86_64 files (AppImage and its signature,
+   Debian package) in parallel, then writes `latest.json` with `darwin-aarch64`,
+   `darwin-x86_64`, and `linux-x86_64` entries and publishes the release. If a build fails, the
+   draft stays unpublished and the previous release remains the latest. Installed apps see the
+   new one on their next check.
 
 ## License
 

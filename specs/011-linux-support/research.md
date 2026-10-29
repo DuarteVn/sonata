@@ -251,3 +251,33 @@ On `ubuntu-22.04` the whole workspace (including `src-tauri`) already compiled, 
 - `zsh_helpers::hand_typed_agents_are_wrapped_and_user_rc_still_loads`: Ubuntu's global zshrc runs
   `compinit`, which stops at an "insecure directories" prompt on the runner. Fix: the test's
   `.zshenv` sets `skip_global_compinit=1`.
+
+## Outcome per inventory row
+
+| Row | Outcome |
+|---|---|
+| M1 | WebKitGTK snapshot → PNG (R10), `src-tauri/src/browser/snapshot.rs` |
+| M2, M3 | Linux `data_directory(<data>/browser-data/<ws>)`; folder deleted with the workspace (R10) |
+| M4, M6, M7 | `platform::open_url_command` / `reveal_command` (`xdg-open`) (R13) |
+| M5 | unchanged; Linux-only `cairo-rs`, `gtk`, `webkit2gtk` entries added (no new crates) |
+| M8 | bubblewrap sandbox with probe (R9), `platform::bwrap`, `usage::custom::read_custom_bwrap` |
+| M9 | `platform::{git_install_hint, git_candidates, git_shim}`; "this computer" on Linux |
+| M10, M12 | `platform::default_shell()` (`/bin/bash` on Linux) |
+| M11 | bash rcfile helpers (R8), `terminal::bash`, `pty::shell_start` |
+| M13, M14, M15 | `platform::{android_sdk_defaults, emulator_discovery_dirs, IOS_SIMULATORS}`; `ToolReport.ios` is `null` on Linux (R12) |
+| M16 | `install_blocker()` per OS (R3) |
+| M17 | `cli_dir()` unchanged (smoke run shows the CLI found in the AppImage); `~/.local/bin/sonata` copy (R7) |
+| M18 | `src-tauri/tauri.linux.conf.json` (R2) |
+| M19, M30 | Linux menu with Ctrl+Shift items and a custom Quit that runs the same quit check (R11) |
+| M20, M21, M22 | `ui/src/platform.ts`; Cmd keys only on macOS; Ctrl+Shift+C/V in terminals (R11) |
+| M23 | Linux fonts appended after the macOS ones |
+| M24 | `scripts/install.sh` Linux path (R14) |
+| M25 | unchanged (host build on Linux) |
+| M26 | `--linux-sig-file` / `--linux-url` → `linux-x86_64` (R2, R4) |
+| M27 | `release.yml`: checks → draft → macos, linux → publish (R4) |
+| M28 | `ci.yml` `linux-app` job with bundle, smoke run, install from source (R15) |
+| M29 | tests made platform-aware; Linux-only tests in `platform_linux.rs`, `usage_bwrap.rs` |
+
+Also found while verifying: programs started from an AppImage inherit its library paths, fixed
+for all child processes (R6); a usage-runner `ETXTBSY` race and Ubuntu's global `compinit` prompt
+in the zsh test (CI baseline).

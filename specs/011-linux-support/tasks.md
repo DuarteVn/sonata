@@ -142,7 +142,7 @@ labels and key overrides; smoke screenshot shows no macOS glyphs.
 
 - [X] T032 [P] [US5] Write failing unit tests in `crates/core/tests/usage_bwrap.rs` for `platform::linux::bwrap_args(home, root, runtime_dir, exists)` matching contracts/platform.md exactly (order, "if exists" entries); and Linux-only integration tests: a provider can read `usage-providers/ok.txt`, cannot read `<root>/secret.json` or `~/.codex/auth.json`, and nothing runs when the bwrap path is missing (message "Cannot run safely: bubblewrap (bwrap) is not installed. Install the bubblewrap package.")
 - [X] T033 [P] [US5] Write failing tests in `crates/core/tests/platform_linux.rs` for Linux SDK candidates (`~/Android/Sdk`, `/opt/android-sdk`, `/usr/lib/android-sdk`), emulator discovery dirs (`$XDG_RUNTIME_DIR/avd/running`, `/tmp/android-$USER/avd/running`), and `ToolReport.ios == None`; keep macOS cases in `crates/core/tests/device_tools.rs` behind `cfg(target_os = "macos")` where they assume macOS paths
-- [ ] T034 [P] [US5] Write failing vitest tests in `ui/src/platform.test.ts` for `shortcut("toggleSidebar")` ("⌃⌘S" mac, "Ctrl+Shift+S" Linux), `shortcut("closeItem")`, `fileManagerName()` ("Finder" / "File Manager"), and in `ui/src/terminal/xtermKeys.test.ts` for Linux Ctrl+Shift+C / Ctrl+Shift+V handling and unchanged mac Cmd keys
+- [X] T034 [P] [US5] Write failing vitest tests in `ui/tests/platform.test.ts` for `shortcut("toggleSidebar")` ("⌃⌘S" mac, "Ctrl+Shift+S" Linux), `shortcut("closeItem")`, `revealLabel()` ("Reveal in Finder" / "Show in File Manager"), and in `ui/tests/xtermKeys.test.ts` for Linux Ctrl+Shift+C / Ctrl+Shift+V handling and unchanged mac Cmd keys
 
 ### Implementation
 
@@ -152,8 +152,8 @@ labels and key overrides; smoke screenshot shows no macOS glyphs.
 - [X] T038 [US5] Linux browser data: in `src-tauri/src/browser/mod.rs` use `data_directory(<data>/browser-data/<ws>)` under `cfg(target_os = "linux")` (keep `data_store_identifier` on macOS); in `src-tauri/src/browser/snapshot.rs` `remove_data_store` deletes that folder on Linux after checking it is under the data root
 - [X] T039 [US5] Linux snapshot in `src-tauri/src/browser/snapshot.rs` via WebKitGTK `snapshot(SnapshotRegion::Visible, SnapshotOptions::NONE)` → `cairo::ImageSurface` → PNG → atomic write; add `[target.'cfg(target_os = "linux")'.dependencies]` `webkit2gtk = "2.0"`, `cairo-rs = { version = "0.18", features = ["png"] }` to `src-tauri/Cargo.toml`; on any error call `done(false)`
 - [X] T040 [US5] Linux menu in `src-tauri/src/menu.rs` (R11): Sonata (Settings… `Ctrl+,`, update items, Quit `Ctrl+Shift+Q`), File (Close Item `Ctrl+Shift+W`), View (Toggle Sidebar `Ctrl+Shift+S`); no Edit menu, no services/hide items; macOS menu unchanged
-- [ ] T041 [US5] Create `ui/src/platform.ts` (`isMac`, `shortcut`, `fileManagerName`) and use it in `ui/src/App.tsx`, `ui/src/sidebar/Sidebar.tsx`, and `ui/src/sidebar/LoadFailureItem.tsx` ("Reveal in Finder" / "Show in File Manager")
-- [ ] T042 [US5] Linux terminal copy/paste (Ctrl+Shift+C / Ctrl+Shift+V) in `ui/src/terminal/xtermKeys.ts` and its caller in `ui/src/terminal/xtermSession.ts`; mac Cmd keys only when `isMac`
+- [X] T041 [US5] Create `ui/src/platform.ts` (`isMac`, `shortcut`, `revealLabel`) and use it in `ui/src/App.tsx`, `ui/src/sidebar/Sidebar.tsx`, and `ui/src/sidebar/LoadFailureItem.tsx` ("Reveal in Finder" / "Show in File Manager")
+- [X] T042 [US5] Linux terminal copy/paste (Ctrl+Shift+C / Ctrl+Shift+V) in `ui/src/terminal/xtermKeys.ts` and its caller in `ui/src/terminal/xtermSession.ts`; mac Cmd keys only when `isMac`
 - [ ] T043 [US5] Push and confirm `usage_bwrap`, `platform_linux`, and the src-tauri Linux build pass; check the smoke screenshot
 
 **Checkpoint**: every macOS-only feature works or explains itself on Linux.
@@ -166,16 +166,16 @@ labels and key overrides; smoke screenshot shows no macOS glyphs.
 
 **Independent Test**: `install-linux.test.sh` with stubbed tools; real run in `linux-app`.
 
-- [ ] T044 [P] [US6] Write failing `scripts/release/tests/install-linux.test.sh` (stub `uname`, `pkg-config`, `cargo`, `npm`, `/etc/os-release` via `SONATA_OS_RELEASE`): missing WebKitGTK prints the apt command for Ubuntu and the dnf command for Fedora and exits 1; with everything present it calls `tauri build --bundles appimage` without updater artifacts; register in `scripts/release/tests/run.sh`
-- [ ] T045 [US6] Add the Linux branch to `scripts/install.sh` (R14): checks, build, install `~/.local/bin/sonata-app`, `~/.local/bin/sonata`, `~/.local/share/applications/sonata.desktop`, `~/.local/share/icons/hicolor/128x128/apps/sonata.png`; macOS branch byte-for-byte the same behavior
+- [X] T044 [P] [US6] Write failing `scripts/release/tests/install-linux.test.sh` (stub `uname`, `pkg-config`, `cargo`, `npm`, `/etc/os-release` via `SONATA_OS_RELEASE`): missing WebKitGTK prints the apt command for Ubuntu and the dnf command for Fedora and exits 1; with everything present it calls `tauri build --bundles appimage` without updater artifacts; register in `scripts/release/tests/run.sh`
+- [X] T045 [US6] Add the Linux branch to `scripts/install.sh` (R14): checks, build, install `~/.local/bin/sonata-app`, `~/.local/bin/sonata`, `~/.local/share/applications/sonata.desktop`, `~/.local/share/icons/hicolor/128x128/apps/sonata.png`; macOS branch byte-for-byte the same behavior
 - [ ] T046 [US6] Run `scripts/install.sh` in `linux-app` after the bundle build (or a separate step) and check the installed files
 
 ---
 
 ## Phase 9: Polish & Cross-Cutting
 
-- [ ] T047 [P] Update `README.md`: Linux install (AppImage, `.deb`), supported distributions, required packages (`libwebkit2gtk-4.1-0`, optional `bubblewrap`), update behavior per install type, Linux shortcuts, features that differ, build from source on Linux
-- [ ] T048 [P] Fill "Portable today" and the decision outcome per inventory row M1–M30 in `specs/011-linux-support/research.md`
+- [X] T047 [P] Update `README.md`: Linux install (AppImage, `.deb`), supported distributions, required packages (`libwebkit2gtk-4.1-0`, optional `bubblewrap`), update behavior per install type, Linux shortcuts, features that differ, build from source on Linux
+- [X] T048 [P] Fill "Portable today" and the decision outcome per inventory row M1–M30 in `specs/011-linux-support/research.md`
 - [ ] T049 Run `scripts/check.sh` on macOS and confirm a full green `ci` run (both jobs) on the branch; record run ids in `specs/011-linux-support/quickstart.md`
 - [ ] T050 `sonata notify` the user: branch ready, ask for OK to open a PR and for a release dry run
 
