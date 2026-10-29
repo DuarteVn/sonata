@@ -33,7 +33,7 @@ impl Env {
                 .map(PathBuf::from)
                 .unwrap_or_default(),
             vars: std::env::vars().collect(),
-            brew_prefixes: vec!["/opt/homebrew".into(), "/usr/local".into()],
+            brew_prefixes: crate::platform::brew_prefixes(),
         }
     }
 
@@ -73,7 +73,8 @@ pub struct IosReport {
 #[serde(rename_all = "camelCase")]
 pub struct ToolReport {
     pub android: AndroidReport,
-    pub ios: IosReport,
+    /// `None` where iOS simulators cannot exist (Linux, feature 011).
+    pub ios: Option<IosReport>,
 }
 
 impl AndroidReport {
@@ -94,18 +95,23 @@ fn complete_sdk(dir: &Path) -> bool {
     executable(&dir.join("emulator/emulator")) && executable(&dir.join("platform-tools/adb"))
 }
 
-/// Preference, `ANDROID_HOME`, `ANDROID_SDK_ROOT`, `~/Library/Android/sdk` (the default of both
-/// Android Studio and a manual command-line tools install), then Homebrew's
+/// Preference, `ANDROID_HOME`, `ANDROID_SDK_ROOT`, the platform's default folders (on macOS
+/// `~/Library/Android/sdk`, the default of both Android Studio and a manual command-line tools
+/// install; on Linux `~/Android/Sdk` and the package folders), then Homebrew's
 /// `android-commandlinetools`. Apps opened from the Dock do not see shell variables, so the
 /// fixed folders matter.
 fn sdk_candidates(env: &Env, preference: Option<&Path>) -> Vec<PathBuf> {
     let mut out: Vec<PathBuf> = Vec::new();
-    let fixed = [
+    let vars = [
         preference.map(Path::to_path_buf),
         env.path("ANDROID_HOME"),
         env.path("ANDROID_SDK_ROOT"),
-        Some(env.home.join("Library/Android/sdk")),
     ];
+    let fixed = vars.into_iter().chain(
+        crate::platform::android_sdk_defaults(&env.home)
+            .into_iter()
+            .map(Some),
+    );
     let brew = env
         .brew_prefixes
         .iter()
@@ -162,10 +168,10 @@ pub fn detect(env: &Env, preference: Option<&Path>) -> ToolReport {
             help_url: ANDROID_HELP_URL,
             avd_help_url: AVD_HELP_URL,
         },
-        ios: IosReport {
+        ios: crate::platform::IOS_SIMULATORS.then(|| IosReport {
             developer_dir: developer_dir(env),
             simulators: Vec::new(),
             help_url: XCODE_HELP_URL,
-        },
+        }),
     }
 }

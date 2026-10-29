@@ -23,6 +23,21 @@ pub fn git_shim() -> Option<(&'static Path, bool)> {
     Some((Path::new("/usr/bin/git"), tools))
 }
 
+pub const IOS_SIMULATORS: bool = true;
+pub const BREW_PREFIXES: &[&str] = &["/opt/homebrew", "/usr/local"];
+
+/// The default of both Android Studio and a manual command-line tools install.
+pub fn android_sdk_defaults(home: &Path) -> Vec<std::path::PathBuf> {
+    vec![home.join("Library/Android/sdk")]
+}
+
+pub fn emulator_discovery_dirs(
+    home: &Path,
+    _vars: &std::collections::HashMap<String, String>,
+) -> Vec<std::path::PathBuf> {
+    vec![home.join("Library/Caches/TemporaryItems/avd/running")]
+}
+
 pub fn open_url_command(url: &str) -> Launch {
     Launch {
         program: "/usr/bin/open".into(),

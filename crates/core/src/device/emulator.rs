@@ -76,9 +76,10 @@ fn read_instance(path: &Path) -> Option<Instance> {
     })
 }
 
-/// Default discovery folders on macOS (research R7).
+/// Default discovery folders of the platform (research R7; Linux: 011 research R12), then the
+/// ones named by variables.
 pub fn discovery_dirs(env: &super::tools::Env) -> Vec<PathBuf> {
-    let mut dirs = vec![env.home.join("Library/Caches/TemporaryItems/avd/running")];
+    let mut dirs = crate::platform::emulator_discovery_dirs(&env.home, &env.vars);
     for key in ["ANDROID_EMULATOR_HOME", "ANDROID_USER_HOME"] {
         if let Some(v) = env.vars.get(key).filter(|v| !v.is_empty()) {
             dirs.push(PathBuf::from(v).join("avd/running"));

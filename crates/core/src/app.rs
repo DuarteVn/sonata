@@ -402,6 +402,9 @@ impl App {
             });
             let ios = crate::device::ios::IosLauncher::new(
                 Box::new(|| {
+                    if !crate::platform::IOS_SIMULATORS {
+                        return Err("iOS simulators need macOS.".to_string());
+                    }
                     crate::device::tools::developer_dir(&crate::device::tools::Env::current())
                         .ok_or_else(|| "Xcode not found".to_string())
                 }),
@@ -2154,8 +2157,10 @@ impl App {
     fn with_simulators(
         mut report: crate::device::tools::ToolReport,
     ) -> crate::device::tools::ToolReport {
-        if let Some(dev) = &report.ios.developer_dir {
-            report.ios.simulators = crate::device::ios::list_simulators(
+        if let Some(ios) = &mut report.ios
+            && let Some(dev) = &ios.developer_dir
+        {
+            ios.simulators = crate::device::ios::list_simulators(
                 Arc::new(crate::device::process::SystemProcesses),
                 dev,
             );

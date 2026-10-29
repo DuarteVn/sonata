@@ -84,6 +84,14 @@ describe("device node picker (US2)", () => {
     expect(ipc.deviceOpenHelp).toHaveBeenCalledWith("xcode");
   });
 
+  it("hides iOS where simulators cannot exist (Linux)", async () => {
+    ipc.deviceTools.mockResolvedValue({ ...ready, ios: null });
+    render(<DeviceNode node={node} />);
+    await screen.findByRole("region", { name: "Android" });
+    await screen.findByText("Pixel 8");
+    expect(screen.queryByRole("region", { name: "iOS" })).not.toBeInTheDocument();
+  });
+
   it("chooses an SDK folder and checks again", async () => {
     ipc.deviceTools.mockResolvedValue(missing);
     ipc.deviceChooseSdk.mockResolvedValue(noAvd);
@@ -137,7 +145,7 @@ describe("iOS simulators (US4)", () => {
       ios: {
         developerDir: "/Applications/Xcode.app/Contents/Developer",
         simulators: [{ udid: "AAAA-1111", name: "iPhone 16", osVersion: "iOS 18.2", booted: false }],
-        helpUrl: missing.ios.helpUrl,
+        helpUrl: missing.ios!.helpUrl,
       },
     });
     ipc.deviceSelect.mockResolvedValue({ ...node, content: { device: { platform: "ios", deviceId: "AAAA-1111", name: "iPhone 16" } } });

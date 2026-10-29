@@ -168,7 +168,8 @@ export type ToolReport = {
     helpUrl: string;
     avdHelpUrl: string;
   };
-  ios: { developerDir: string | null; simulators: Simulator[]; helpUrl: string };
+  /** null where iOS simulators cannot exist (Linux). */
+  ios: { developerDir: string | null; simulators: Simulator[]; helpUrl: string } | null;
 };
 
 export type DeviceStateName = "off" | "booting" | "ready" | "stopped" | "error";

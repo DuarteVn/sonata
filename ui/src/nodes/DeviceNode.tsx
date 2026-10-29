@@ -409,34 +409,37 @@ function DevicePicker({ nodeId }: { nodeId: string }) {
           </ul>
         )}
       </section>
-      <section aria-label="iOS">
-        <h3>iOS</h3>
-        {report && !report.ios.developerDir ? (
-          <>
-            <p className="device-missing">Xcode not found</p>
-            <p className="device-dim">iOS simulators need Xcode from Apple.</p>
-            <div className="device-actions">
-              <button type="button" onClick={() => help("xcode")}>
-                Open Xcode page
-              </button>
-            </div>
-          </>
-        ) : report && report.ios.simulators.length === 0 ? (
-          <p className="device-dim">Xcode found, but it has no simulators. Add one in Xcode's Devices and Simulators window.</p>
-        ) : (
-          report && (
-            <ul className="device-list">
-              {report.ios.simulators.map((sim) => (
-                <li key={sim.udid}>
-                  <button type="button" onClick={() => void pick("ios", sim.udid, sim.name, sim.osVersion)}>
-                    <strong>{sim.name}</strong> <span>{sim.osVersion}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )
-        )}
-      </section>
+      {/* Hidden where iOS simulators cannot exist (Linux): the report says null. */}
+      {report?.ios !== null && (
+        <section aria-label="iOS">
+          <h3>iOS</h3>
+          {report?.ios && !report.ios.developerDir ? (
+            <>
+              <p className="device-missing">Xcode not found</p>
+              <p className="device-dim">iOS simulators need Xcode from Apple.</p>
+              <div className="device-actions">
+                <button type="button" onClick={() => help("xcode")}>
+                  Open Xcode page
+                </button>
+              </div>
+            </>
+          ) : report?.ios && report.ios.simulators.length === 0 ? (
+            <p className="device-dim">Xcode found, but it has no simulators. Add one in Xcode's Devices and Simulators window.</p>
+          ) : (
+            report?.ios && (
+              <ul className="device-list">
+                {report.ios.simulators.map((sim) => (
+                  <li key={sim.udid}>
+                    <button type="button" onClick={() => void pick("ios", sim.udid, sim.name, sim.osVersion)}>
+                      <strong>{sim.name}</strong> <span>{sim.osVersion}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )
+          )}
+        </section>
+      )}
       <button type="button" className="device-recheck" onClick={() => void check()} disabled={checking}>
         <RefreshCw size={12} aria-hidden /> Check again
       </button>
