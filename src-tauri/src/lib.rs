@@ -17,7 +17,7 @@ use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 use crate::commands::app::Quitting;
 use crate::events::TauriEventSink;
 
-const QUIT_REQUESTED: &str = "app://quit-requested";
+pub(crate) const QUIT_REQUESTED: &str = "app://quit-requested";
 
 pub fn run() {
     let app = tauri::Builder::default()

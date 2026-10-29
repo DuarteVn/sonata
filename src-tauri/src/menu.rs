@@ -2,6 +2,11 @@
 //! selected terminal or note instead of the window. Cmd+Q stays Quit. View → Toggle Sidebar
 //! (Ctrl+Cmd+S) hides or shows the workspace list. The app menu holds the update items
 //! (feature 005) and Settings… (Cmd+,, feature 006).
+//!
+//! Linux (feature 011, research R11): GTK menu shortcuts fire before the page sees the key, so
+//! the Linux menu binds no plain Ctrl+letter that a terminal program needs. Close Item, Toggle
+//! Sidebar, and Quit use Ctrl+Shift; there is no Edit menu (text fields copy and paste on their
+//! own; terminals use Ctrl+Shift+C and Ctrl+Shift+V).
 
 use std::sync::Arc;
 
@@ -17,7 +22,79 @@ pub const CHECK_UPDATES_ID: &str = "check-updates";
 pub const CHECK_UPDATES_EVENT: &str = "app://check-updates";
 pub const AUTO_CHECK_ID: &str = "auto-check-updates";
 pub const SETTINGS_ID: &str = "settings";
+#[cfg(target_os = "linux")]
+const QUIT_ID: &str = "quit";
 
+#[cfg(target_os = "macos")]
+const SETTINGS_KEY: &str = "Cmd+,";
+#[cfg(target_os = "linux")]
+const SETTINGS_KEY: &str = "Ctrl+,";
+#[cfg(target_os = "macos")]
+const CLOSE_ITEM_KEY: &str = "CmdOrCtrl+W";
+#[cfg(target_os = "linux")]
+const CLOSE_ITEM_KEY: &str = "Ctrl+Shift+W";
+#[cfg(target_os = "macos")]
+const TOGGLE_SIDEBAR_KEY: &str = "Cmd+Ctrl+S";
+#[cfg(target_os = "linux")]
+const TOGGLE_SIDEBAR_KEY: &str = "Ctrl+Shift+S";
+
+fn settings_item<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<MenuItem<R>> {
+    MenuItem::with_id(app, SETTINGS_ID, "Settings…", true, Some(SETTINGS_KEY))
+}
+
+fn check_updates_item<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<MenuItem<R>> {
+    MenuItem::with_id(
+        app,
+        CHECK_UPDATES_ID,
+        "Check for Updates…",
+        true,
+        None::<&str>,
+    )
+}
+
+/// Set from preferences once core has started (see `set_auto_check`).
+fn auto_check_menu_item<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<CheckMenuItem<R>> {
+    CheckMenuItem::with_id(
+        app,
+        AUTO_CHECK_ID,
+        "Check for Updates Automatically",
+        true,
+        true,
+        None::<&str>,
+    )
+}
+
+fn file_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
+    Submenu::with_items(
+        app,
+        "File",
+        true,
+        &[&MenuItem::with_id(
+            app,
+            CLOSE_ITEM_ID,
+            "Close Item",
+            true,
+            Some(CLOSE_ITEM_KEY),
+        )?],
+    )
+}
+
+fn view_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
+    Submenu::with_items(
+        app,
+        "View",
+        true,
+        &[&MenuItem::with_id(
+            app,
+            TOGGLE_SIDEBAR_ID,
+            "Toggle Sidebar",
+            true,
+            Some(TOGGLE_SIDEBAR_KEY),
+        )?],
+    )
+}
+
+#[cfg(target_os = "linux")]
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let sep = || PredefinedMenuItem::separator(app);
     let app_menu = Submenu::with_items(
@@ -27,23 +104,29 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         &[
             &PredefinedMenuItem::about(app, Some("About Sonata"), None)?,
             &sep()?,
-            &MenuItem::with_id(app, SETTINGS_ID, "Settings…", true, Some("Cmd+,"))?,
-            &MenuItem::with_id(
-                app,
-                CHECK_UPDATES_ID,
-                "Check for Updates…",
-                true,
-                None::<&str>,
-            )?,
-            // Set from preferences once core has started (see `set_auto_check`).
-            &CheckMenuItem::with_id(
-                app,
-                AUTO_CHECK_ID,
-                "Check for Updates Automatically",
-                true,
-                true,
-                None::<&str>,
-            )?,
+            &settings_item(app)?,
+            &check_updates_item(app)?,
+            &auto_check_menu_item(app)?,
+            &sep()?,
+            &MenuItem::with_id(app, QUIT_ID, "Quit Sonata", true, Some("Ctrl+Shift+Q"))?,
+        ],
+    )?;
+    Menu::with_items(app, &[&app_menu, &file_menu(app)?, &view_menu(app)?])
+}
+
+#[cfg(target_os = "macos")]
+pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
+    let sep = || PredefinedMenuItem::separator(app);
+    let app_menu = Submenu::with_items(
+        app,
+        "Sonata",
+        true,
+        &[
+            &PredefinedMenuItem::about(app, Some("About Sonata"), None)?,
+            &sep()?,
+            &settings_item(app)?,
+            &check_updates_item(app)?,
+            &auto_check_menu_item(app)?,
             &sep()?,
             &PredefinedMenuItem::services(app, None)?,
             &sep()?,
@@ -54,18 +137,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &PredefinedMenuItem::quit(app, Some("Quit Sonata"))?,
         ],
     )?;
-    let file = Submenu::with_items(
-        app,
-        "File",
-        true,
-        &[&MenuItem::with_id(
-            app,
-            CLOSE_ITEM_ID,
-            "Close Item",
-            true,
-            Some("CmdOrCtrl+W"),
-        )?],
-    )?;
+    let file = file_menu(app)?;
     // Needed so copy, paste, and select-all work in text fields and terminals.
     let edit = Submenu::with_items(
         app,
@@ -81,18 +153,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &PredefinedMenuItem::select_all(app, None)?,
         ],
     )?;
-    let view = Submenu::with_items(
-        app,
-        "View",
-        true,
-        &[&MenuItem::with_id(
-            app,
-            TOGGLE_SIDEBAR_ID,
-            "Toggle Sidebar",
-            true,
-            Some("Cmd+Ctrl+S"),
-        )?],
-    )?;
+    let view = view_menu(app)?;
     let window = Submenu::with_items(
         app,
         "Window",
@@ -117,6 +178,11 @@ pub fn on_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
         }
         CHECK_UPDATES_ID => {
             let _ = app.emit(CHECK_UPDATES_EVENT, ());
+        }
+        // The same quit check as Cmd+Q on macOS: the UI asks when programs are running.
+        #[cfg(target_os = "linux")]
+        QUIT_ID => {
+            let _ = app.emit(crate::QUIT_REQUESTED, ());
         }
         SETTINGS_ID => {
             if let Err(err) = crate::settings::open(app) {

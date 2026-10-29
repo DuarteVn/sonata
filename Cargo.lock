@@ -3927,6 +3927,8 @@ name = "sonata-app"
 version = "0.2.0"
 dependencies = [
  "block2",
+ "cairo-rs",
+ "gtk",
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",
@@ -3943,6 +3945,7 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "webkit2gtk",
 ]
 
 [[package]]
