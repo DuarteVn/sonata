@@ -1,7 +1,9 @@
 name: ci
 on:
   push:
-    branches: [main]
+    # Feature branches (for example 011-linux-support) too: Linux and Windows are only
+    # verified on runners.
+    branches: [main, '[0-9][0-9][0-9]-*']
   pull_request:
   # The release workflow runs these same checks before it builds (feature 005).
   workflow_call:
