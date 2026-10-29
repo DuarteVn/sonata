@@ -75,17 +75,17 @@ creates the IPC socket, and copies the CLI to `~/.local/bin/sonata`.
 
 ### Tests
 
-- [ ] T017 [P] [US2] Write failing unit tests in `crates/core/src/terminal/bash.rs` for the generated `bashrc` text: sources `/etc/profile`, then the first readable of `~/.bash_profile`, `~/.bash_login`, `~/.profile`; defines `claude` and `codex` only when `sonata` is on PATH
-- [ ] T018 [P] [US2] Write failing test `crates/core/tests/bash_helpers.rs` (skipped when `/bin/bash` is missing): spawn a bash terminal with a temp `HOME` holding `.profile` that sources `.bashrc`; check `$FROM_USER_RC` is set, `type -t claude` prints `function`, and the user's files are unchanged
-- [ ] T019 [P] [US2] Write failing unit test in `crates/core/tests/pty_args.rs` for `pty::shell_args(shell, dirs)`: bash → `["--rcfile", <bashrc>, "-i"]`; zsh → `["-l"]` plus `ZDOTDIR` env; fish → `["-l"]`
-- [ ] T020 [P] [US2] Write failing test for the Linux git hint in `crates/core/tests/lanes_git_hint.rs`: on Linux the missing-git message is "Git is not installed. Install it with your package manager, for example: sudo apt install git"; on macOS it stays the `xcode-select` text
+- [X] T017 [P] [US2] Write failing unit tests in `crates/core/src/terminal/bash.rs` for the generated `bashrc` text: sources `/etc/profile`, then the first readable of `~/.bash_profile`, `~/.bash_login`, `~/.profile`; defines `claude` and `codex` only when `sonata` is on PATH
+- [X] T018 [P] [US2] Write failing test `crates/core/tests/bash_helpers.rs` (skipped when `/bin/bash` is missing): spawn a bash terminal with a temp `HOME` holding `.profile` that sources `.bashrc`; check `$FROM_USER_RC` is set, `type -t claude` prints `function`, and the user's files are unchanged
+- [X] T019 [P] [US2] Write failing unit test in `crates/core/tests/bash_helpers.rs` for `pty::shell_start(shell, helpers, user_zdotdir)`: bash → `["--rcfile", <bashrc>, "-i"]`; zsh → `["-l"]` plus `ZDOTDIR` env; fish → `["-l"]`
+- [X] T020 [P] [US2] Write failing test for the Linux git hint in `crates/core/tests/lanes_git_hint.rs`: on Linux the missing-git message is "Git is not installed. Install it with your package manager, for example: sudo apt install git"; on macOS it stays the `xcode-select` text
 
 ### Implementation
 
-- [ ] T021 [US2] Implement `crates/core/src/terminal/bash.rs` (`write_files(dir)` → `bashrc`, private dir, atomic write) and register in `crates/core/src/terminal/mod.rs`
-- [ ] T022 [US2] Implement `shell_args` in `crates/core/src/terminal/pty.rs`; add `bash_dir: Option<PathBuf>` next to `zsh_dir` in `SpawnOptions`, `crates/core/src/terminal/manager.rs`, and `crates/core/src/app.rs` (write `run/bash` at start like `run/zsh`); update test helpers that build `SpawnOptions` (`crates/core/tests/terminal_pty.rs`, `terminal_attach.rs`, `zsh_helpers.rs`)
-- [ ] T023 [US2] Move git candidates and the install hint to `platform::{git_candidates, git_install_hint}` and use them in `crates/core/src/lanes/git.rs`; apply `child_env()` to git commands
-- [ ] T024 [P] [US2] Apply `child_env()` in `crates/core/src/presets.rs`, `crates/core/src/usage/runner.rs`, and `crates/core/src/device/process.rs`
+- [X] T021 [US2] Implement `crates/core/src/terminal/bash.rs` (`write_files(dir)` → `bashrc`, private dir, atomic write) and register in `crates/core/src/terminal/mod.rs`
+- [X] T022 [US2] Implement `shell_args` in `crates/core/src/terminal/pty.rs`; replace `zsh_dir` with `shell_helpers: Option<PathBuf>` (the `run/` folder holding `zsh/` and `bash/`) in `SpawnOptions`, `crates/core/src/terminal/manager.rs`, and `crates/core/src/app.rs` (write `run/bash` at start like `run/zsh`); update test helpers that build `SpawnOptions` (`crates/core/tests/terminal_pty.rs`, `terminal_attach.rs`, `zsh_helpers.rs`)
+- [X] T023 [US2] Move git candidates and the install hint to `platform::{git_candidates, git_install_hint}` and use them in `crates/core/src/lanes/git.rs`; apply `child_env()` to git commands
+- [X] T024 [P] [US2] Apply `child_env()` in `crates/core/src/presets.rs`, `crates/core/src/usage/runner.rs`, and `crates/core/src/device/process.rs`
 - [ ] T025 [US2] Push and confirm `bash_helpers`, `zsh_helpers`, lanes, messaging, and usage tests pass on `linux-app`
 
 **Checkpoint**: agents typed by hand get Sonata in bash and zsh; lanes work.
@@ -101,13 +101,13 @@ creates the IPC socket, and copies the CLI to `~/.local/bin/sonata`.
 
 ### Tests
 
-- [ ] T026 [P] [US3] Write failing vitest cases in `scripts/release/latest-json.test.ts` (or the existing test file for it): `linux` option adds `linux-x86_64` with its signature and URL; macOS entries unchanged; CLI rejects `--linux-sig-file` without `--linux-url` and vice versa; non-https Linux URL rejected
+- [X] T026 [P] [US3] Write failing vitest cases in `ui/tests/latestJson.test.ts`: `linux` option adds `linux-x86_64` with its signature and URL; macOS entries unchanged; CLI rejects `--linux-sig-file` without `--linux-url` and vice versa; non-https Linux URL rejected
 
 ### Implementation
 
-- [ ] T027 [US3] Extend `scripts/release/latest-json.mjs` and `scripts/release/latest-json.d.mts` with the optional `linux` entry and the `--linux-sig-file` / `--linux-url` flags (contracts/release.md)
-- [ ] T028 [US3] Restructure `.github/workflows/release.yml` into `checks` → `draft` → `macos` | `linux` → `publish` (R4, contracts/release.md); macOS build steps unchanged except upload to the draft; `linux` on `ubuntu-22.04` with signing env, `--bundles appimage,deb`, uploads `Sonata_<v>_amd64.AppImage`, `.AppImage.sig`, `Sonata_<v>_amd64.deb`; `publish` downloads both `.sig` files with `gh release download`, builds and uploads `latest.json`, un-drafts, marks latest
-- [ ] T029 [US3] Validate the workflow with `actionlint` (run locally via `npx`/`brew` or a CI step) and a dry `linux` build in CI with signing disabled; do not tag
+- [X] T027 [US3] Extend `scripts/release/latest-json.mjs` and `scripts/release/latest-json.d.mts` with the optional `linux` entry and the `--linux-sig-file` / `--linux-url` flags (contracts/release.md)
+- [X] T028 [US3] Restructure `.github/workflows/release.yml` into `checks` → `draft` → `macos` | `linux` → `publish` (R4, contracts/release.md); macOS build steps unchanged except upload to the draft; `linux` on `ubuntu-22.04` with signing env, `--bundles appimage,deb`, uploads `Sonata_<v>_amd64.AppImage`, `.AppImage.sig`, `Sonata_<v>_amd64.deb`; `publish` downloads both `.sig` files with `gh release download`, builds and uploads `latest.json`, un-drafts, marks latest
+- [ ] T029 [US3] Validate the workflow with `actionlint` as a CI step (`docker://rhysd/actionlint`) and a dry `linux` build in CI with signing disabled; do not tag
 
 **Checkpoint**: release pipeline ready; a real tag needs the user's OK.
 

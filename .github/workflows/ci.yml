@@ -29,6 +29,11 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: sh scripts/release/tests/run.sh
+      # The release workflow runs only on tags; lint it on every push instead (feature 011).
+      - name: Lint the workflows
+        uses: docker://rhysd/actionlint:1.7.7
+        with:
+          args: -color
 
   linux-app:
     # The whole workspace, including the Tauri shell, on the oldest supported Linux baseline

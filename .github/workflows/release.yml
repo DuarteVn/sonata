@@ -1,6 +1,11 @@
 name: release
 # Builds and publishes a release when a version tag is pushed (or on demand for an existing tag).
-# See specs/005-release-distribution/contracts/release.md.
+# See specs/005-release-distribution/contracts/release.md and
+# specs/011-linux-support/contracts/release.md.
+#
+# checks → draft → macos | linux → publish. Each platform job uploads its files to the draft;
+# publish writes latest.json and makes the release public only when every build succeeded, so a
+# failed build leaves the previous release (and its latest.json) as "latest".
 on:
   push:
     tags: ['v*.*.*']
@@ -13,18 +18,19 @@ on:
 permissions:
   contents: read
 
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
 jobs:
   checks:
     uses: ./.github/workflows/ci.yml
 
-  release:
+  draft:
     needs: checks
-    # macOS is needed for the app bundle, lipo, and the disk image.
-    runs-on: macos-14
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
-      TAG: ${{ inputs.tag || github.ref_name }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
@@ -44,6 +50,28 @@ jobs:
             echo 'plugins.updater.pubkey is still the placeholder; see README "Releasing"'
             exit 1
           fi
+      - name: Create the draft release
+        run: |
+          # A draft left by an earlier failed run is reused; a published release is never touched.
+          if draft="$(gh release view "$TAG" --json isDraft -q .isDraft 2>/dev/null)"; then
+            [ "$draft" = true ] || { echo "release $TAG is already published"; exit 1; }
+            echo "reusing the draft release $TAG"
+          else
+            gh release create "$TAG" --verify-tag --draft --generate-notes --title "Sonata ${TAG#v}"
+          fi
+
+  macos:
+    needs: draft
+    # macOS is needed for the app bundle, lipo, and the disk image.
+    runs-on: macos-14
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin, x86_64-apple-darwin
@@ -68,19 +96,74 @@ jobs:
             case "$archs" in *x86_64*arm64*|*arm64*x86_64*) ;; *) exit 1 ;; esac
           done
           codesign -dv "$app" 2>&1 | grep -q 'Signature=adhoc'
-      - name: Publish the release
+      - name: Upload the macOS files to the draft
         run: |
           bundle=target/universal-apple-darwin/release/bundle
-          version="${TAG#v}"
-          dmg="$bundle/dmg/Sonata_${version}_universal.dmg"
           archive="$bundle/macos/Sonata.app.tar.gz"
-          # Draft first, so the "latest" download link never points at a half-uploaded release.
-          gh release create "$TAG" --verify-tag --draft --generate-notes --title "Sonata $version" \
-            "$dmg" "$archive" "$archive.sig"
+          gh release upload "$TAG" --clobber \
+            "$bundle/dmg/Sonata_${TAG#v}_universal.dmg" "$archive" "$archive.sig"
+
+  linux:
+    needs: draft
+    # The oldest supported baseline, so the AppImage runs on newer glibc too (011 research R5).
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: Install Linux build packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libssl-dev \
+            patchelf file build-essential
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build the AppImage and the Debian package
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run tauri build -- --bundles appimage,deb
+      - name: Upload the Linux files to the draft
+        run: |
+          bundle=target/release/bundle
+          appimage="$bundle/appimage/Sonata_${TAG#v}_amd64.AppImage"
+          gh release upload "$TAG" --clobber \
+            "$appimage" "$appimage.sig" "$bundle/deb/Sonata_${TAG#v}_amd64.deb"
+
+  publish:
+    needs: [macos, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Write latest.json and publish
+        run: |
+          version="${TAG#v}"
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
+          appimage="Sonata_${version}_amd64.AppImage"
+          gh release download "$TAG" --dir sigs -p Sonata.app.tar.gz.sig -p "$appimage.sig"
           gh release view "$TAG" --json body -q .body > notes.md
           node scripts/release/latest-json.mjs --version "$TAG" --notes-file notes.md \
-            --sig-file "$archive.sig" \
-            --url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/Sonata.app.tar.gz" \
+            --sig-file sigs/Sonata.app.tar.gz.sig --url "$base/Sonata.app.tar.gz" \
+            --linux-sig-file "sigs/$appimage.sig" --linux-url "$base/$appimage" \
             > latest.json
-          gh release upload "$TAG" latest.json
+          cat latest.json
+          gh release upload "$TAG" --clobber latest.json
           gh release edit "$TAG" --draft=false --latest
