@@ -44,7 +44,7 @@ cli="$home/.local/bin/sonata"
 echo "cli copied"
 
 listing="$(dpkg-deb -c "$deb")"
-echo "$listing" | grep -q ' \./usr/bin/sonata$' || {
+echo "$listing" | grep -Eq ' (\./)?usr/bin/sonata$' || {
   echo "$listing" | sed 's/^/  deb: /'
   fail "the .deb has no /usr/bin/sonata"
 }
