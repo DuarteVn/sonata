@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 use portable_pty::{Child, ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use uuid::Uuid;
 
-/// The user's login shell from the password database, then `$SHELL`, then `/bin/zsh`.
+/// The user's login shell from the password database, then `$SHELL`, then the platform default
+/// (`/bin/zsh` on macOS, `/bin/bash` on Linux).
 pub fn login_shell() -> PathBuf {
     // SAFETY: getpwuid returns a pointer into static storage or null; we copy the string
     // immediately and do not keep the pointer.
@@ -29,7 +30,7 @@ pub fn login_shell() -> PathBuf {
                 .map(PathBuf::from)
                 .filter(|p| p.exists())
         })
-        .unwrap_or_else(|| PathBuf::from("/bin/zsh"))
+        .unwrap_or_else(crate::platform::default_shell)
 }
 
 pub struct Spawned {
@@ -132,6 +133,7 @@ pub fn spawn(opts: SpawnOptions<'_>) -> io::Result<Spawned> {
     for key in AGENT_SESSION_MARKERS {
         cmd.env_remove(key);
     }
+    crate::platform::child_env().apply_pty(&mut cmd);
     for (k, v) in opts.env {
         cmd.env(k, v);
     }

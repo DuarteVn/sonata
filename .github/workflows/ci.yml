@@ -54,3 +54,16 @@ jobs:
       - run: npm run build:tauri
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace --no-fail-fast
+      - name: Build the AppImage and the Debian package
+        run: npm run tauri build -- --bundles appimage,deb --config '{"bundle":{"createUpdaterArtifacts":false}}'
+      - name: Start the AppImage on a virtual display
+        run: |
+          bundle=target/release/bundle
+          sh scripts/release/tests/linux-smoke.sh "$(ls $bundle/appimage/*.AppImage)" \
+            "$(ls $bundle/deb/*.deb)" screenshot.png
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-smoke
+          path: screenshot.png
+          if-no-files-found: ignore

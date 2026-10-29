@@ -40,7 +40,7 @@ export class XtermSession {
     this.zoom = opts.zoom;
     this.term = new Terminal({
       fontSize: opts.baseFontSize * opts.zoom,
-      fontFamily: '"SF Mono", Menlo, Monaco, monospace',
+      fontFamily: '"SF Mono", Menlo, Monaco, "DejaVu Sans Mono", "Ubuntu Mono", "Liberation Mono", monospace',
       scrollback: 10000,
       cursorBlink: true,
       allowProposedApi: true,

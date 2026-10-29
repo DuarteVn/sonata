@@ -31,10 +31,10 @@ Linux-only tests are `#[cfg(target_os = "linux")]` and run on the `linux-app` CI
 
 ## Phase 2: Foundational (blocks all stories)
 
-- [ ] T004 Write failing tests in `crates/core/tests/platform_env.rs` for `platform::host_env` (data-model `EnvFix`): empty without `APPIMAGE`; removes `APPIMAGE`, `APPDIR`, `ARGV0`, `OWD`; drops `$APPDIR` entries from colon lists (`LD_LIBRARY_PATH`, `XDG_DATA_DIRS`, `GTK_PATH`); removes a variable left empty; keeps unrelated variables
-- [ ] T005 Create `crates/core/src/platform/mod.rs`, `macos.rs`, `linux.rs` (R1) with `EnvFix`, `host_env`, `EnvFix::apply_std(&mut std::process::Command)` and `EnvFix::apply_pty(&mut portable_pty::CommandBuilder)`, a cached `child_env()` from the real environment, and per-OS `default_shell()` (`/bin/zsh` macOS, `/bin/bash` Linux); register in `crates/core/src/lib.rs`
-- [ ] T006 Write failing tests in `crates/core/tests/platform_open.rs` for `platform::open_url_command(url)` and `platform::reveal_command(path)` returning the program and arguments per OS (contracts/platform.md rows "Open URL", "Reveal file")
-- [ ] T007 Implement `open_url_command`, `reveal_command`, and `platform::spawn_detached(program, args)` (applies `child_env()`) in `crates/core/src/platform/{mod,macos,linux}.rs`; replace `/usr/bin/open` in `crates/core/src/app.rs` (`reveal_in_finder`, help pages) and `src-tauri/src/browser/mod.rs` (`open_externally`)
+- [X] T004 Write failing tests in `crates/core/tests/platform_env.rs` for `platform::host_env` (data-model `EnvFix`): empty without `APPIMAGE`; removes `APPIMAGE`, `APPDIR`, `ARGV0`, `OWD`; drops `$APPDIR` entries from colon lists (`LD_LIBRARY_PATH`, `XDG_DATA_DIRS`, `GTK_PATH`); removes a variable left empty; keeps unrelated variables
+- [X] T005 Create `crates/core/src/platform/mod.rs`, `macos.rs`, `linux.rs` (R1) with `EnvFix`, `host_env`, `EnvFix::apply_std(&mut std::process::Command)` and `EnvFix::apply_pty(&mut portable_pty::CommandBuilder)`, a cached `child_env()` from the real environment, and per-OS `default_shell()` (`/bin/zsh` macOS, `/bin/bash` Linux); register in `crates/core/src/lib.rs`
+- [X] T006 Write failing tests in `crates/core/tests/platform_open.rs` for `platform::open_url_command(url)` and `platform::reveal_command(path)` returning the program and arguments per OS (contracts/platform.md rows "Open URL", "Reveal file")
+- [X] T007 Implement `open_url_command`, `reveal_command`, and `platform::spawn_detached(program, args)` (applies `child_env()`) in `crates/core/src/platform/{mod,macos,linux}.rs`; replace `/usr/bin/open` in `crates/core/src/app.rs` (`reveal_in_finder`, help pages) and `src-tauri/src/browser/mod.rs` (`open_externally`)
 
 **Checkpoint**: platform module exists; macOS behavior identical (scripts/check.sh green).
 
@@ -49,17 +49,17 @@ creates the IPC socket, and copies the CLI to `~/.local/bin/sonata`.
 
 ### Tests
 
-- [ ] T008 [P] [US1] Write failing tests in `src-tauri/src/cli_install.rs` (unit tests) for `should_write(target, bundled)`: writes when missing; skips when identical; overwrites only when the existing file contains `SONATA_TERMINAL_ID`; never overwrites another program
-- [ ] T009 [P] [US1] Write `scripts/release/tests/linux-smoke.sh`: start the AppImage with `xvfb-run` and a temporary `HOME`, wait up to 60 s for the socket under `$HOME/.sonata/run/`, check `$HOME/.local/bin/sonata` runs `help`, take `screenshot.png` with `import -window root`, check `dpkg-deb -c` lists `./usr/bin/sonata`, kill the app; print `socket ready`, `cli copied`, `deb has /usr/bin/sonata`
+- [X] T008 [P] [US1] Write failing tests in `crates/core/tests/cli_copy.rs` for `platform::install_cli(bundled, target)` (rule kept in core, constitution II): writes when missing; skips when identical; overwrites only when the existing file contains `SONATA_TERMINAL_ID`; never overwrites another program
+- [X] T009 [P] [US1] Write `scripts/release/tests/linux-smoke.sh`: start the AppImage with `xvfb-run` and a temporary `HOME`, wait up to 60 s for the socket under `$HOME/.sonata/run/`, check `$HOME/.local/bin/sonata` runs `help`, take `screenshot.png` with `import -window root`, check `dpkg-deb -c` lists `./usr/bin/sonata`, kill the app; print `socket ready`, `cli copied`, `deb has /usr/bin/sonata`
 
 ### Implementation
 
-- [ ] T010 [US1] Create `src-tauri/tauri.linux.conf.json` (R2): `bundle.targets` `["appimage","deb"]`, `bundle.linux.deb.files` `{"/usr/bin/sonata": "resources/bin/sonata"}`, deb `section` `devel`; keep `tauri.conf.json` unchanged for macOS
-- [ ] T011 [US1] Implement `src-tauri/src/cli_install.rs` (R7): copy `resource_dir()/bin/sonata` to `~/.local/bin/sonata` atomically with mode 0755 when `should_write` says so; log failures; call it from `src-tauri/src/lib.rs` setup under `#[cfg(target_os = "linux")]`
+- [X] T010 [US1] Create `src-tauri/tauri.linux.conf.json` (R2): `bundle.targets` `["appimage","deb"]`, `bundle.linux.deb.files` `{"/usr/bin/sonata": "resources/bin/sonata"}`, deb `section` `devel`; keep `tauri.conf.json` unchanged for macOS
+- [X] T011 [US1] Implement `platform::install_cli` in `crates/core/src/platform/mod.rs` and `install_cli_copy` in `src-tauri/src/lib.rs` (R7): copy `resource_dir()/bin/sonata` to `~/.local/bin/sonata` atomically with mode 0755 when `should_write` says so; log failures; call it from `src-tauri/src/lib.rs` setup under `#[cfg(target_os = "linux")]`
 - [ ] T012 [US1] Verify `cli_dir()` in `src-tauri/src/lib.rs` finds the CLI in the AppImage and `.deb` resource dirs (fix the lookup if the smoke run shows it missing)
-- [ ] T013 [US1] Use `platform::default_shell()` for the fallback in `crates/core/src/terminal/pty.rs` (`login_shell`) and `crates/core/src/app.rs:573`; apply `child_env()` to the PTY `CommandBuilder` in `pty.rs`
-- [ ] T014 [P] [US1] Append Linux font fallbacks (`"DejaVu Sans Mono", "Ubuntu Mono", "Liberation Mono"`, and `system-ui, "Ubuntu", "Cantarell", "Noto Sans"`) after the macOS fonts in `ui/src/styles.css` and `ui/src/terminal/xtermSession.ts`
-- [ ] T015 [US1] Extend `linux-app` in `.github/workflows/ci.yml`: `npm run tauri build -- --bundles appimage,deb --config '{"bundle":{"createUpdaterArtifacts":false}}'`, run `scripts/release/tests/linux-smoke.sh`, upload `screenshot.png` as artifact `linux-smoke`
+- [X] T013 [US1] Use `platform::default_shell()` for the fallback in `crates/core/src/terminal/pty.rs` (`login_shell`) and `crates/core/src/app.rs:573`; apply `child_env()` to the PTY `CommandBuilder` in `pty.rs`
+- [X] T014 [P] [US1] Append Linux font fallbacks (`"DejaVu Sans Mono", "Ubuntu Mono", "Liberation Mono"`, and `system-ui, "Ubuntu", "Cantarell", "Noto Sans"`) after the macOS fonts in `ui/src/styles.css` and `ui/src/terminal/xtermSession.ts`
+- [X] T015 [US1] Extend `linux-app` in `.github/workflows/ci.yml`: `npm run tauri build -- --bundles appimage,deb --config '{"bundle":{"createUpdaterArtifacts":false}}'`, run `scripts/release/tests/linux-smoke.sh`, upload `screenshot.png` as artifact `linux-smoke`
 - [ ] T016 [US1] Push, read the log, download the screenshot, fix until the smoke run passes
 
 **Checkpoint**: Linux app builds, starts, and exposes the CLI.

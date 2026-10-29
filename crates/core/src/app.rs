@@ -571,7 +571,7 @@ impl App {
                     .shell
                     .clone()
                     .or_else(|| std::env::var_os("SHELL").map(PathBuf::from))
-                    .unwrap_or_else(|| PathBuf::from("/bin/zsh"));
+                    .unwrap_or_else(crate::platform::default_shell);
                 crate::lanes::git::discover(&shell)
             })
             .as_ref()
@@ -662,8 +662,8 @@ impl App {
         };
         let mut env = vec![("SONATA_SOCKET".to_string(), socket.display().to_string())];
         if let Some(dir) = &self.options.cli_dir {
-            let path =
-                std::env::var("PATH").unwrap_or_else(|_| "/usr/bin:/bin:/usr/sbin:/sbin".into());
+            let path = crate::platform::host_var("PATH")
+                .unwrap_or_else(|| "/usr/bin:/bin:/usr/sbin:/sbin".into());
             env.push(("PATH".into(), format!("{}:{path}", dir.display())));
         }
         env
@@ -1237,10 +1237,7 @@ impl App {
                 "Only files in Sonata's data folder can be revealed.",
             ));
         }
-        std::process::Command::new("/usr/bin/open")
-            .arg("-R")
-            .arg(path)
-            .spawn()?;
+        crate::platform::reveal_command(path).spawn()?;
         Ok(())
     }
 
@@ -2190,9 +2187,7 @@ impl App {
             "xcode" => XCODE_HELP_URL,
             _ => return Err(AppError::internal(format!("No help page named {topic}."))),
         };
-        std::process::Command::new("/usr/bin/open")
-            .arg(url)
-            .spawn()?;
+        crate::platform::open_url_command(url).spawn()?;
         Ok(())
     }
 

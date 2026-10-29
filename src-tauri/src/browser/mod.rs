@@ -86,7 +86,7 @@ fn allowed(url: &Url) -> bool {
 }
 
 fn open_externally(url: &str) {
-    let _ = std::process::Command::new("/usr/bin/open").arg(url).spawn();
+    let _ = sonata_core::platform::open_url_command(url).spawn();
 }
 
 impl Browsers {
