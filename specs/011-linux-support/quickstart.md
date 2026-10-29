@@ -48,3 +48,17 @@ browser node and confirm the card picture. Settings → Usage with a custom prov
 `bubblewrap` installed, shows the install message without it. Check shortcuts from
 [contracts/platform.md](contracts/platform.md): Ctrl+C and Ctrl+W reach the terminal;
 Ctrl+Shift+W closes the item.
+
+## Verification record (2026-10-29)
+
+- `scripts/check.sh` on macOS: all checks passed (after the last code change).
+- CI run 40878647288 on `011-linux-support`: `core-and-ui` and `linux-app` green. `linux-app`
+  covered clippy and tests for the whole workspace on ubuntu-22.04 (bash helpers, bubblewrap
+  sandbox with bubblewrap installed, Linux device defaults), the AppImage and `.deb` builds
+  without signing, the Xvfb smoke run (`socket ready`, `cli copied`, `deb has /usr/bin/sonata`),
+  and `scripts/install.sh` installing under `~/.local`. `core-and-ui` linted both workflows with
+  actionlint.
+- Smoke screenshots (runs 40873391922, 40876542242) show the Sonata window on Linux with the
+  Linux menu (Sonata, File, View).
+- Not yet exercised: a WebKitGTK card snapshot of a live page, and `release.yml` on a real tag
+  (needs the maintainer's OK).

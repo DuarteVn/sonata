@@ -107,7 +107,7 @@ creates the IPC socket, and copies the CLI to `~/.local/bin/sonata`.
 
 - [X] T027 [US3] Extend `scripts/release/latest-json.mjs` and `scripts/release/latest-json.d.mts` with the optional `linux` entry and the `--linux-sig-file` / `--linux-url` flags (contracts/release.md)
 - [X] T028 [US3] Restructure `.github/workflows/release.yml` into `checks` → `draft` → `macos` | `linux` → `publish` (R4, contracts/release.md); macOS build steps unchanged except upload to the draft; `linux` on `ubuntu-22.04` with signing env, `--bundles appimage,deb`, uploads `Sonata_<v>_amd64.AppImage`, `.AppImage.sig`, `Sonata_<v>_amd64.deb`; `publish` downloads both `.sig` files with `gh release download`, builds and uploads `latest.json`, un-drafts, marks latest
-- [ ] T029 [US3] Validate the workflow with `actionlint` as a CI step (`docker://rhysd/actionlint`) and a dry `linux` build in CI with signing disabled; do not tag
+- [X] T029 [US3] Validate the workflow with `actionlint` as a CI step (`docker://rhysd/actionlint`) and a dry `linux` build in CI with signing disabled; do not tag
 
 **Checkpoint**: release pipeline ready; a real tag needs the user's OK.
 
@@ -168,7 +168,7 @@ labels and key overrides; smoke screenshot shows no macOS glyphs.
 
 - [X] T044 [P] [US6] Write failing `scripts/release/tests/install-linux.test.sh` (stub `uname`, `pkg-config`, `cargo`, `npm`, `/etc/os-release` via `SONATA_OS_RELEASE`): missing WebKitGTK prints the apt command for Ubuntu and the dnf command for Fedora and exits 1; with everything present it calls `tauri build --bundles appimage` without updater artifacts; register in `scripts/release/tests/run.sh`
 - [X] T045 [US6] Add the Linux branch to `scripts/install.sh` (R14): checks, build, install `~/.local/bin/sonata-app`, `~/.local/bin/sonata`, `~/.local/share/applications/sonata.desktop`, `~/.local/share/icons/hicolor/128x128/apps/sonata.png`; macOS branch byte-for-byte the same behavior
-- [ ] T046 [US6] Run `scripts/install.sh` in `linux-app` after the bundle build (or a separate step) and check the installed files
+- [X] T046 [US6] Run `scripts/install.sh` in `linux-app` after the bundle build (or a separate step) and check the installed files
 
 ---
 
@@ -176,8 +176,8 @@ labels and key overrides; smoke screenshot shows no macOS glyphs.
 
 - [X] T047 [P] Update `README.md`: Linux install (AppImage, `.deb`), supported distributions, required packages (`libwebkit2gtk-4.1-0`, optional `bubblewrap`), update behavior per install type, Linux shortcuts, features that differ, build from source on Linux
 - [X] T048 [P] Fill "Portable today" and the decision outcome per inventory row M1–M30 in `specs/011-linux-support/research.md`
-- [ ] T049 Run `scripts/check.sh` on macOS and confirm a full green `ci` run (both jobs) on the branch; record run ids in `specs/011-linux-support/quickstart.md`
-- [ ] T050 `sonata notify` the user: branch ready, ask for OK to open a PR and for a release dry run
+- [X] T049 Run `scripts/check.sh` on macOS and confirm a full green `ci` run (both jobs) on the branch; record run ids in `specs/011-linux-support/quickstart.md`
+- [X] T050 `sonata notify` the user: branch ready, ask for OK to open a PR and for a release dry run
 
 ---
 
