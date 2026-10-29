@@ -402,6 +402,9 @@ impl App {
             });
             let ios = crate::device::ios::IosLauncher::new(
                 Box::new(|| {
+                    if !crate::platform::IOS_SIMULATORS {
+                        return Err("iOS simulators need macOS.".to_string());
+                    }
                     crate::device::tools::developer_dir(&crate::device::tools::Env::current())
                         .ok_or_else(|| "Xcode not found".to_string())
                 }),
@@ -571,7 +574,7 @@ impl App {
                     .shell
                     .clone()
                     .or_else(|| std::env::var_os("SHELL").map(PathBuf::from))
-                    .unwrap_or_else(|| PathBuf::from("/bin/zsh"));
+                    .unwrap_or_else(crate::platform::default_shell);
                 crate::lanes::git::discover(&shell)
             })
             .as_ref()
@@ -647,10 +650,10 @@ impl App {
             restored_history: None,
             session_env: self.session_env(),
             wrap_agents: self.socket_path.is_some(),
-            zsh_dir: self
+            shell_helpers: self
                 .socket_path
                 .as_ref()
-                .map(|_| self.data_root.path().join("run").join("zsh")),
+                .map(|_| self.data_root.path().join("run")),
             resume: term.conversation.clone(),
         })
     }
@@ -662,8 +665,8 @@ impl App {
         };
         let mut env = vec![("SONATA_SOCKET".to_string(), socket.display().to_string())];
         if let Some(dir) = &self.options.cli_dir {
-            let path =
-                std::env::var("PATH").unwrap_or_else(|_| "/usr/bin:/bin:/usr/sbin:/sbin".into());
+            let path = crate::platform::host_var("PATH")
+                .unwrap_or_else(|| "/usr/bin:/bin:/usr/sbin:/sbin".into());
             env.push(("PATH".into(), format!("{}:{path}", dir.display())));
         }
         env
@@ -1237,10 +1240,7 @@ impl App {
                 "Only files in Sonata's data folder can be revealed.",
             ));
         }
-        std::process::Command::new("/usr/bin/open")
-            .arg("-R")
-            .arg(path)
-            .spawn()?;
+        crate::platform::reveal_command(path).spawn()?;
         Ok(())
     }
 
@@ -1513,9 +1513,12 @@ impl App {
         let Some(path) = self.socket_path.clone() else {
             return;
         };
-        let zsh_dir = self.data_root.path().join("run").join("zsh");
-        if let Err(e) = crate::terminal::zsh::write_files(&zsh_dir) {
+        let run = self.data_root.path().join("run");
+        if let Err(e) = crate::terminal::zsh::write_files(&run.join("zsh")) {
             tracing::warn!(error = %e, "could not write zsh helper files");
+        }
+        if let Err(e) = crate::terminal::bash::write_files(&run.join("bash")) {
+            tracing::warn!(error = %e, "could not write bash helper files");
         }
         match crate::messaging::server::Server::start(self.this.clone(), path) {
             Ok(server) => *self.server.lock().unwrap_or_else(|e| e.into_inner()) = Some(server),
@@ -2154,8 +2157,10 @@ impl App {
     fn with_simulators(
         mut report: crate::device::tools::ToolReport,
     ) -> crate::device::tools::ToolReport {
-        if let Some(dev) = &report.ios.developer_dir {
-            report.ios.simulators = crate::device::ios::list_simulators(
+        if let Some(ios) = &mut report.ios
+            && let Some(dev) = &ios.developer_dir
+        {
+            ios.simulators = crate::device::ios::list_simulators(
                 Arc::new(crate::device::process::SystemProcesses),
                 dev,
             );
@@ -2190,9 +2195,7 @@ impl App {
             "xcode" => XCODE_HELP_URL,
             _ => return Err(AppError::internal(format!("No help page named {topic}."))),
         };
-        std::process::Command::new("/usr/bin/open")
-            .arg(url)
-            .spawn()?;
+        crate::platform::open_url_command(url).spawn()?;
         Ok(())
     }
 

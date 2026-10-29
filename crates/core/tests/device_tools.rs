@@ -8,6 +8,13 @@ use std::path::{Path, PathBuf};
 
 use sonata_core::device::avd::{android_version, list_avds, parse_ini};
 use sonata_core::device::tools::{Env, detect};
+use sonata_core::platform::android_sdk_defaults;
+
+/// The platform's first default SDK folder (`~/Library/Android/sdk` on macOS, `~/Android/Sdk`
+/// on Linux).
+fn default_sdk(home: &Path) -> PathBuf {
+    android_sdk_defaults(home).remove(0)
+}
 
 fn exe(path: &Path) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -60,20 +67,20 @@ fn nothing_installed_reports_every_place_looked() {
     let home = tmp.path().join("home");
     let r = detect(&env(&home, &[]), None);
     assert!(r.android.sdk.is_none());
-    assert_eq!(
-        r.android.looked,
-        vec![
-            home.join("Library/Android/sdk"),
-            home.join("brew/share/android-commandlinetools"),
-        ]
-    );
+    let mut looked = android_sdk_defaults(&home);
+    looked.push(home.join("brew/share/android-commandlinetools"));
+    assert_eq!(r.android.looked, looked);
     assert!(
         r.android
             .help_url
             .starts_with("https://developer.android.com/")
     );
-    assert!(r.ios.developer_dir.is_none() || Path::new("/Applications/Xcode.app").exists());
-    assert!(r.ios.help_url.starts_with("https://developer.apple.com/"));
+    // iOS is offered only on macOS (feature 011).
+    assert_eq!(r.ios.is_some(), cfg!(target_os = "macos"));
+    if let Some(ios) = &r.ios {
+        assert!(ios.developer_dir.is_none() || Path::new("/Applications/Xcode.app").exists());
+        assert!(ios.help_url.starts_with("https://developer.apple.com/"));
+    }
 }
 
 #[test]
@@ -84,7 +91,7 @@ fn sdk_candidates_in_order_and_only_complete_ones_count() {
     std::fs::create_dir_all(chosen.join("emulator")).unwrap(); // no adb: incomplete
     let from_home_var = sdk(&tmp.path().join("android_home"));
     let from_root_var = sdk(&tmp.path().join("sdk_root"));
-    let studio = sdk(&home.join("Library/Android/sdk"));
+    let studio = sdk(&default_sdk(&home));
     let xcode = tmp.path().join("Xcode.app/Contents/Developer");
     exe(&xcode.join("usr/bin/simctl"));
 
@@ -104,7 +111,9 @@ fn sdk_candidates_in_order_and_only_complete_ones_count() {
         r.android.looked,
         vec![chosen.clone(), from_home_var.clone()]
     );
-    assert_eq!(r.ios.developer_dir.as_deref(), Some(xcode.as_path()));
+    if let Some(ios) = &r.ios {
+        assert_eq!(ios.developer_dir.as_deref(), Some(xcode.as_path()));
+    }
 
     let r = detect(&env(&home, &[("ANDROID_SDK_ROOT", &from_root_var)]), None);
     assert_eq!(r.android.sdk.as_deref(), Some(from_root_var.as_path()));
@@ -131,7 +140,7 @@ fn the_homebrew_command_line_tools_folder_counts_without_android_studio() {
 fn avds_are_listed_from_the_avd_home_in_order() {
     let tmp = tempfile::tempdir().unwrap();
     let home = tmp.path().join("home");
-    sdk(&home.join("Library/Android/sdk"));
+    sdk(&default_sdk(&home));
 
     // Default location, empty.
     let r = detect(&env(&home, &[]), None);

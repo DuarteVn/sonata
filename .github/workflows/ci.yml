@@ -1,7 +1,9 @@
 name: ci
 on:
   push:
-    branches: [main]
+    # Feature branches (for example 011-linux-support) too: Linux and Windows are only
+    # verified on runners.
+    branches: [main, '[0-9][0-9][0-9]-*']
   pull_request:
   # The release workflow runs these same checks before it builds (feature 005).
   workflow_call:
@@ -27,3 +29,52 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: sh scripts/release/tests/run.sh
+      # The release workflow runs only on tags; lint it on every push instead (feature 011).
+      - name: Lint the workflows
+        uses: docker://rhysd/actionlint:1.7.7
+        with:
+          args: -color
+
+  linux-app:
+    # The whole workspace, including the Tauri shell, on the oldest supported Linux baseline
+    # (feature 011): Linux-only code and tests run here.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux build packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libssl-dev \
+            patchelf file build-essential bubblewrap zsh xvfb imagemagick
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The shell crate embeds the built frontend and the bundled CLI.
+      - run: npm run build:tauri
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace --no-fail-fast
+      - name: Build the AppImage and the Debian package
+        run: npm run tauri build -- --bundles appimage,deb --config '{"bundle":{"createUpdaterArtifacts":false}}'
+      - name: Start the AppImage on a virtual display
+        run: |
+          bundle=target/release/bundle
+          sh scripts/release/tests/linux-smoke.sh "$(ls $bundle/appimage/*.AppImage)" \
+            "$(ls $bundle/deb/*.deb)" screenshot.png
+      - name: Install from source for the current user
+        run: |
+          sh scripts/install.sh
+          test -x "$HOME/.local/bin/sonata-app"
+          "$HOME/.local/bin/sonata" help >/dev/null
+          grep -q '^Exec=' "$HOME/.local/share/applications/sonata.desktop"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-smoke
+          path: screenshot.png
+          if-no-files-found: ignore

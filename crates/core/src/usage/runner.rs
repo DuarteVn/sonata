@@ -72,6 +72,21 @@ fn fmt_secs(d: Duration) -> String {
     }
 }
 
+/// Spawns `cmd`, retrying briefly when Linux reports the program busy (`ETXTBSY`): a script
+/// written a moment ago can still be open for writing in a process forked by another thread.
+fn spawn_retrying(cmd: &mut Command) -> std::io::Result<std::process::Child> {
+    let mut tries = 0;
+    loop {
+        match cmd.spawn() {
+            Err(e) if e.kind() == std::io::ErrorKind::ExecutableFileBusy && tries < 10 => {
+                tries += 1;
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            result => return result,
+        }
+    }
+}
+
 /// Runs `spec` in a new process group inside an empty temporary folder. The whole group is
 /// killed when the command exits, times out, overflows, or meets `stop_when`, so no child
 /// process outlives the run.
@@ -94,7 +109,8 @@ pub fn run(spec: &RunSpec) -> Result<RunOutput, RunError> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     for key in ENV_ALLOWLIST {
-        if let Some(value) = std::env::var_os(key) {
+        // As seen by user programs: an AppImage's own paths are left out (feature 011, R6).
+        if let Some(value) = crate::platform::host_var(key) {
             cmd.env(key, value);
         }
     }
@@ -104,7 +120,7 @@ pub fn run(spec: &RunSpec) -> Result<RunOutput, RunError> {
     for key in crate::terminal::pty::AGENT_SESSION_MARKERS {
         cmd.env_remove(key);
     }
-    let mut child = cmd.spawn().map_err(|e| match e.kind() {
+    let mut child = spawn_retrying(&mut cmd).map_err(|e| match e.kind() {
         std::io::ErrorKind::NotFound => RunError::NotFound,
         _ => RunError::Spawn(e.to_string()),
     })?;

@@ -2,6 +2,7 @@ import { AlertOctagon } from "lucide-react";
 import { useId } from "react";
 import { ipc } from "../ipc/commands";
 import type { LoadFailure, LoadFailureReason } from "../ipc/types";
+import { revealLabel } from "../platform";
 
 export function describeReason(r: LoadFailureReason): string {
   switch (r.kind) {
@@ -37,7 +38,7 @@ export function LoadFailureItem({ failure }: { failure: LoadFailure }) {
           {failure.path}
         </span>
         <button type="button" className="link-button" onClick={() => void ipc.appRevealPath(failure.path)}>
-          Reveal in Finder
+          {revealLabel()}
         </button>
       </div>
     </li>

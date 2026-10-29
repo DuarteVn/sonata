@@ -17,7 +17,7 @@ use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 use crate::commands::app::Quitting;
 use crate::events::TauriEventSink;
 
-const QUIT_REQUESTED: &str = "app://quit-requested";
+pub(crate) const QUIT_REQUESTED: &str = "app://quit-requested";
 
 pub fn run() {
     let app = tauri::Builder::default()
@@ -52,6 +52,8 @@ pub fn run() {
                 socket: true,
                 usage_extra_path: None,
             };
+            #[cfg(target_os = "linux")]
+            install_cli_copy(tauri_app.handle());
             let data_root = root.path().to_path_buf();
             let core = App::start_with(root, sink, options)?;
             let browsers = browser::Browsers::new(
@@ -244,6 +246,30 @@ fn cli_dir(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
     dev.join("sonata")
         .is_file()
         .then(|| dev.canonicalize().unwrap_or(dev))
+}
+
+/// Keeps `~/.local/bin/sonata` in step with the bundled CLI, so it has a stable path outside
+/// Sonata terminals; the AppImage's mount folder changes on every launch (feature 011, R7).
+#[cfg(target_os = "linux")]
+fn install_cli_copy(app: &tauri::AppHandle) {
+    let Some(bundled) = app
+        .path()
+        .resource_dir()
+        .ok()
+        .map(|d| d.join("bin/sonata"))
+        .filter(|p| p.is_file())
+    else {
+        return;
+    };
+    let Some(home) = std::env::var_os("HOME").filter(|h| !h.is_empty()) else {
+        return;
+    };
+    let target = std::path::Path::new(&home).join(".local/bin/sonata");
+    match sonata_core::platform::install_cli(&bundled, &target) {
+        Ok(true) => tracing::info!(path = %target.display(), "installed the sonata CLI"),
+        Ok(false) => {}
+        Err(err) => tracing::warn!(error = %err, "could not install the sonata CLI"),
+    }
 }
 
 /// Refreshes the card images of live pages every few seconds (004 FR-008).

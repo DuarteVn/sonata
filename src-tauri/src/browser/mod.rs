@@ -74,6 +74,10 @@ pub struct Browsers {
     app: AppHandle,
     core: Weak<App>,
     image_dir: PathBuf,
+    /// Linux keeps each workspace's browsing data in a folder of its own (011 research R10);
+    /// macOS uses WebKit data stores instead.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    data_dir: PathBuf,
     views: Mutex<HashMap<Uuid, View>>,
 }
 
@@ -86,7 +90,7 @@ fn allowed(url: &Url) -> bool {
 }
 
 fn open_externally(url: &str) {
-    let _ = std::process::Command::new("/usr/bin/open").arg(url).spawn();
+    let _ = sonata_core::platform::open_url_command(url).spawn();
 }
 
 impl Browsers {
@@ -97,6 +101,7 @@ impl Browsers {
             app,
             core,
             image_dir,
+            data_dir: data_root.join("browser-data"),
             views: Mutex::default(),
         })
     }
@@ -145,8 +150,17 @@ impl Browsers {
         let load_cb = load.clone();
         let app_nav = self.app.clone();
         let label_nav = label.clone();
-        let builder = WebviewBuilder::new(&label, WebviewUrl::External(parsed))
-            .data_store_identifier(*ws.as_bytes())
+        let builder = WebviewBuilder::new(&label, WebviewUrl::External(parsed));
+        #[cfg(target_os = "macos")]
+        let builder = builder.data_store_identifier(*ws.as_bytes());
+        #[cfg(target_os = "linux")]
+        let builder = {
+            let dir = self.data_dir.join(ws.simple().to_string());
+            sonata_core::paths::ensure_private_dir(&dir)
+                .map_err(|e| format!("Could not create the browser data folder: {e}"))?;
+            builder.data_directory(dir)
+        };
+        let builder = builder
             .devtools(true)
             .on_navigation(allowed)
             .on_new_window(move |url, _features| {
@@ -328,7 +342,14 @@ impl Browsers {
         for n in nodes {
             self.close(*n);
         }
+        #[cfg(target_os = "macos")]
         snapshot::remove_data_store(&self.app, ws);
+        #[cfg(target_os = "linux")]
+        if let Err(err) = std::fs::remove_dir_all(self.data_dir.join(ws.simple().to_string()))
+            && err.kind() != std::io::ErrorKind::NotFound
+        {
+            tracing::warn!(error = %err, "could not delete the workspace's browsing data");
+        }
     }
 
     fn load_counts(&self, node: Uuid) -> Option<(u64, u64)> {

@@ -63,14 +63,19 @@ fn custom_command_needs_consent_again_when_it_changes() {
     let st = svc.refresh(RefreshReason::Manual, Some("fake"));
     let fake = st.providers.iter().find(|p| p.id == "fake").unwrap();
     assert_eq!(fake.consent, "granted");
-    if !std::path::Path::new(sonata_core::usage::custom::SANDBOX_EXEC).exists() {
-        // No sandbox (Linux CI): custom commands fail closed and never run.
+    let sandbox = if cfg!(target_os = "macos") {
+        sonata_core::usage::custom::SANDBOX_EXEC
+    } else {
+        sonata_core::platform::bwrap::BWRAP
+    };
+    if !std::path::Path::new(sandbox).exists() {
+        // No sandbox: custom commands fail closed and never run.
         assert!(fake.reading.is_none());
         assert!(
             fake.last_error
                 .as_deref()
                 .unwrap_or_default()
-                .contains("sandbox-exec"),
+                .contains("Cannot run safely"),
             "{:?}",
             fake.last_error
         );

@@ -41,7 +41,8 @@ pub struct SpawnSpec {
     /// identity (`SONATA_TOKEN`) is added by the manager.
     pub session_env: Vec<(String, String)>,
     pub wrap_agents: bool,
-    pub zsh_dir: Option<PathBuf>,
+    /// Sonata's shell startup folder (`run/`, with `zsh/` and `bash/`); see `terminal::pty`.
+    pub shell_helpers: Option<PathBuf>,
     /// The node's stored conversation; every start offers it once (feature 009, research R3).
     pub resume: Option<Conversation>,
 }
@@ -196,7 +197,7 @@ impl TerminalManager {
             cols,
             env: &env,
             wrap_agents: spec.wrap_agents,
-            zsh_dir: spec.zsh_dir.as_deref(),
+            shell_helpers: spec.shell_helpers.as_deref(),
         })?;
         let pid = spawned.pid;
         let launch = spec

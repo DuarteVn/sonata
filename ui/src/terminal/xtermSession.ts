@@ -5,7 +5,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { ipc } from "../ipc/commands";
 import type { TerminalStateEvent } from "../ipc/types";
-import { keyOverride } from "./xtermKeys";
+import { clipboardAction, keyOverride } from "./xtermKeys";
 
 export const theme: ITheme = {
   background: "#101115",
@@ -40,7 +40,7 @@ export class XtermSession {
     this.zoom = opts.zoom;
     this.term = new Terminal({
       fontSize: opts.baseFontSize * opts.zoom,
-      fontFamily: '"SF Mono", Menlo, Monaco, monospace',
+      fontFamily: '"SF Mono", Menlo, Monaco, "DejaVu Sans Mono", "Ubuntu Mono", "Liberation Mono", monospace',
       scrollback: 10000,
       cursorBlink: true,
       allowProposedApi: true,
@@ -63,6 +63,12 @@ export class XtermSession {
     }
     this.term.resize(this.cols, this.rows);
     this.term.attachCustomKeyEventHandler((ev) => {
+      const clip = clipboardAction(ev);
+      if (clip) {
+        if (ev.type === "keydown") void this.clipboard(clip);
+        ev.preventDefault();
+        return false;
+      }
       const bytes = keyOverride(ev);
       if (bytes === null) return true;
       if (ev.type === "keydown") void ipc.terminalWrite(this.nodeId, bytes);
@@ -76,6 +82,22 @@ export class XtermSession {
     };
     const state = await ipc.terminalAttach(this.nodeId, channel, this.cols, this.rows);
     if (state) this.opts.onState?.(state);
+  }
+
+  /** Linux Ctrl+Shift+C / Ctrl+Shift+V (see `clipboardAction`). Paste goes through xterm so
+   * bracketed paste works. */
+  private async clipboard(action: "copy" | "paste") {
+    try {
+      if (action === "copy") {
+        const text = this.term.getSelection();
+        if (text) await navigator.clipboard.writeText(text);
+      } else {
+        const text = await navigator.clipboard.readText();
+        if (text) this.term.paste(text);
+      }
+    } catch {
+      // The clipboard can be unavailable; the key then does nothing.
+    }
   }
 
   enableWebgl() {

@@ -1,5 +1,14 @@
 <!--
 Sync Impact Report
+- Version change: 1.1.1 → 1.2.0 (2026-10-29)
+- Modified principles: VI. Free, Open Distribution — adds the Linux install paths (AppImage that
+  updates itself, Debian package installed by hand); VII. Simplicity & Incremental Delivery —
+  target platforms are macOS and Linux x86_64 (feature 011, research R16).
+- Modified section: Technology & Platform Constraints — adds the Linux baseline (Ubuntu 22.04 or
+  equivalent with WebKitGTK 4.1).
+- Templates requiring updates: none.
+
+Earlier report:
 - Version change: 1.1.0 → 1.1.1 (2026-10-23)
 - Modified principle: VI. Free, Open Distribution — names two install paths: the prebuilt
   universal disk image from GitHub Releases (recommended for users) and the build-from-source
@@ -33,7 +42,7 @@ Previous report:
 
 # Sonata Constitution
 
-Sonata is an open source (MIT) macOS desktop app: an infinite spatial canvas holding AI-agent
+Sonata is an open source (MIT) desktop app for macOS and Linux: an infinite spatial canvas holding AI-agent
 terminals, notes, and the links between them, organized into multiple workspaces.
 
 ## Core Principles
@@ -113,11 +122,14 @@ Rationale: the app is unsandboxed and runs commands with the user's full permiss
 
 - Building, signing, and distributing Sonata MUST NOT require any paid service, including the
   Apple Developer Program and notarization.
-- Binaries use ad-hoc signing (`signingIdentity: "-"`) and a universal build
+- macOS binaries use ad-hoc signing (`signingIdentity: "-"`) and a universal build
   (`universal-apple-darwin`).
-- Two install paths: a prebuilt universal disk image from GitHub Releases (recommended for
-  users) and a script that builds from source (contributors). Auto-update uses the project's own
-  updater key.
+- macOS install paths: a prebuilt universal disk image from GitHub Releases (recommended for
+  users) and a script that builds from source (contributors).
+- Linux install paths: a prebuilt x86_64 AppImage from GitHub Releases (recommended; it updates
+  itself), a Debian package from the same release (updated by hand), and the same build-from-source
+  script.
+- Auto-update uses the project's own updater key on every platform.
 - The README MUST document the one-command install, the Gatekeeper "Open Anyway" step for
   browser downloads, and a security notice that the app runs shells without a sandbox.
 
@@ -125,8 +137,9 @@ Rationale: friends and contributors must be able to install and ship Sonata at z
 
 ### VII. Simplicity & Incremental Delivery
 
-- Target platform is macOS only (Apple Silicon and Intel). Cross-platform work is out of scope
-  until this constitution is amended.
+- Target platforms are macOS (Apple Silicon and Intel) and Linux x86_64. Platform-specific code
+  lives behind `cfg(target_os)` in one module per OS. Other platforms are out of scope until this
+  constitution is amended.
 - Build the smallest slice that works, in phases. Multiple workspaces are part of the first phase
   because they are the main reason the project exists.
 - New dependencies, abstractions, or configuration options MUST be justified in the plan's
@@ -138,7 +151,8 @@ Rationale: a small team ships a working tool faster than a complete one.
 
 ## Technology & Platform Constraints
 
-- **App shell**: Tauri 2, macOS 15 or later.
+- **App shell**: Tauri 2, macOS 15 or later; Linux with glibc 2.35 or later and WebKitGTK 4.1
+  (Ubuntu 22.04 or an equivalent distribution).
 - **Frontend**: React, TypeScript, Vite. Terminal rendering with xterm.js. The WebGL renderer is
   used only for visible, legible terminals; all others use a lighter renderer or a static preview.
 - **Core**: Rust, Cargo workspace with `crates/core`, `crates/cli`, and `src-tauri`; frontend in
@@ -173,4 +187,4 @@ Changing an item in this section requires a constitution amendment (MINOR bump a
 - Every code review checks compliance with the principles. A deviation MUST be recorded in the
   plan's Complexity Tracking section with its reason, or the change is rejected.
 
-**Version**: 1.1.1 | **Ratified**: 2026-10-21 | **Last Amended**: 2026-10-23
+**Version**: 1.2.0 | **Ratified**: 2026-10-21 | **Last Amended**: 2026-10-29

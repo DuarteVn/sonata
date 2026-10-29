@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Bootstrap, CanvasNode } from "../src/ipc/types";
+import { revealLabel } from "../src/platform";
 
 const ipc = vi.hoisted(() => ({
   appBootstrap: vi.fn(),
@@ -47,7 +48,7 @@ describe("recovery UI", () => {
     const item = await screen.findByRole("listitem", { name: /could not be loaded/i });
     expect(item).toHaveTextContent("newer version");
     expect(item).toHaveTextContent("workspace.json");
-    await userEvent.click(within(item).getByRole("button", { name: "Reveal in Finder" }));
+    await userEvent.click(within(item).getByRole("button", { name: revealLabel() }));
     expect(ipc.appRevealPath).toHaveBeenCalledWith(boot.loadFailures[0].path);
   });
 

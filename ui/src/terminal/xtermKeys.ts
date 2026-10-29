@@ -1,5 +1,7 @@
 // Key overrides for live terminals.
 
+import { isMac } from "../platform";
+
 /** Shift+Enter sends Escape + Return (Meta+Enter), which agent CLIs read as "new line". */
 export const SHIFT_ENTER_SEQUENCE = "\x1b\r";
 
@@ -16,8 +18,18 @@ const CMD_KEYS: Record<string, string> = {
 type KeyLike = Pick<KeyboardEvent, "key" | "shiftKey" | "altKey" | "ctrlKey" | "metaKey">;
 
 /** Bytes to send instead of xterm's default for this key, or null to let xterm handle it. */
-export function keyOverride(ev: KeyLike): string | null {
+export function keyOverride(ev: KeyLike, mac = isMac): string | null {
   if (ev.key === "Enter" && ev.shiftKey && !ev.altKey && !ev.ctrlKey && !ev.metaKey) return SHIFT_ENTER_SEQUENCE;
-  if (ev.metaKey && !ev.shiftKey && !ev.altKey && !ev.ctrlKey) return CMD_KEYS[ev.key] ?? null;
+  if (mac && ev.metaKey && !ev.shiftKey && !ev.altKey && !ev.ctrlKey) return CMD_KEYS[ev.key] ?? null;
   return null;
+}
+
+/**
+ * Linux terminals copy and paste with Ctrl+Shift+C and Ctrl+Shift+V, because Ctrl+C and Ctrl+V
+ * belong to the program in the terminal. On a Mac the Edit menu does this with Cmd+C and Cmd+V.
+ */
+export function clipboardAction(ev: KeyLike, mac = isMac): "copy" | "paste" | null {
+  if (mac || !ev.ctrlKey || !ev.shiftKey || ev.altKey || ev.metaKey) return null;
+  const k = ev.key.toLowerCase();
+  return k === "c" ? "copy" : k === "v" ? "paste" : null;
 }

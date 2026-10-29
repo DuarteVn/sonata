@@ -79,7 +79,9 @@ pub fn detect(shell: &Path, timeout: Duration) -> Vec<PresetStatus> {
 }
 
 fn run_with_timeout(shell: &Path, script: &str, timeout: Duration) -> Option<String> {
-    let mut child = Command::new(shell)
+    let mut cmd = Command::new(shell);
+    crate::platform::child_env().apply_std(&mut cmd);
+    let mut child = cmd
         .args(["-l", "-c", script])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

@@ -32,3 +32,10 @@ objc2 = "0.6"
 objc2-foundation = { version = "0.3", features = ["NSData", "NSDictionary", "NSError", "NSUUID", "NSString"] }
 objc2-app-kit = { version = "0.3", features = ["NSImage", "NSImageRep", "NSBitmapImageRep", "NSGraphics"] }
 objc2-web-kit = { version = "0.3", features = ["WKWebView", "WKSnapshotConfiguration", "WKWebsiteDataStore", "block2", "objc2-app-kit"] }
+
+# Browser node card pictures on Linux (feature 011, research R10). All three are already built
+# through wry; these entries only make their APIs reachable.
+[target.'cfg(target_os = "linux")'.dependencies]
+cairo-rs = { version = "0.18", features = ["png"] }
+gtk = "0.18"
+webkit2gtk = "2.0"

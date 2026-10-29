@@ -7,6 +7,7 @@ import { useWorkspaces } from "../state/workspaces";
 import { LoadFailureItem } from "./LoadFailureItem";
 import { UpdateBanner } from "./UpdateBanner";
 import { WorkspaceItem } from "./WorkspaceItem";
+import { shortcut } from "../platform";
 
 const DRAG_THRESHOLD_PX = 4;
 export const SIDEBAR_DEFAULT_WIDTH = 232;
@@ -87,7 +88,7 @@ export function Sidebar({ onCreate, onHide, width, onResize, onInstallUpdate }: 
           <button type="button" className="icon-button" aria-label="New workspace" onClick={onCreate}>
             <Plus size={16} />
           </button>
-          <button type="button" className="icon-button" aria-label="Hide sidebar" title="Hide sidebar (⌃⌘S)" onClick={onHide}>
+          <button type="button" className="icon-button" aria-label="Hide sidebar" title={`Hide sidebar (${shortcut("toggleSidebar")})`} onClick={onHide}>
             <PanelLeftClose size={16} />
           </button>
         </span>

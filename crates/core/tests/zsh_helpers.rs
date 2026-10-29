@@ -26,7 +26,13 @@ fn hand_typed_agents_are_wrapped_and_user_rc_still_loads() {
         "export FROM_USER_RC=yes\nPROMPT='%% '\n",
     )
     .unwrap();
-    std::fs::write(home.join(".zshenv"), "export FROM_USER_ENV=yes\n").unwrap();
+    // Ubuntu's global zshrc runs compinit, which stops at a prompt on CI runners whose shared
+    // folders are group-writable; users can opt out the same way.
+    std::fs::write(
+        home.join(".zshenv"),
+        "export FROM_USER_ENV=yes\nskip_global_compinit=1\n",
+    )
+    .unwrap();
     // SAFETY: single test in this binary; nothing else reads the environment concurrently.
     unsafe {
         std::env::set_var("HOME", &home);

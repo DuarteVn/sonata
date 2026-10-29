@@ -13,7 +13,13 @@ use tauri_plugin_updater::{Update, UpdaterExt};
 use crate::commands::app::Quitting;
 use crate::menu;
 
+#[cfg(target_os = "macos")]
 const WRONG_LOCATION: &str = "Move Sonata to Applications to update";
+#[cfg(any(target_os = "linux", test))]
+const PACKAGE_INSTALL: &str = "Sonata was installed with a package. Download the new version from https://github.com/DuarteVn/sonata/releases/latest";
+#[cfg(any(target_os = "linux", test))]
+const READ_ONLY_APPIMAGE: &str =
+    "Move the Sonata AppImage to a folder you can write to, such as ~/Applications, to update";
 /// How often the background task asks core whether an automatic check is due.
 const TICK: Duration = Duration::from_secs(10 * 60);
 
@@ -51,8 +57,8 @@ pub async fn update_download(
     app: State<'_, Arc<App>>,
     pending: State<'_, PendingUpdate>,
 ) -> Result<UpdateState, String> {
-    if wrong_location() {
-        return Ok(app.update(|s| s.block(WRONG_LOCATION.into())));
+    if let Some(reason) = install_blocker() {
+        return Ok(app.update(|s| s.block(reason.into())));
     }
     let Some(update) = pending.found.lock().map_err(|e| e.to_string())?.clone() else {
         return Err("No update to download. Check for updates first.".into());
@@ -162,13 +168,67 @@ async fn check(
     }
 }
 
-/// The updater cannot replace a bundle that runs from the disk image or from the read-only
-/// copy macOS makes of a quarantined app (research R9).
-fn wrong_location() -> bool {
-    std::env::current_exe().is_ok_and(|exe| {
-        let path = exe.to_string_lossy();
-        path.starts_with("/Volumes/") || path.contains("/AppTranslocation/")
-    })
+/// Why this install cannot replace itself, if it cannot.
+///
+/// macOS: the updater cannot replace a bundle that runs from the disk image or from the
+/// read-only copy macOS makes of a quarantined app (005 research R9).
+#[cfg(target_os = "macos")]
+fn install_blocker() -> Option<&'static str> {
+    std::env::current_exe()
+        .is_ok_and(|exe| {
+            let path = exe.to_string_lossy();
+            path.starts_with("/Volumes/") || path.contains("/AppTranslocation/")
+        })
+        .then_some(WRONG_LOCATION)
+}
+
+/// Linux: only an AppImage in a folder the user can write to updates itself; a package belongs
+/// to the package manager (011 research R3).
+#[cfg(target_os = "linux")]
+fn install_blocker() -> Option<&'static str> {
+    use tauri::utils::config::BundleType;
+    let install = match tauri::utils::platform::bundle_type() {
+        Some(BundleType::AppImage) => LinuxInstall::AppImage {
+            writable: std::env::var_os("APPIMAGE")
+                .map(std::path::PathBuf::from)
+                .and_then(|p| p.parent().map(writable))
+                .unwrap_or(false),
+        },
+        _ => LinuxInstall::Package,
+    };
+    linux_blocker(install)
+}
+
+#[cfg(any(target_os = "linux", test))]
+#[derive(Debug, Clone, Copy)]
+enum LinuxInstall {
+    AppImage {
+        writable: bool,
+    },
+    /// A Debian package, or a build without a bundle.
+    Package,
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn linux_blocker(install: LinuxInstall) -> Option<&'static str> {
+    match install {
+        LinuxInstall::AppImage { writable: true } => None,
+        LinuxInstall::AppImage { writable: false } => Some(READ_ONLY_APPIMAGE),
+        LinuxInstall::Package => Some(PACKAGE_INSTALL),
+    }
+}
+
+/// Whether a new file can be created in `dir` (the updater writes the new AppImage there).
+#[cfg(target_os = "linux")]
+fn writable(dir: &std::path::Path) -> bool {
+    let probe = dir.join(format!(".sonata-update-check-{}", std::process::id()));
+    let ok = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&probe)
+        .is_ok();
+    let _ = std::fs::remove_file(&probe);
+    ok
 }
 
 /// Checks at launch and then whenever core says an automatic check is due (FR-008).
@@ -186,4 +246,23 @@ pub fn spawn_background_checks(handle: AppHandle, core: Arc<App>) {
             tokio::time::sleep(TICK).await;
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_a_writable_appimage_updates_itself_on_linux() {
+        assert_eq!(
+            linux_blocker(LinuxInstall::AppImage { writable: true }),
+            None
+        );
+        assert_eq!(
+            linux_blocker(LinuxInstall::AppImage { writable: false }),
+            Some(READ_ONLY_APPIMAGE)
+        );
+        assert_eq!(linux_blocker(LinuxInstall::Package), Some(PACKAGE_INSTALL));
+        assert!(PACKAGE_INSTALL.contains("https://github.com/DuarteVn/sonata/releases/latest"));
+    }
 }
