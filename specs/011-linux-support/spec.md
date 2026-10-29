@@ -6,6 +6,23 @@
 
 **Status**: Draft
 
+## Clarifications
+
+### Session 2026-10-29
+
+Answers were delegated by the user to the orchestrating agent.
+
+- Q: Which Linux architectures does the release publish? → A: x86_64 only; arm64 later.
+- Q: Which Linux package formats ship, and which one updates itself? → A: AppImage (the self-updating target, update manifest key `linux-x86_64`) plus a Debian package for manual install; no Flatpak, Snap, or RPM now.
+- Q: What is the supported distribution baseline? → A: Ubuntu 22.04 or later and equivalents with WebKitGTK 4.1; Linux builds run on Ubuntu 22.04 runners so the glibc requirement stays at that baseline.
+- Q: How do Cmd shortcuts map on Linux? → A: Cmd maps to Ctrl, but terminal-reserved Ctrl keys (Ctrl+C, Ctrl+D, Ctrl+Z, Ctrl+A, Ctrl+E, Ctrl+U, Ctrl+W, and similar) go to the terminal when it has focus; app shortcuts that clash use Ctrl+Shift.
+- Q: How do custom usage providers run on Linux? → A: Inside a bubblewrap (`bwrap`) sandbox when it is installed; otherwise they do not run and show a clear message. Never unsandboxed.
+- Decision: data root stays `~/.sonata` with the macOS layout; the bundled `sonata` CLI is on the PATH of every Sonata terminal (as on macOS) and the app also places it in `~/.local/bin`.
+- Decision: shell integration covers bash and zsh; fish and other shells are out of scope.
+- Decision: browser card pictures and the snapshot command use WebKitGTK when feasible; otherwise they degrade with a message and never crash.
+- Decision: device node supports Android emulators on Linux; iOS is hidden.
+- Decision: `scripts/install.sh` gains a Linux path that installs for the current user under `~/.local` with a desktop entry (one script for both systems).
+
 **Input**: User description: "Linux support for Sonata. Goal: friends on Linux can download a prebuilt Sonata from GitHub Releases and use it like on macOS: canvas, terminals with AI agents, notes, links, the sonata CLI and agent messaging, browser node, lanes, usage meter, session restore, and auto-update. Scope ideas to confirm in clarify: target x86_64 (arm64 optional); package formats (AppImage for auto-update via Tauri updater, plus .deb); distro baseline (Ubuntu 22.04+ / webkit2gtk-4.1); shell integration for bash as well as zsh (agents typed by hand must know Sonata); data root and sonata CLI install path on Linux; browser node snapshot (src-tauri/src/browser/snapshot.rs is macOS-only today); custom usage providers run under sandbox-exec on macOS (find a Linux equivalent such as bubblewrap, or disable with a clear message); device node: Android emulator works on Linux, iOS hidden; keyboard shortcuts Cmd to Ctrl mapping; install-from-source script for Linux. macOS behavior must not regress. Verification happens on GitHub Actions Linux runners."
 
 ## User Scenarios & Testing *(mandatory)*
@@ -207,7 +224,7 @@ confirm it builds and installs Sonata and the `sonata` command.
 
 **Distribution**
 
-- **FR-001**: Each release MUST include a portable Linux file that runs without installation on
+- **FR-001**: Each release MUST include a portable Linux file (AppImage) that runs without installation on
   the supported distributions for the x86_64 architecture.
 - **FR-002**: Each release MUST include a Debian package for x86_64 that installs Sonata, its
   launcher entry, its icon, and the `sonata` command.
@@ -235,7 +252,9 @@ confirm it builds and installs Sonata and the `sonata` command.
 - **FR-012**: The data folder on Linux MUST be the same location relative to the user's home as
   on macOS, so data can move between systems.
 - **FR-013**: The `sonata` command MUST be available inside every Sonata terminal on Linux with
-  no user setup, for both the portable file and the Debian package.
+  no user setup, for both the portable file and the Debian package. The app MUST also place the
+  bundled CLI at `~/.local/bin/sonata`, refreshed when the app version changes, so it survives the
+  portable file's changing mount location.
 - **FR-014**: The messaging channel between the CLI and the app MUST keep the same local-only,
   owner-only access rules on Linux as on macOS.
 - **FR-015**: Typing an agent name by hand MUST start it through Sonata in bash and in zsh
@@ -250,18 +269,19 @@ confirm it builds and installs Sonata and the `sonata` command.
 - **FR-018**: The browser card picture and the agent snapshot command on Linux MUST either work
   or fail with a clear "not available on Linux" message; the card MUST show a placeholder with
   the page title and address when no picture exists.
-- **FR-019**: Custom usage providers on Linux MUST run only inside a restricted environment that
-  blocks writes outside allowed folders and hides the same sensitive folders as on macOS; if
-  that environment is not available, the provider MUST NOT run and MUST show the reason.
+- **FR-019**: Custom usage providers on Linux MUST run only inside a bubblewrap sandbox that
+  blocks writes outside allowed folders and hides the same kinds of sensitive folders as on macOS
+  (credential stores, SSH keys); if bubblewrap is not installed or cannot start, the provider
+  MUST NOT run and MUST show the reason and the package to install.
 - **FR-020**: The device node on Linux MUST support Android emulators and MUST hide iOS options.
 - **FR-021**: Opening external links and revealing files MUST use the system default browser and
   file manager on Linux.
 
 **Input and interface**
 
-- **FR-022**: On Linux, every app shortcut that uses Cmd on macOS MUST use Ctrl (with Shift where
-  Ctrl alone is a terminal control key), and every hint in menus and tooltips MUST show the Linux
-  key names.
+- **FR-022**: On Linux, every app shortcut that uses Cmd on macOS MUST use Ctrl; a shortcut whose
+  Ctrl form is a terminal control key MUST use Ctrl+Shift instead. Every hint in menus and
+  tooltips MUST show the Linux key names. macOS shortcuts MUST NOT change.
 - **FR-023**: On Linux, terminal control keys (Ctrl+C, Ctrl+D, Ctrl+Z, Ctrl+W, Ctrl+U, and
   similar) MUST reach the terminal program when a terminal has focus.
 - **FR-024**: The interface MUST use fonts that exist on common Linux desktops, falling back to
@@ -269,8 +289,9 @@ confirm it builds and installs Sonata and the `sonata` command.
 
 **Build from source and verification**
 
-- **FR-025**: The install script MUST build and install Sonata on Linux for the current user,
-  after checking build tools and system libraries and printing missing package names.
+- **FR-025**: `scripts/install.sh` MUST build and install Sonata on Linux for the current user
+  under `~/.local` (app, `sonata` CLI, desktop entry, icon), after checking build tools and system
+  libraries and printing missing package names.
 - **FR-026**: CI MUST build the Linux app and run the platform-specific tests on a Linux runner
   for every push and pull request.
 - **FR-027**: macOS behavior, files, and tests MUST NOT regress; all existing macOS checks MUST
@@ -313,15 +334,16 @@ confirm it builds and installs Sonata and the `sonata` command.
 
 - Target architecture is x86_64 only for this feature; arm64 Linux is a later addition.
 - Supported baseline is Ubuntu 22.04 or later and distributions of the same age (the WebKitGTK
-  4.1 family); both X11 and Wayland sessions are supported.
+  4.1 family); both X11 and Wayland sessions are supported. Linux release builds run on Ubuntu
+  22.04 so the files do not need a newer glibc.
 - Formats are a portable file (self-updating) and a Debian package (updated by the user); other
   package formats (RPM, Flatpak, Snap, AUR) are out of scope.
 - The data folder stays `~/.sonata` on Linux, matching the constitution and allowing data to move
   between systems.
 - Builds and tests for Linux run on GitHub Actions Linux runners; the maintainer's Mac cannot run
   Linux, so CI logs are the verification record.
-- Shell integration covers bash and zsh; other shells start normally without hand-typed agent
-  integration.
+- Shell integration covers bash and zsh; fish and other shells start normally without
+  hand-typed agent integration (out of scope).
 - The constitution currently limits Sonata to macOS (principle VII and the platform constraints);
   the plan amends it to add Linux. A parallel Windows feature may amend the same text.
 - iOS simulators need macOS and are not offered on Linux.
