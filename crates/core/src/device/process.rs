@@ -50,7 +50,9 @@ fn read_all(mut r: impl Read + Send + 'static) -> std::thread::JoinHandle<Vec<u8
 
 impl Processes for SystemProcesses {
     fn run(&self, program: &Path, args: &[&str], timeout: Duration) -> Result<Output, String> {
-        let mut child = Command::new(program)
+        let mut cmd = Command::new(program);
+        crate::platform::child_env().apply_std(&mut cmd);
+        let mut child = cmd
             .args(args)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -79,7 +81,9 @@ impl Processes for SystemProcesses {
     }
 
     fn spawn(&self, program: &Path, args: &[String]) -> Result<Box<dyn Child>, String> {
-        let mut child = Command::new(program)
+        let mut cmd = Command::new(program);
+        crate::platform::child_env().apply_std(&mut cmd);
+        let mut child = cmd
             .args(args)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())

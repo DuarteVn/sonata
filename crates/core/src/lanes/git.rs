@@ -54,6 +54,7 @@ impl Git {
     /// `git -C <dir> <args>` with an environment that cannot redirect or prompt.
     pub fn command<S: AsRef<OsStr>>(&self, dir: &Path, args: &[S]) -> Command {
         let mut cmd = Command::new(&self.bin);
+        crate::platform::child_env().apply_std(&mut cmd);
         cmd.arg("-C").arg(dir).args(args);
         for var in [
             "GIT_DIR",
@@ -143,9 +144,6 @@ pub fn parse_version(text: &str) -> Option<(u32, u32)> {
 
 /// Finds a usable git without triggering macOS's install prompt (research R2).
 pub fn discover(shell: &Path) -> Result<Git, String> {
-    let missing =
-        "Git is not installed. Install the Command Line Tools with: xcode-select --install";
-    let shim = Path::new("/usr/bin/git");
     let mut candidates: Vec<PathBuf> = Vec::new();
     if let Ok(out) = Git::new(shell).run_with_raw(&["-l", "-c", "command -v git"]) {
         let found = out.text();
@@ -153,31 +151,28 @@ pub fn discover(shell: &Path) -> Result<Git, String> {
             candidates.push(PathBuf::from(found));
         }
     }
-    candidates.push("/opt/homebrew/bin/git".into());
-    candidates.push("/usr/local/bin/git".into());
+    candidates.extend(crate::platform::git_candidates().iter().map(PathBuf::from));
+    let shim = crate::platform::git_shim();
     let chosen = candidates
         .into_iter()
-        // On macOS `/usr/bin/git` is a shim that may open an install prompt; elsewhere (CI on
-        // Linux) it is the real binary.
-        .find(|p| p.is_absolute() && (p != shim || !cfg!(target_os = "macos")) && p.is_file())
+        .find(|p| p.is_absolute() && shim.is_none_or(|(s, _)| p != s) && p.is_file())
         .or_else(|| {
-            let tools = Command::new("/usr/bin/xcode-select")
-                .arg("-p")
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()
-                .is_ok_and(|s| s.success());
-            (tools && shim.is_file()).then(|| shim.to_path_buf())
+            shim.filter(|(s, usable)| *usable && s.is_file())
+                .map(|(s, _)| s.to_path_buf())
         })
-        .ok_or_else(|| missing.to_string())?;
+        .ok_or_else(|| crate::platform::git_install_hint().to_string())?;
     let git = Git::new(chosen);
     let version = git
         .version()
         .map_err(|e| format!("Git could not run: {e}"))?;
     if version < MIN_VERSION {
         return Err(format!(
-            "Lanes need git {}.{} or newer; this Mac has {}.{}.",
-            MIN_VERSION.0, MIN_VERSION.1, version.0, version.1
+            "Lanes need git {}.{} or newer; this {} has {}.{}.",
+            MIN_VERSION.0,
+            MIN_VERSION.1,
+            crate::platform::machine_name(),
+            version.0,
+            version.1
         ));
     }
     Ok(git)
@@ -186,7 +181,9 @@ pub fn discover(shell: &Path) -> Result<Git, String> {
 impl Git {
     /// Runs the binary itself (no `-C`); used only to ask the login shell where git is.
     fn run_with_raw(&self, args: &[&str]) -> Result<Output, GitError> {
-        let out = Command::new(&self.bin)
+        let mut cmd = Command::new(&self.bin);
+        crate::platform::child_env().apply_std(&mut cmd);
+        let out = cmd
             .args(args)
             .stdin(Stdio::null())
             .stderr(Stdio::null())

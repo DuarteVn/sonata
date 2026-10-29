@@ -133,6 +133,27 @@ pub fn reveal_command(path: &Path) -> Launch {
     os::reveal_command(path)
 }
 
+/// The message shown when no usable git is found.
+pub fn git_install_hint() -> &'static str {
+    os::GIT_INSTALL_HINT
+}
+
+/// Where to look for git after the login shell's `command -v git`.
+pub fn git_candidates() -> &'static [&'static str] {
+    os::GIT_CANDIDATES
+}
+
+/// A git that may open an install prompt instead of running (macOS `/usr/bin/git`), and whether
+/// it is safe to use now. It is tried only after every other candidate.
+pub fn git_shim() -> Option<(&'static Path, bool)> {
+    os::git_shim()
+}
+
+/// What the user's computer is called in messages ("this Mac has git 2.30").
+pub fn machine_name() -> &'static str {
+    os::MACHINE_NAME
+}
+
 /// The shell used when neither the user database nor `$SHELL` names one that exists.
 pub fn default_shell() -> PathBuf {
     PathBuf::from(os::DEFAULT_SHELL)
