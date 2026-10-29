@@ -191,7 +191,7 @@ fn failed_resume_prints_one_notice_and_starts_a_new_conversation() {
     failing_resume(&bin, "codex", "resume", "0");
     let (app, _) = messaging_app(&sb);
     let (_, ids) = shells(&app, &sb, &["A"]);
-    let window = [("SONATA_RESUME_WINDOW_MS", "500")];
+    let window = [("SONATA_RESUME_WINDOW_MS", "5000")];
 
     offered(&app, ids[0], ConversationAgent::Claude, ID);
     let out = run_as(&app, ids[0], &bin, &["claude", "--model", "x"], &window);
