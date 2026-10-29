@@ -228,10 +228,12 @@ fn start_fresh_forgets_the_conversation_and_restarts() {
     assert!(v["data"].get("resume").is_none(), "{v}");
     assert!(transcript.exists());
 
-    // An idle terminal needs no confirmation. The restarted shell may still be starting up.
-    assert!(wait_until(WAIT, || !app.terminals().is_busy(a)));
+    // An idle terminal needs no confirmation. The restarted shell may still run startup
+    // commands in the foreground, so retry until it is idle; a refusal changes nothing.
     app.record_conversation(a, CLAUDE, Some(ID)).unwrap();
-    app.start_fresh_conversation(a, false).unwrap();
+    assert!(wait_until(WAIT, || app
+        .start_fresh_conversation(a, false)
+        .is_ok()));
     assert!(conversation(&app, ws, a).is_none());
 
     assert_eq!(
