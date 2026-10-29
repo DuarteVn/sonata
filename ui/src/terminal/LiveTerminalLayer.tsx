@@ -5,6 +5,7 @@ import { isTerminal, type CanvasNode } from "../ipc/types";
 import { useCanvas } from "../state/canvas";
 import { useWorkspaces } from "../state/workspaces";
 import { computeLiveSet, type Renderer } from "./liveSet";
+import { occlusionClip } from "./occlusion";
 import { XtermSession } from "./xtermSession";
 
 export const TITLE_HEIGHT = 28;
@@ -63,6 +64,11 @@ export function LiveTerminalLayer({ viewport }: { viewport: ScreenRect }) {
   useEffect(() => () => void ipc.terminalPreviewSubscribe([]), []);
 
   const byId = new Map(terminals.map((n) => [n.id, n]));
+  const coverOf = (n: CanvasNode) =>
+    occlusionClip(
+      frameToScreen(settled, bodyFrame(n)),
+      nodes.filter((o) => o.z > n.z).map((o) => frameToScreen(settled, o.frame)),
+    );
   const k = camera.zoom / settled.zoom;
   const transform =
     settled === camera
@@ -78,6 +84,7 @@ export function LiveTerminalLayer({ viewport }: { viewport: ScreenRect }) {
             key={id}
             node={n}
             rect={frameToScreen(settled, bodyFrame(n))}
+            clip={coverOf(n)}
             zoom={settled.zoom}
             baseFontSize={("terminal" in n.content && n.content.terminal.fontSize) || baseFontSize}
             focused={focusedId === id}
@@ -92,13 +99,15 @@ export function LiveTerminalLayer({ viewport }: { viewport: ScreenRect }) {
 type LiveProps = {
   node: CanvasNode;
   rect: ScreenRect;
+  /** Hides the parts under nodes stacked above this one. */
+  clip: string | undefined;
   zoom: number;
   baseFontSize: number;
   focused: boolean;
   renderer: Renderer;
 };
 
-function LiveTerminal({ node, rect, zoom, baseFontSize, focused, renderer }: LiveProps) {
+function LiveTerminal({ node, rect, clip, zoom, baseFontSize, focused, renderer }: LiveProps) {
   const ref = useRef<HTMLDivElement>(null);
   const session = useRef<XtermSession | null>(null);
   const { pressNode, bringToFront, setTerminalState, markWebglLost } = useCanvas.getState();
@@ -147,7 +156,7 @@ function LiveTerminal({ node, rect, zoom, baseFontSize, focused, renderer }: Liv
       data-node-id={node.id}
       data-node-kind="terminal"
       data-renderer={renderer}
-      style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height, zIndex: node.z }}
+      style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height, zIndex: node.z, clipPath: clip }}
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         if (pressNode(node.id, "terminal", e.shiftKey)) {
