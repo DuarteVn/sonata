@@ -53,20 +53,20 @@ pub struct SpawnOptions<'a> {
     pub cols: u16,
     /// Extra environment (Sonata session identity, socket, CLI folder on PATH).
     pub env: &'a [(String, String)],
-    /// Start Claude Code and Codex through `sonata run` (feature 003, research R4).
+    /// Start Claude Code, Codex, and Kimi through `sonata run` (feature 003, research R4).
     pub wrap_agents: bool,
     /// Sonata's shell startup folder with `zsh/` and `bash/` (see [`shell_start`]).
     pub shell_helpers: Option<&'a Path>,
 }
 
 /// Agents that `sonata run` knows how to start with session instructions and hooks.
-pub const WRAPPED_AGENTS: [&str; 2] = ["claude", "codex"];
+pub const WRAPPED_AGENTS: [&str; 3] = ["claude", "codex", "kimi"];
 
 /// Environment variables that mark a process as running inside an agent session (research R5).
 /// Terminals and the usage probe drop them, so an agent started there is a fresh, top-level
 /// session and an outer agent's messaging secret never leaks. User settings such as
 /// `CLAUDE_CODE_USE_BEDROCK` or `ANTHROPIC_*` are not on the list.
-pub const AGENT_SESSION_MARKERS: [&str; 12] = [
+pub const AGENT_SESSION_MARKERS: [&str; 14] = [
     "CLAUDECODE",
     "CLAUDE_CODE_ENTRYPOINT",
     "CLAUDE_CODE_EXECPATH",
@@ -79,6 +79,9 @@ pub const AGENT_SESSION_MARKERS: [&str; 12] = [
     "CLAUDE_EFFORT",
     "CODEX_SANDBOX",
     "CODEX_SANDBOX_NETWORK_DISABLED",
+    // Kimi Code (feature 010, research R7).
+    "KIMI_PLUGIN_ROOT",
+    "KIMI_CODE_UPDATE_REEXEC",
 ];
 
 /// `claude --foo` becomes `sonata run claude --foo` when wrapping is on.
@@ -202,4 +205,19 @@ pub fn spawn(opts: SpawnOptions<'_>) -> io::Result<Spawned> {
         pid,
         warning,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kimi_is_wrapped() {
+        assert!(WRAPPED_AGENTS.contains(&"kimi"));
+        assert_eq!(
+            wrap_launch_command("kimi --yolo", true),
+            "sonata run kimi --yolo"
+        );
+        assert_eq!(wrap_launch_command("kimi", false), "kimi");
+    }
 }

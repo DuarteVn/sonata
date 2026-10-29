@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "settings",
-  "description": "Settings window (feature 006): only the usage commands and revealing the providers folder.",
+  "description": "Settings window: the usage commands (feature 006), revealing a path, and the Kimi integration (feature 010).",
   "windows": [
     "settings"
   ],
@@ -15,7 +15,11 @@
     "allow-usage-set-provider-enabled",
     "allow-usage-set-provider-color",
     "allow-usage-answer-consent",
-    "allow-usage-providers-folder"
+    "allow-usage-providers-folder",
+    "allow-kimi-integration",
+    "allow-kimi-integration-apply",
+    "allow-kimi-integration-remove",
+    "allow-kimi-watch"
   ],
   "webviews": [
     "settings"

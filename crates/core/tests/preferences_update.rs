@@ -41,3 +41,40 @@ fn the_default_is_not_written() {
     let raw = std::fs::read_to_string(sb.root.preferences_file()).unwrap();
     assert!(!raw.contains("autoUpdateCheck"), "{raw}");
 }
+
+// ---- Kimi notice dismissal (feature 010) ----
+
+#[test]
+fn kimi_notice_dismissal_round_trips_and_is_omitted_when_unset() {
+    use sonata_core::model::preferences::KimiNoticeDismissed;
+    let sb = Sandbox::new();
+    let store = Store::new(sb.root.clone());
+    store.save_preferences(&Preferences::default()).unwrap();
+    let raw = std::fs::read_to_string(sb.root.preferences_file()).unwrap();
+    assert!(!raw.contains("kimiNoticeDismissed"), "{raw}");
+    for (value, text) in [
+        (KimiNoticeDismissed::Off, "off"),
+        (KimiNoticeDismissed::Outdated, "outdated"),
+    ] {
+        let prefs = Preferences {
+            kimi_notice_dismissed: Some(value),
+            ..Preferences::default()
+        };
+        store.save_preferences(&prefs).unwrap();
+        let raw = std::fs::read_to_string(sb.root.preferences_file()).unwrap();
+        let json: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(json["payload"]["kimiNoticeDismissed"], text, "{raw}");
+        assert_eq!(
+            store.load_preferences().value.kimi_notice_dismissed,
+            Some(value)
+        );
+    }
+}
+
+#[test]
+fn an_unknown_kimi_notice_value_is_a_load_warning() {
+    let sb = Sandbox::new();
+    write_prefs(&sb, r#"{"kimiNoticeDismissed":"bogus"}"#);
+    let loaded = Store::new(sb.root.clone()).load_preferences();
+    assert!(loaded.warning.is_some());
+}

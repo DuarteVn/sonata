@@ -51,6 +51,7 @@ pub fn run() {
                 cli_dir: cli_dir(tauri_app.handle()),
                 socket: true,
                 usage_extra_path: None,
+                kimi_home: None,
             };
             #[cfg(target_os = "linux")]
             install_cli_copy(tauri_app.handle());
@@ -161,6 +162,12 @@ pub fn run() {
             commands::lane::lane_land,
             commands::lane::lane_preview,
             commands::lane::lane_check,
+            commands::agents::kimi_integration,
+            commands::agents::kimi_integration_apply,
+            commands::agents::kimi_integration_remove,
+            commands::agents::dismiss_kimi_notice,
+            commands::agents::kimi_watch,
+            commands::agents::kimi_open_settings,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Sonata");

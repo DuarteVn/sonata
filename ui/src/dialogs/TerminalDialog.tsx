@@ -1,5 +1,5 @@
 import { open as openFolderPicker } from "@tauri-apps/plugin-dialog";
-import { Bot, Brain, Code2, Sparkles, SquareTerminal, Trash2, type LucideIcon } from "lucide-react";
+import { Bot, Brain, Code2, Moon, Sparkles, SquareTerminal, Trash2, type LucideIcon } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { ipc } from "../ipc/commands";
 import {
@@ -22,6 +22,7 @@ export const PRESETS: Preset[] = [
   { id: "codex", label: "Codex", name: "Codex", command: "codex", icon: Brain },
   { id: "opencode", label: "OpenCode", name: "OpenCode", command: "opencode", icon: Code2 },
   { id: "gemini", label: "Gemini CLI", name: "Gemini", command: "gemini", icon: Bot },
+  { id: "kimi", label: "Kimi Code", name: "Kimi", command: "kimi", icon: Moon },
   { id: "shell", label: "Shell", name: "", command: "", icon: SquareTerminal },
 ];
 
@@ -257,12 +258,12 @@ export function TerminalDialog({ mode, onClose }: Props) {
             <label className="check">
               <input
                 type="checkbox"
-                checked={sendInstructions ?? !["", "claude"].includes(command.trim().split(/\s+/)[0] ?? "")}
+                checked={sendInstructions ?? !["", "claude", "kimi"].includes(command.trim().split(/\s+/)[0] ?? "")}
                 onChange={(e) => setSendInstructions(e.target.checked)}
               />
               <span>
                 Type Sonata instructions on start
-                <small>For agents that cannot receive instructions at launch. Claude Code gets them automatically.</small>
+                <small>For agents that cannot receive instructions at launch. Claude Code and Kimi Code get them automatically.</small>
               </span>
             </label>
           </div>

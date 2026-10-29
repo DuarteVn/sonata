@@ -1,0 +1,11 @@
+# My Kimi settings
+default_model = "kimi-k2"
+
+[providers.moonshot]
+type = "kimi"
+api_key_env = "MOONSHOT_API_KEY"
+
+[[hooks]]
+event = "Notification"
+matcher = "task\\.completed"
+command = "terminal-notifier -title Kimi -message 'Task done'"

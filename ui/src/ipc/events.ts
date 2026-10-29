@@ -38,6 +38,8 @@ export type EventMap = {
   "lane://status": LaneStatus;
   "lane://confirm": import("./types").LaneConfirmEvent;
   "lane://confirm-closed": { requestId: string };
+  "kimi://integration": import("./types").KimiIntegration;
+  "settings://section": string;
 };
 
 export function onEvent<K extends keyof EventMap>(

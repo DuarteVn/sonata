@@ -59,7 +59,7 @@ fn hand_typed_agents_are_wrapped_and_user_rc_still_loads() {
     app.terminals()
         .write(
             t,
-            b"echo \"[$FROM_USER_ENV $FROM_USER_RC $ZDOTDIR]\"; whence -w claude codex\r",
+            b"echo \"[$FROM_USER_ENV $FROM_USER_RC $ZDOTDIR]\"; whence -w claude codex kimi\r",
         )
         .unwrap();
     let expected = format!("[yes yes {}]", home.display());
@@ -69,7 +69,8 @@ fn hand_typed_agents_are_wrapped_and_user_rc_still_loads() {
             .screen_text(t)
             .is_some_and(|s| s.contains(&expected)
                 && s.contains("claude: function")
-                && s.contains("codex: function"))),
+                && s.contains("codex: function")
+                && s.contains("kimi: function"))),
         "{:?}",
         app.terminals().screen_text(t)
     );

@@ -58,6 +58,10 @@ pub enum TargetKind {
     Shell,
     /// Anything else: quiet-terminal heuristic.
     Other,
+    /// Kimi Code, whose hooks exist only after the user sets them up (feature 010, research R5):
+    /// like `Other` until the target's process reports a hook, then like `Hooked`, and never
+    /// cut off by quiet while a turn is active.
+    Probing,
 }
 
 #[derive(Debug, Clone)]
@@ -446,8 +450,11 @@ impl Broker {
                     let quiet = now.duration_since(last);
                     let done = match kind {
                         TargetKind::Hooked => saw && quiet >= HOOKED_QUIET_FALLBACK,
+                        TargetKind::Probing if terms.agent_hooked(to) => {
+                            saw && quiet >= HOOKED_QUIET_FALLBACK && !terms.turn_active(to)
+                        }
                         TargetKind::Shell => saw && quiet >= SHELL_QUIET && !terms.is_busy(to),
-                        TargetKind::Other => {
+                        TargetKind::Other | TargetKind::Probing => {
                             (saw && quiet >= QUIET_AFTER_OUTPUT)
                                 || (!saw && now.duration_since(sent_at) >= SILENT_LIMIT)
                         }

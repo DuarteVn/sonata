@@ -74,10 +74,14 @@ pub fn handle(app: &App, req: &Request, progress: &mut dyn FnMut(&str)) -> Reply
         ["unlink", a, b] => orchestrator(&ctx).unwrap_or_else(|| link(&ctx, a, b, false)),
         ["_session", agent, hook] => session(&ctx, agent, hook),
         ["_turn", "complete"] => {
+            app.terminals().report_agent_hook(ctx.me, Some(false));
             app.broker().turn_complete(app, ctx.me, stdin);
             Reply::ok("")
         }
-        ["_turn", "start"] => Reply::ok(""),
+        ["_turn", "start"] => {
+            app.terminals().report_agent_hook(ctx.me, Some(true));
+            Reply::ok("")
+        }
         ["_conversation", agent, id] => conversation(&ctx, agent, id),
         _ => Reply::err(
             EXIT_USAGE,
@@ -236,7 +240,7 @@ fn resolve(ctx: &Ctx<'_>, name: &str, kind: Kind) -> Result<Node, Reply> {
 
 fn state_label(app: &App, id: Uuid) -> &'static str {
     match app.terminals().status(id) {
-        Some(RunStatus::Running { .. }) if app.terminals().is_busy(id) => "working",
+        Some(RunStatus::Running { .. }) if app.terminals().is_working(id) => "working",
         Some(RunStatus::Running { .. }) => "idle",
         Some(RunStatus::Exited { .. }) => "exited",
         Some(RunStatus::Starting) => "starting",
@@ -255,6 +259,8 @@ pub fn target_kind(node: &Node) -> TargetKind {
     let cmd = node.terminal().and_then(|t| t.launch_command.as_deref());
     match cmd.and_then(|c| c.split_whitespace().next()) {
         None => TargetKind::Shell,
+        // Kimi has end-of-turn hooks only after the user sets them up (feature 010).
+        Some("kimi") => TargetKind::Probing,
         Some(a) if crate::terminal::pty::WRAPPED_AGENTS.contains(&a) => TargetKind::Hooked,
         Some(_) => TargetKind::Other,
     }
@@ -709,7 +715,7 @@ fn recruit(ctx: &Ctx<'_>, rest: &[&str]) -> Reply {
     let Some(what) = what else {
         return Reply::err(
             EXIT_USAGE,
-            "Usage: sonata recruit <claude|codex|opencode|gemini|shell|\"<command>\"> [--name N] [--role R | --role-text T] [--folder F | --lane]",
+            "Usage: sonata recruit <claude|codex|kimi|opencode|gemini|shell|\"<command>\"> [--name N] [--role R | --role-text T] [--folder F | --lane]",
         );
     };
     if lane && folder.is_some() {
@@ -1026,12 +1032,16 @@ fn link(ctx: &Ctx<'_>, a: &str, b: &str, create: bool) -> Reply {
 fn session(ctx: &Ctx<'_>, agent: &str, hook: &str) -> Reply {
     match ctx.app.prepare_agent_session(ctx.me, hook) {
         Ok(files) => {
-            let mut data = json!({
-                "agent": agent,
-                "instructionsFile": files.instructions,
-                "settingsFile": files.settings,
-                "codexNotify": super::instructions::codex_notify(hook),
-            });
+            let mut data = if agent == "kimi" {
+                json!({"agent": agent, "agentFile": files.kimi_agent})
+            } else {
+                json!({
+                    "agent": agent,
+                    "instructionsFile": files.instructions,
+                    "settingsFile": files.settings,
+                    "codexNotify": super::instructions::codex_notify(hook),
+                })
+            };
             if let Some(c) = ctx.app.take_resume_offer(ctx.me, agent) {
                 data["resume"] = json!({"agent": c.agent, "id": c.id});
             }
@@ -1046,9 +1056,11 @@ fn conversation(ctx: &Ctx<'_>, agent: &str, id: &str) -> Reply {
     let Some(agent) = ConversationAgent::parse(agent) else {
         return Reply::err(
             EXIT_USAGE,
-            "Usage: sonata _conversation <claude|codex> <id|none>",
+            "Usage: sonata _conversation <claude|codex|kimi> <id|none>",
         );
     };
+    // A conversation report is an agent hook too (feature 010, contracts/cli.md).
+    ctx.app.terminals().report_agent_hook(ctx.me, None);
     let id = (id != "none").then_some(id);
     match ctx.app.record_conversation(ctx.me, agent, id) {
         Ok(_) => Reply::ok(""),

@@ -1,4 +1,4 @@
-//! Agent helpers for zsh terminals: `claude` and `codex` typed by hand start through
+//! Agent helpers for zsh terminals: `claude`, `codex`, and `kimi` typed by hand start through
 //! `sonata run`, so they get Sonata's session instructions. The user's startup files are loaded
 //! as usual and never changed; Sonata only points `ZDOTDIR` at its own small files that source
 //! them first.
@@ -24,6 +24,7 @@ const HELPERS: &str = r#"
 if (( $+commands[sonata] )); then
   claude() { command sonata run claude "$@" }
   codex() { command sonata run codex "$@" }
+  kimi() { command sonata run kimi "$@" }
 fi
 ZDOTDIR=$SONATA_USER_ZDOTDIR
 unset _sonata_dir

@@ -13,6 +13,7 @@ import { useCanvas } from "./state/canvas";
 import { updatePending, useUpdate } from "./state/update";
 import { useWorkspaces } from "./state/workspaces";
 import { UsageConsentDialog } from "./dialogs/UsageConsentDialog";
+import { useKimi } from "./state/kimi";
 import { useUsage } from "./state/usage";
 import { UsageButton } from "./usage/UsageButton";
 import { resetText } from "./usage/meter";
@@ -117,6 +118,7 @@ export function App() {
       onEvent("lane://status", (status) => useCanvas.getState().setLaneStatus(status)),
       onEvent("lane://confirm", (e) => useCanvas.getState().showLaneRequest(e)),
       onEvent("lane://confirm-closed", (e) => useCanvas.getState().closeLaneRequest(e.requestId)),
+      onEvent("kimi://integration", (i) => useKimi.getState().set(i)),
       // Sonata → Check for Updates…: always report the result (FR-013).
       onEvent("app://check-updates", async () => {
         try {

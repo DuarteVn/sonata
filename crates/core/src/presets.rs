@@ -16,7 +16,7 @@ pub struct Preset {
     pub command: Option<&'static str>,
 }
 
-pub const PRESETS: [Preset; 5] = [
+pub const PRESETS: [Preset; 6] = [
     Preset {
         id: "claude",
         name: "Claude Code",
@@ -36,6 +36,11 @@ pub const PRESETS: [Preset; 5] = [
         id: "gemini",
         name: "Gemini CLI",
         command: Some("gemini"),
+    },
+    Preset {
+        id: "kimi",
+        name: "Kimi Code",
+        command: Some("kimi"),
     },
     Preset {
         id: "shell",

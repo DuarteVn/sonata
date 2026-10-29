@@ -7,6 +7,7 @@ import { isAppError, type CanvasNode, type TerminalContent } from "../ipc/types"
 import { TITLE_HEIGHT } from "../terminal/LiveTerminalLayer";
 import { useCanvas } from "../state/canvas";
 import { useWorkspaces } from "../state/workspaces";
+import { KimiNotice, isKimiCommand } from "./KimiNotice";
 import { LaneBadge } from "./LaneBadge";
 import { LinkCount, LinkHandle } from "./LinkHandle";
 import { TerminalMenu } from "./TerminalMenu";
@@ -135,6 +136,7 @@ export function TerminalNode({ node }: Props) {
         )}
         {role && <span className="role-chip" title={term.role?.text}>{role}</span>}
         {!role && term.launchCommand && <span className="node-sub">{term.launchCommand}</span>}
+        {isKimiCommand(term.launchCommand) && <KimiNotice />}
         {exited && (
           <span className="node-exit">
             exited ({state?.exitCode ?? "?"})

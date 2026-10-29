@@ -1,13 +1,21 @@
-import { Gauge } from "lucide-react";
-import { useEffect } from "react";
+import { Bot, Gauge } from "lucide-react";
+import { useEffect, useState } from "react";
 import { UsageConsentDialog } from "../dialogs/UsageConsentDialog";
 import { onEvent } from "../ipc/events";
 import { useUsage } from "../state/usage";
+import { AgentSettings } from "./AgentSettings";
 import { UsageSettings } from "./UsageSettings";
 
-// Root of the Settings window (`?view=settings`, FR-015). Usage is the only section for now.
+type Section = "usage" | "agents";
+
+function initialSection(): Section {
+  return (window as { __SONATA_SECTION__?: string }).__SONATA_SECTION__ === "agents" ? "agents" : "usage";
+}
+
+// Root of the Settings window (`?view=settings`, FR-015): Usage (006) and Agents (010).
 export function SettingsApp() {
   const consent = useUsage((s) => s.consents[0]);
+  const [section, setSection] = useState<Section>(initialSection);
 
   useEffect(() => {
     void useUsage.getState().load();
@@ -17,6 +25,7 @@ export function SettingsApp() {
       onEvent("usage://consent", (request) => {
         if (document.hasFocus()) useUsage.getState().askConsent(request);
       }),
+      onEvent("settings://section", (s) => setSection(s === "agents" ? "agents" : "usage")),
     ];
     return () => unlisten.forEach((p) => p.then((off) => off()));
   }, []);
@@ -24,13 +33,24 @@ export function SettingsApp() {
   return (
     <div className="settings-app">
       <nav className="settings-nav" aria-label="Settings sections">
-        <button type="button" className="settings-nav-item active" aria-current="page">
-          <Gauge size={14} /> Usage
-        </button>
+        {(
+          [
+            ["usage", "Usage", Gauge],
+            ["agents", "Agents", Bot],
+          ] as const
+        ).map(([id, label, Icon]) => (
+          <button
+            key={id}
+            type="button"
+            className={`settings-nav-item${section === id ? " active" : ""}`}
+            aria-current={section === id ? "page" : undefined}
+            onClick={() => setSection(id)}
+          >
+            <Icon size={14} /> {label}
+          </button>
+        ))}
       </nav>
-      <main className="settings-content">
-        <UsageSettings />
-      </main>
+      <main className="settings-content">{section === "usage" ? <UsageSettings /> : <AgentSettings />}</main>
       {consent && (
         <UsageConsentDialog
           key={consent.providerId}

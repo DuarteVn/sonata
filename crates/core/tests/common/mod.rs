@@ -261,3 +261,32 @@ pub fn fake_agent_args(dir: &Path, name: &str) -> Vec<String> {
         .map(|s| s.lines().map(str::to_string).collect())
         .unwrap_or_default()
 }
+
+/// A fake Kimi Code CLI (feature 010). Records its arguments; `--session session_missing` fails
+/// like a missing session. For each input line it reports the prompt hook, echoes `kimi:<line>`,
+/// waits `FAKE_KIMI_PAUSE` seconds without output, then reports the stop hook.
+/// `FAKE_KIMI_NO_HOOKS=1` only echoes.
+pub const FAKE_KIMI: &str = r#"#!/bin/sh
+echo "$@" > "$FAKE_LOG/kimi.args"
+case " $* " in
+  *" --session session_missing "*)
+    echo 'error: failed to start shell: Session "session_missing" not found.' >&2
+    exit 1;;
+esac
+while IFS= read -r line; do
+  echo "$line" >> "$FAKE_LOG/kimi.lines"
+  if [ "$FAKE_KIMI_NO_HOOKS" = 1 ]; then
+    echo "kimi:$line"
+    continue
+  fi
+  printf '{"hook_event_name":"UserPromptSubmit","session_id":"session_test1","cwd":"."}' | sonata _hook kimi prompt-submit
+  echo "kimi:$line"
+  [ -n "$FAKE_KIMI_PAUSE" ] && sleep "$FAKE_KIMI_PAUSE"
+  printf '{"hook_event_name":"Stop","session_id":"session_test1"}' | sonata _hook kimi stop
+done
+"#;
+
+/// Writes the fake `kimi` into `dir` (for `SONATA_AGENT_BIN_DIR`).
+pub fn install_fake_kimi(dir: &Path) -> PathBuf {
+    fake_bin::fake_bin(dir, "kimi", FAKE_KIMI.trim_start_matches("#!/bin/sh\n"))
+}

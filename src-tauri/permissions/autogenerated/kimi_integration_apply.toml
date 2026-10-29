@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-kimi-integration-apply"
+description = "Enables the kimi_integration_apply command without any pre-configured scope."
+commands.allow = ["kimi_integration_apply"]
+
+[[permission]]
+identifier = "deny-kimi-integration-apply"
+description = "Denies the kimi_integration_apply command without any pre-configured scope."
+commands.deny = ["kimi_integration_apply"]

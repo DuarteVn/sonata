@@ -62,6 +62,17 @@ pub struct AppOptions {
     /// Folder put first on `PATH` when looking for agent commands (feature 006). Tests point
     /// it at fake `claude`/`codex` scripts.
     pub usage_extra_path: Option<PathBuf>,
+    /// Kimi's folder; `None` reads `KIMI_CODE_HOME` from the login shell (feature 010). Tests
+    /// point it at a temporary folder.
+    pub kimi_home: Option<PathBuf>,
+}
+
+/// What Sonata watches of Kimi's config file (feature 010, research R9).
+#[derive(Default)]
+struct KimiWatch {
+    settings_open: bool,
+    watcher: Option<crate::notes::watcher::NotesWatcher>,
+    last: Option<crate::agents::kimi::KimiIntegration>,
 }
 
 /// The choices of the remove-lane confirmation (FR-014, FR-015).
@@ -213,6 +224,14 @@ impl Default for NewTerminal {
     }
 }
 
+/// A terminal whose launch command starts Kimi Code (feature 010).
+fn is_kimi(node: &Node) -> bool {
+    node.terminal()
+        .and_then(|t| t.launch_command.as_deref())
+        .and_then(|c| c.split_whitespace().next())
+        == Some("kimi")
+}
+
 fn lane_info(lane: &crate::model::node::Lane) -> crate::messaging::instructions::LaneInfo<'_> {
     crate::messaging::instructions::LaneInfo {
         branch: &lane.branch,
@@ -298,6 +317,8 @@ pub struct App {
     git: std::sync::OnceLock<Result<crate::lanes::git::Git, String>>,
     lane_statuses: Mutex<crate::lanes::status::StatusCache>,
     confirmations: crate::lanes::confirm::Confirmations,
+    kimi: Mutex<KimiWatch>,
+    kimi_home: std::sync::OnceLock<PathBuf>,
 }
 
 impl App {
@@ -390,6 +411,8 @@ impl App {
             git: std::sync::OnceLock::new(),
             lane_statuses: Mutex::default(),
             confirmations: Default::default(),
+            kimi: Mutex::default(),
+            kimi_home: std::sync::OnceLock::new(),
         }))
         .inspect(|app| {
             app.spawn_preview_loop();
@@ -466,6 +489,127 @@ impl App {
         store.save_preferences(&prefs)?;
         self.updates().0.set_enabled(enabled);
         Ok(())
+    }
+
+    // ---- Kimi integration (feature 010) ----
+
+    fn kimi_shell(&self) -> PathBuf {
+        self.options
+            .shell
+            .clone()
+            .unwrap_or_else(crate::terminal::pty::login_shell)
+    }
+
+    fn kimi_dir(&self) -> PathBuf {
+        if let Some(home) = &self.options.kimi_home {
+            return home.clone();
+        }
+        self.kimi_home
+            .get_or_init(|| crate::agents::kimi::kimi_home(&self.kimi_shell()))
+            .clone()
+    }
+
+    pub fn kimi_integration(&self) -> crate::agents::kimi::KimiIntegration {
+        let i = crate::agents::kimi::integration(&self.kimi_dir(), &self.kimi_shell());
+        self.publish_kimi(i.clone());
+        i
+    }
+
+    /// Adds Sonata's hooks to Kimi's config. The UI asks the user to confirm first (FR-010).
+    pub fn kimi_integration_apply(&self) -> AppResult<crate::agents::kimi::KimiIntegration> {
+        let i = crate::agents::kimi::apply(&self.kimi_dir(), &self.kimi_shell())?;
+        self.publish_kimi(i.clone());
+        Ok(i)
+    }
+
+    /// Removes Sonata's hooks from Kimi's config. The UI asks the user to confirm first.
+    pub fn kimi_integration_remove(&self) -> AppResult<crate::agents::kimi::KimiIntegration> {
+        let i = crate::agents::kimi::remove(&self.kimi_dir(), &self.kimi_shell())?;
+        self.publish_kimi(i.clone());
+        Ok(i)
+    }
+
+    pub fn dismiss_kimi_notice(
+        &self,
+        status: crate::model::preferences::KimiNoticeDismissed,
+    ) -> AppResult<()> {
+        let store = Store::new(self.data_root.clone());
+        let mut prefs = store.load_preferences().value;
+        prefs.kimi_notice_dismissed = Some(status);
+        store.save_preferences(&prefs)?;
+        Ok(())
+    }
+
+    /// The Settings window shows the Kimi section (`true`) or closed it (`false`).
+    pub fn kimi_watch(&self, on: bool) {
+        self.lock_kimi().settings_open = on;
+        self.update_kimi_watch();
+    }
+
+    fn lock_kimi(&self) -> MutexGuard<'_, KimiWatch> {
+        self.kimi.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Emits `KimiIntegrationChanged` when the status differs from the last one sent.
+    fn publish_kimi(&self, i: crate::agents::kimi::KimiIntegration) {
+        let mut k = self.lock_kimi();
+        if k.last.as_ref() != Some(&i) {
+            k.last = Some(i.clone());
+            drop(k);
+            self.emit(CoreEvent::KimiIntegrationChanged(i));
+        }
+    }
+
+    /// Watches Kimi's folder while the Settings section is open or a Kimi terminal exists.
+    fn update_kimi_watch(&self) {
+        let has_kimi = {
+            let m = self.workspaces();
+            m.ids()
+                .into_iter()
+                .filter(|id| m.is_loaded(*id))
+                .filter_map(|id| m.workspace(id))
+                .any(|w| w.nodes.iter().any(is_kimi))
+        };
+        let mut k = self.lock_kimi();
+        let want = k.settings_open || has_kimi;
+        if !want {
+            k.watcher = None;
+            return;
+        }
+        if k.watcher.is_some() {
+            return;
+        }
+        let dir = self.kimi_dir();
+        if !dir.is_dir() {
+            return;
+        }
+        let this = self.this.clone();
+        let mut debouncer = match notify_debouncer_full::new_debouncer(
+            crate::notes::watcher::DEBOUNCE,
+            None,
+            move |result: notify_debouncer_full::DebounceEventResult| {
+                let touches_config = result.is_ok_and(|events| {
+                    events
+                        .iter()
+                        .flat_map(|e| e.paths.iter())
+                        .any(|p| p.file_name().is_some_and(|n| n == "config.toml"))
+                });
+                if touches_config && let Some(app) = this.upgrade() {
+                    app.kimi_integration();
+                }
+            },
+        ) {
+            Ok(d) => d,
+            Err(e) => {
+                tracing::warn!(error = %e, "cannot watch Kimi's folder");
+                return;
+            }
+        };
+        if let Err(e) = debouncer.watch(&dir, notify::RecursiveMode::NonRecursive) {
+            tracing::warn!(error = %e, "cannot watch Kimi's folder");
+            return;
+        }
+        k.watcher = Some(debouncer);
     }
 
     pub fn usage_state(&self) -> UsageState {
@@ -695,6 +839,9 @@ impl App {
             return;
         }
         self.maybe_type_instructions(ws, node);
+        if is_kimi(node) {
+            self.update_kimi_watch();
+        }
     }
 
     fn require_loaded(&self, ws: Uuid) -> AppResult<()> {
@@ -845,7 +992,9 @@ impl App {
             w.nodes.retain(|n| n.id != node);
             w.links.retain(|l| !l.touches(node));
             Ok(())
-        })
+        })?;
+        self.update_kimi_watch();
+        Ok(())
     }
 
     /// Sets which terminals get text previews (the UI sends the ones near the viewport that
@@ -1021,7 +1170,7 @@ impl App {
             let mut last = self.activity_last.lock().unwrap_or_else(|e| e.into_inner());
             last.retain(|id, _| monitored.contains(id));
             for id in monitored {
-                let busy = self.terminals.is_busy(id);
+                let busy = self.terminals.is_working(id);
                 if last.insert(id, busy).is_some_and(|prev| prev != busy) {
                     changed.push(id);
                 }
@@ -1718,6 +1867,8 @@ impl App {
         let automatic = match kind {
             crate::messaging::broker::TargetKind::Shell => false,
             crate::messaging::broker::TargetKind::Other => true,
+            // Kimi gets instructions in its agent file (feature 010, research R2).
+            crate::messaging::broker::TargetKind::Probing => false,
             // Codex has no verified session-instructions option yet (research 003 R4).
             crate::messaging::broker::TargetKind::Hooked => first == Some("codex"),
         };

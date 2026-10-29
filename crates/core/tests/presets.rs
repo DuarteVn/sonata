@@ -21,6 +21,7 @@ fn builtin_list() {
             ("codex", "Codex", Some("codex")),
             ("opencode", "OpenCode", Some("opencode")),
             ("gemini", "Gemini CLI", Some("gemini")),
+            ("kimi", "Kimi Code", Some("kimi")),
             ("shell", "Shell", None),
         ]
     );
@@ -29,16 +30,17 @@ fn builtin_list() {
 #[test]
 fn detection_reports_found_and_missing() {
     let tmp = tempfile::tempdir().unwrap();
-    // Pretends only claude and gemini are installed, like `command -v` would print.
+    // Pretends only claude, gemini, and kimi are installed, like `command -v` would print.
     let shell = fake_shell(
         tmp.path(),
-        "echo /opt/bin/claude; echo /usr/local/bin/gemini",
+        "echo /opt/bin/claude; echo /usr/local/bin/gemini; echo /opt/homebrew/bin/kimi",
     );
     let found = presets::detect(&shell, Duration::from_secs(2));
     let get = |id: &str| found.iter().find(|d| d.id == id).unwrap().found;
     assert_eq!(get("claude"), Some(true));
     assert_eq!(get("codex"), Some(false));
     assert_eq!(get("gemini"), Some(true));
+    assert_eq!(get("kimi"), Some(true));
     assert_eq!(get("shell"), Some(true));
 }
 

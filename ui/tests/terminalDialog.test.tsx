@@ -34,6 +34,7 @@ beforeEach(() => {
     { id: "codex", found: false },
     { id: "opencode", found: false },
     { id: "gemini", found: true },
+    { id: "kimi", found: true },
     { id: "shell", found: true },
   ]);
   ipc.laneCheck.mockResolvedValue({ available: true, baseBranch: "main" });
@@ -45,6 +46,16 @@ beforeEach(() => {
 });
 
 describe("New Terminal dialog", () => {
+  it("offers Kimi Code, which gets instructions at launch like Claude Code", async () => {
+    render(<TerminalDialog mode={{ kind: "create", at: { x: 10, y: 20 } }} onClose={() => {}} />);
+    await userEvent.click(await screen.findByRole("button", { name: /Kimi Code/ }));
+    expect(screen.getByLabelText("Command")).toHaveValue("kimi");
+    expect(screen.getByLabelText("Name")).toHaveValue("Kimi");
+    expect(screen.getByLabelText(/Type Sonata instructions on start/)).not.toBeChecked();
+    await userEvent.click(screen.getByRole("button", { name: /Gemini CLI/ }));
+    expect(screen.getByLabelText(/Type Sonata instructions on start/)).toBeChecked();
+  });
+
   it("presets fill name and command; missing ones are marked but selectable", async () => {
     render(<TerminalDialog mode={{ kind: "create", at: { x: 10, y: 20 } }} onClose={() => {}} />);
     const codex = await screen.findByRole("button", { name: /Codex/ });

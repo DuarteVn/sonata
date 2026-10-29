@@ -238,6 +238,8 @@ pub struct Conversation {
 pub enum ConversationAgent {
     Claude,
     Codex,
+    /// Kimi Code (feature 010).
+    Kimi,
 }
 
 impl ConversationAgent {
@@ -245,6 +247,7 @@ impl ConversationAgent {
         match text {
             "claude" => Some(Self::Claude),
             "codex" => Some(Self::Codex),
+            "kimi" => Some(Self::Kimi),
             _ => None,
         }
     }
@@ -253,6 +256,7 @@ impl ConversationAgent {
         match self {
             Self::Claude => "claude",
             Self::Codex => "codex",
+            Self::Kimi => "kimi",
         }
     }
 }
@@ -396,10 +400,11 @@ mod tests {
     }
 
     #[test]
-    fn conversation_agent_is_claude_or_codex() {
+    fn conversation_agent_is_claude_codex_or_kimi() {
         for (text, agent) in [
             ("claude", ConversationAgent::Claude),
             ("codex", ConversationAgent::Codex),
+            ("kimi", ConversationAgent::Kimi),
         ] {
             let c: Conversation = serde_json::from_value(
                 json!({"agent": text, "id": "a", "recordedAt": "2026-10-24T13:05:00Z"}),

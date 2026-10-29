@@ -1,0 +1,16 @@
+# My Kimi settings
+default_model = "kimi-k2"
+
+[providers.moonshot]
+type = "kimi"
+api_key_env = "MOONSHOT_API_KEY"
+
+[[hooks]]
+event = "Notification"
+matcher = "task\\.completed"
+command = "terminal-notifier -title Kimi -message 'Task done'"
+
+[[hooks]]
+event = "Stop"
+command = "test -n \"$SONATA_TERMINAL_ID\" && sonata _hook kimi stop; exit 0"
+timeout = 30
