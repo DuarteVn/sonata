@@ -56,11 +56,11 @@ creates the IPC socket, and copies the CLI to `~/.local/bin/sonata`.
 
 - [X] T010 [US1] Create `src-tauri/tauri.linux.conf.json` (R2): `bundle.targets` `["appimage","deb"]`, `bundle.linux.deb.files` `{"/usr/bin/sonata": "resources/bin/sonata"}`, deb `section` `devel`; keep `tauri.conf.json` unchanged for macOS
 - [X] T011 [US1] Implement `platform::install_cli` in `crates/core/src/platform/mod.rs` and `install_cli_copy` in `src-tauri/src/lib.rs` (R7): copy `resource_dir()/bin/sonata` to `~/.local/bin/sonata` atomically with mode 0755 when `should_write` says so; log failures; call it from `src-tauri/src/lib.rs` setup under `#[cfg(target_os = "linux")]`
-- [ ] T012 [US1] Verify `cli_dir()` in `src-tauri/src/lib.rs` finds the CLI in the AppImage and `.deb` resource dirs (fix the lookup if the smoke run shows it missing)
+- [X] T012 [US1] Verify `cli_dir()` in `src-tauri/src/lib.rs` finds the CLI in the AppImage and `.deb` resource dirs (fix the lookup if the smoke run shows it missing)
 - [X] T013 [US1] Use `platform::default_shell()` for the fallback in `crates/core/src/terminal/pty.rs` (`login_shell`) and `crates/core/src/app.rs:573`; apply `child_env()` to the PTY `CommandBuilder` in `pty.rs`
 - [X] T014 [P] [US1] Append Linux font fallbacks (`"DejaVu Sans Mono", "Ubuntu Mono", "Liberation Mono"`, and `system-ui, "Ubuntu", "Cantarell", "Noto Sans"`) after the macOS fonts in `ui/src/styles.css` and `ui/src/terminal/xtermSession.ts`
 - [X] T015 [US1] Extend `linux-app` in `.github/workflows/ci.yml`: `npm run tauri build -- --bundles appimage,deb --config '{"bundle":{"createUpdaterArtifacts":false}}'`, run `scripts/release/tests/linux-smoke.sh`, upload `screenshot.png` as artifact `linux-smoke`
-- [ ] T016 [US1] Push, read the log, download the screenshot, fix until the smoke run passes
+- [X] T016 [US1] Push, read the log, download the screenshot, fix until the smoke run passes
 
 **Checkpoint**: Linux app builds, starts, and exposes the CLI.
 
@@ -86,7 +86,7 @@ creates the IPC socket, and copies the CLI to `~/.local/bin/sonata`.
 - [X] T022 [US2] Implement `shell_args` in `crates/core/src/terminal/pty.rs`; replace `zsh_dir` with `shell_helpers: Option<PathBuf>` (the `run/` folder holding `zsh/` and `bash/`) in `SpawnOptions`, `crates/core/src/terminal/manager.rs`, and `crates/core/src/app.rs` (write `run/bash` at start like `run/zsh`); update test helpers that build `SpawnOptions` (`crates/core/tests/terminal_pty.rs`, `terminal_attach.rs`, `zsh_helpers.rs`)
 - [X] T023 [US2] Move git candidates and the install hint to `platform::{git_candidates, git_install_hint}` and use them in `crates/core/src/lanes/git.rs`; apply `child_env()` to git commands
 - [X] T024 [P] [US2] Apply `child_env()` in `crates/core/src/presets.rs`, `crates/core/src/usage/runner.rs`, and `crates/core/src/device/process.rs`
-- [ ] T025 [US2] Push and confirm `bash_helpers`, `zsh_helpers`, lanes, messaging, and usage tests pass on `linux-app`
+- [X] T025 [US2] Push and confirm `bash_helpers`, `zsh_helpers`, lanes, messaging, and usage tests pass on `linux-app`
 
 **Checkpoint**: agents typed by hand get Sonata in bash and zsh; lanes work.
 
@@ -154,7 +154,7 @@ labels and key overrides; smoke screenshot shows no macOS glyphs.
 - [X] T040 [US5] Linux menu in `src-tauri/src/menu.rs` (R11): Sonata (Settings… `Ctrl+,`, update items, Quit `Ctrl+Shift+Q`), File (Close Item `Ctrl+Shift+W`), View (Toggle Sidebar `Ctrl+Shift+S`); no Edit menu, no services/hide items; macOS menu unchanged
 - [X] T041 [US5] Create `ui/src/platform.ts` (`isMac`, `shortcut`, `revealLabel`) and use it in `ui/src/App.tsx`, `ui/src/sidebar/Sidebar.tsx`, and `ui/src/sidebar/LoadFailureItem.tsx` ("Reveal in Finder" / "Show in File Manager")
 - [X] T042 [US5] Linux terminal copy/paste (Ctrl+Shift+C / Ctrl+Shift+V) in `ui/src/terminal/xtermKeys.ts` and its caller in `ui/src/terminal/xtermSession.ts`; mac Cmd keys only when `isMac`
-- [ ] T043 [US5] Push and confirm `usage_bwrap`, `platform_linux`, and the src-tauri Linux build pass; check the smoke screenshot
+- [X] T043 [US5] Push and confirm `usage_bwrap`, `platform_linux`, and the src-tauri Linux build pass; check the smoke screenshot
 
 **Checkpoint**: every macOS-only feature works or explains itself on Linux.
 
