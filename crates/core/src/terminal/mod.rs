@@ -1,4 +1,5 @@
 pub mod activity;
+pub mod bash;
 pub mod busy;
 pub mod history;
 pub mod manager;

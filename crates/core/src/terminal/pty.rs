@@ -1,6 +1,6 @@
 //! Spawning shells in pseudo-terminals (research R5).
 
-use std::ffi::CStr;
+use std::ffi::{CStr, OsString};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
@@ -55,8 +55,8 @@ pub struct SpawnOptions<'a> {
     pub env: &'a [(String, String)],
     /// Start Claude Code and Codex through `sonata run` (feature 003, research R4).
     pub wrap_agents: bool,
-    /// Sonata's zsh startup files (see `terminal::zsh`); used when the shell is zsh.
-    pub zsh_dir: Option<&'a Path>,
+    /// Sonata's shell startup folder with `zsh/` and `bash/` (see [`shell_start`]).
+    pub shell_helpers: Option<&'a Path>,
 }
 
 /// Agents that `sonata run` knows how to start with session instructions and hooks.
@@ -91,6 +91,45 @@ pub fn wrap_launch_command(command: &str, wrap: bool) -> String {
     }
 }
 
+/// Arguments and extra environment that start `shell` with Sonata's agent helpers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShellStart {
+    pub args: Vec<String>,
+    pub env: Vec<(String, OsString)>,
+}
+
+/// zsh starts as a login shell with `ZDOTDIR` pointing at `<helpers>/zsh` (see `terminal::zsh`).
+/// bash starts interactive with `<helpers>/bash/bashrc`, which repeats a login shell's startup
+/// (see `terminal::bash`): bash ignores `--rcfile` in login mode. Other shells start as login
+/// shells without helpers. `user_zdotdir` is the user's own `ZDOTDIR` (or home).
+pub fn shell_start(shell: &Path, helpers: Option<&Path>, user_zdotdir: OsString) -> ShellStart {
+    let login = ShellStart {
+        args: vec!["-l".into()],
+        env: Vec::new(),
+    };
+    let Some(helpers) = helpers else {
+        return login;
+    };
+    match shell.file_name().and_then(|n| n.to_str()) {
+        Some("zsh") => ShellStart {
+            env: vec![
+                ("SONATA_USER_ZDOTDIR".into(), user_zdotdir),
+                ("ZDOTDIR".into(), helpers.join("zsh").into_os_string()),
+            ],
+            ..login
+        },
+        Some("bash") => ShellStart {
+            args: vec![
+                "--rcfile".into(),
+                helpers.join("bash/bashrc").display().to_string(),
+                "-i".into(),
+            ],
+            env: Vec::new(),
+        },
+        _ => login,
+    }
+}
+
 pub fn spawn(opts: SpawnOptions<'_>) -> io::Result<Spawned> {
     let pty = native_pty_system()
         .openpty(PtySize {
@@ -120,8 +159,13 @@ pub fn spawn(opts: SpawnOptions<'_>) -> io::Result<Spawned> {
         .shell
         .map(Path::to_path_buf)
         .unwrap_or_else(login_shell);
+    let start = shell_start(
+        &shell,
+        opts.shell_helpers,
+        std::env::var_os("ZDOTDIR").unwrap_or_else(|| home.clone().into_os_string()),
+    );
     let mut cmd = CommandBuilder::new(&shell);
-    cmd.arg("-l");
+    cmd.args(&start.args);
     cmd.cwd(&cwd);
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
@@ -137,12 +181,8 @@ pub fn spawn(opts: SpawnOptions<'_>) -> io::Result<Spawned> {
     for (k, v) in opts.env {
         cmd.env(k, v);
     }
-    if let Some(dir) = opts.zsh_dir
-        && shell.file_name().is_some_and(|n| n == "zsh")
-    {
-        let user = std::env::var_os("ZDOTDIR").unwrap_or_else(|| home.clone().into_os_string());
-        cmd.env("SONATA_USER_ZDOTDIR", user);
-        cmd.env("ZDOTDIR", dir);
+    for (k, v) in &start.env {
+        cmd.env(k, v);
     }
 
     let child = pty.slave.spawn_command(cmd).map_err(io::Error::other)?;

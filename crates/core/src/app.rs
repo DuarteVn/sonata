@@ -647,10 +647,10 @@ impl App {
             restored_history: None,
             session_env: self.session_env(),
             wrap_agents: self.socket_path.is_some(),
-            zsh_dir: self
+            shell_helpers: self
                 .socket_path
                 .as_ref()
-                .map(|_| self.data_root.path().join("run").join("zsh")),
+                .map(|_| self.data_root.path().join("run")),
             resume: term.conversation.clone(),
         })
     }
@@ -1510,9 +1510,12 @@ impl App {
         let Some(path) = self.socket_path.clone() else {
             return;
         };
-        let zsh_dir = self.data_root.path().join("run").join("zsh");
-        if let Err(e) = crate::terminal::zsh::write_files(&zsh_dir) {
+        let run = self.data_root.path().join("run");
+        if let Err(e) = crate::terminal::zsh::write_files(&run.join("zsh")) {
             tracing::warn!(error = %e, "could not write zsh helper files");
+        }
+        if let Err(e) = crate::terminal::bash::write_files(&run.join("bash")) {
+            tracing::warn!(error = %e, "could not write bash helper files");
         }
         match crate::messaging::server::Server::start(self.this.clone(), path) {
             Ok(server) => *self.server.lock().unwrap_or_else(|e| e.into_inner()) = Some(server),
