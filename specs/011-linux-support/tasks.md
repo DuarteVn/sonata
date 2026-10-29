@@ -121,11 +121,11 @@ creates the IPC socket, and copies the CLI to `~/.local/bin/sonata`.
 
 ### Tests
 
-- [ ] T030 [P] [US4] Write failing unit tests in `src-tauri/src/commands/update.rs` for a pure `linux_blocker(bundle, appimage_dir_writable)`: `Deb`/none → package text; AppImage + read-only → move text; AppImage + writable → none (contracts/platform.md "Update blockers"); macOS `wrong_location` cases unchanged
+- [X] T030 [P] [US4] Write failing unit tests in `src-tauri/src/commands/update.rs` for a pure `linux_blocker(bundle, appimage_dir_writable)`: `Deb`/none → package text; AppImage + read-only → move text; AppImage + writable → none (contracts/platform.md "Update blockers"); macOS `wrong_location` cases unchanged
 
 ### Implementation
 
-- [ ] T031 [US4] Replace `wrong_location()` with `install_blocker() -> Option<String>` in `src-tauri/src/commands/update.rs` (macOS rule and text unchanged; Linux uses `tauri::utils::platform::bundle_type()` and `$APPIMAGE`'s folder)
+- [X] T031 [US4] Replace `wrong_location()` with `install_blocker() -> Option<String>` in `src-tauri/src/commands/update.rs` (macOS rule and text unchanged; Linux uses `tauri::utils::platform::bundle_type()` and `$APPIMAGE`'s folder)
 
 **Checkpoint**: update flow correct per install type.
 
@@ -140,18 +140,18 @@ labels and key overrides; smoke screenshot shows no macOS glyphs.
 
 ### Tests
 
-- [ ] T032 [P] [US5] Write failing unit tests in `crates/core/tests/usage_bwrap.rs` for `platform::linux::bwrap_args(home, root, runtime_dir, exists)` matching contracts/platform.md exactly (order, "if exists" entries); and Linux-only integration tests: a provider can read `usage-providers/ok.txt`, cannot read `<root>/secret.json` or `~/.codex/auth.json`, and nothing runs when the bwrap path is missing (message "Cannot run safely: bubblewrap (bwrap) is not installed. Install the bubblewrap package.")
-- [ ] T033 [P] [US5] Write failing tests in `crates/core/tests/platform_linux.rs` for Linux SDK candidates (`~/Android/Sdk`, `/opt/android-sdk`, `/usr/lib/android-sdk`), emulator discovery dirs (`$XDG_RUNTIME_DIR/avd/running`, `/tmp/android-$USER/avd/running`), and `ToolReport.ios == None`; keep macOS cases in `crates/core/tests/device_tools.rs` behind `cfg(target_os = "macos")` where they assume macOS paths
+- [X] T032 [P] [US5] Write failing unit tests in `crates/core/tests/usage_bwrap.rs` for `platform::linux::bwrap_args(home, root, runtime_dir, exists)` matching contracts/platform.md exactly (order, "if exists" entries); and Linux-only integration tests: a provider can read `usage-providers/ok.txt`, cannot read `<root>/secret.json` or `~/.codex/auth.json`, and nothing runs when the bwrap path is missing (message "Cannot run safely: bubblewrap (bwrap) is not installed. Install the bubblewrap package.")
+- [X] T033 [P] [US5] Write failing tests in `crates/core/tests/platform_linux.rs` for Linux SDK candidates (`~/Android/Sdk`, `/opt/android-sdk`, `/usr/lib/android-sdk`), emulator discovery dirs (`$XDG_RUNTIME_DIR/avd/running`, `/tmp/android-$USER/avd/running`), and `ToolReport.ios == None`; keep macOS cases in `crates/core/tests/device_tools.rs` behind `cfg(target_os = "macos")` where they assume macOS paths
 - [ ] T034 [P] [US5] Write failing vitest tests in `ui/src/platform.test.ts` for `shortcut("toggleSidebar")` ("⌃⌘S" mac, "Ctrl+Shift+S" Linux), `shortcut("closeItem")`, `fileManagerName()` ("Finder" / "File Manager"), and in `ui/src/terminal/xtermKeys.test.ts` for Linux Ctrl+Shift+C / Ctrl+Shift+V handling and unchanged mac Cmd keys
 
 ### Implementation
 
-- [ ] T035 [US5] Implement the sandbox selection in `crates/core/src/platform/{mod,macos,linux}.rs` (`Sandbox` enum, data-model) with the bwrap probe (`bwrap --ro-bind / / /bin/true`, cached), and use it in `crates/core/src/usage/custom.rs` (`read_custom`; macOS `sandbox_profile` and messages unchanged)
-- [ ] T036 [US5] Move Android SDK candidates, emulator discovery dirs, and iOS support to `platform` and use them in `crates/core/src/device/tools.rs` and `crates/core/src/device/emulator.rs`; make `ToolReport.ios` an `Option<IosReport>`; iOS commands return "iOS simulators need macOS." on Linux
-- [ ] T037 [US5] Update `ui/src/ipc/types.ts` (`ios: IosReport | null`) and hide the iOS section in `ui/src/nodes/DeviceNode.tsx` when null
-- [ ] T038 [US5] Linux browser data: in `src-tauri/src/browser/mod.rs` use `data_directory(<data>/browser-data/<ws>)` under `cfg(target_os = "linux")` (keep `data_store_identifier` on macOS); in `src-tauri/src/browser/snapshot.rs` `remove_data_store` deletes that folder on Linux after checking it is under the data root
-- [ ] T039 [US5] Linux snapshot in `src-tauri/src/browser/snapshot.rs` via WebKitGTK `snapshot(SnapshotRegion::Visible, SnapshotOptions::NONE)` → `cairo::ImageSurface` → PNG → atomic write; add `[target.'cfg(target_os = "linux")'.dependencies]` `webkit2gtk = "2.0"`, `cairo-rs = { version = "0.18", features = ["png"] }` to `src-tauri/Cargo.toml`; on any error call `done(false)`
-- [ ] T040 [US5] Linux menu in `src-tauri/src/menu.rs` (R11): Sonata (Settings… `Ctrl+,`, update items, Quit `Ctrl+Shift+Q`), File (Close Item `Ctrl+Shift+W`), View (Toggle Sidebar `Ctrl+Shift+S`); no Edit menu, no services/hide items; macOS menu unchanged
+- [X] T035 [US5] Implement the sandbox selection in `crates/core/src/platform/{mod,macos,linux}.rs` (`Sandbox` enum, data-model) with the bwrap probe (`bwrap --ro-bind / / /bin/true`, cached), and use it in `crates/core/src/usage/custom.rs` (`read_custom`; macOS `sandbox_profile` and messages unchanged)
+- [X] T036 [US5] Move Android SDK candidates, emulator discovery dirs, and iOS support to `platform` and use them in `crates/core/src/device/tools.rs` and `crates/core/src/device/emulator.rs`; make `ToolReport.ios` an `Option<IosReport>`; iOS commands return "iOS simulators need macOS." on Linux
+- [X] T037 [US5] Update `ui/src/ipc/types.ts` (`ios: IosReport | null`) and hide the iOS section in `ui/src/nodes/DeviceNode.tsx` when null
+- [X] T038 [US5] Linux browser data: in `src-tauri/src/browser/mod.rs` use `data_directory(<data>/browser-data/<ws>)` under `cfg(target_os = "linux")` (keep `data_store_identifier` on macOS); in `src-tauri/src/browser/snapshot.rs` `remove_data_store` deletes that folder on Linux after checking it is under the data root
+- [X] T039 [US5] Linux snapshot in `src-tauri/src/browser/snapshot.rs` via WebKitGTK `snapshot(SnapshotRegion::Visible, SnapshotOptions::NONE)` → `cairo::ImageSurface` → PNG → atomic write; add `[target.'cfg(target_os = "linux")'.dependencies]` `webkit2gtk = "2.0"`, `cairo-rs = { version = "0.18", features = ["png"] }` to `src-tauri/Cargo.toml`; on any error call `done(false)`
+- [X] T040 [US5] Linux menu in `src-tauri/src/menu.rs` (R11): Sonata (Settings… `Ctrl+,`, update items, Quit `Ctrl+Shift+Q`), File (Close Item `Ctrl+Shift+W`), View (Toggle Sidebar `Ctrl+Shift+S`); no Edit menu, no services/hide items; macOS menu unchanged
 - [ ] T041 [US5] Create `ui/src/platform.ts` (`isMac`, `shortcut`, `fileManagerName`) and use it in `ui/src/App.tsx`, `ui/src/sidebar/Sidebar.tsx`, and `ui/src/sidebar/LoadFailureItem.tsx` ("Reveal in Finder" / "Show in File Manager")
 - [ ] T042 [US5] Linux terminal copy/paste (Ctrl+Shift+C / Ctrl+Shift+V) in `ui/src/terminal/xtermKeys.ts` and its caller in `ui/src/terminal/xtermSession.ts`; mac Cmd keys only when `isMac`
 - [ ] T043 [US5] Push and confirm `usage_bwrap`, `platform_linux`, and the src-tauri Linux build pass; check the smoke screenshot

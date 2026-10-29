@@ -43,6 +43,10 @@ cli="$home/.local/bin/sonata"
 "$cli" help >/dev/null || fail "the CLI copy does not run"
 echo "cli copied"
 
-dpkg-deb -c "$deb" | grep -q ' ./usr/bin/sonata$' || fail "the .deb has no /usr/bin/sonata"
+listing="$(dpkg-deb -c "$deb")"
+echo "$listing" | grep -q ' \./usr/bin/sonata$' || {
+  echo "$listing" | sed 's/^/  deb: /'
+  fail "the .deb has no /usr/bin/sonata"
+}
 echo "deb has /usr/bin/sonata"
 rm -rf "$home"
