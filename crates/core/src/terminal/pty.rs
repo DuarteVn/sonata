@@ -61,6 +61,25 @@ pub struct SpawnOptions<'a> {
 /// Agents that `sonata run` knows how to start with session instructions and hooks.
 pub const WRAPPED_AGENTS: [&str; 2] = ["claude", "codex"];
 
+/// Environment variables that mark a process as running inside an agent session (research R5).
+/// Terminals and the usage probe drop them, so an agent started there is a fresh, top-level
+/// session and an outer agent's messaging secret never leaks. User settings such as
+/// `CLAUDE_CODE_USE_BEDROCK` or `ANTHROPIC_*` are not on the list.
+pub const AGENT_SESSION_MARKERS: [&str; 12] = [
+    "CLAUDECODE",
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_EXECPATH",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_CODE_SESSION_ATTENDED",
+    "CLAUDE_CODE_MESSAGING_SOCKET",
+    "CLAUDE_CODE_MESSAGING_TOKEN",
+    "CLAUDE_PID",
+    "CLAUDE_EFFORT",
+    "CODEX_SANDBOX",
+    "CODEX_SANDBOX_NETWORK_DISABLED",
+];
+
 /// `claude --foo` becomes `sonata run claude --foo` when wrapping is on.
 pub fn wrap_launch_command(command: &str, wrap: bool) -> String {
     let first = command.split_whitespace().next().unwrap_or_default();
@@ -110,6 +129,9 @@ pub fn spawn(opts: SpawnOptions<'_>) -> io::Result<Spawned> {
     cmd.env("SONATA_TERMINAL_ID", opts.node_id.to_string());
     cmd.env("PWD", &cwd);
     cmd.env_remove("SONATA_HOME");
+    for key in AGENT_SESSION_MARKERS {
+        cmd.env_remove(key);
+    }
     for (k, v) in opts.env {
         cmd.env(k, v);
     }

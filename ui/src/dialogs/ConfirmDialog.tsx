@@ -9,6 +9,13 @@ type Props = {
   onCancel: () => void;
 };
 
+/** Shown when a restart would stop a running program (Restart and Start fresh). */
+export const RESTART_CONFIRM = {
+  title: "Restart terminal?",
+  body: "A program is still running. Restarting stops it and starts a fresh shell with the terminal's command.",
+  confirmLabel: "Restart",
+};
+
 export function ConfirmDialog({ title, body, confirmLabel, danger, onConfirm, onCancel }: Props) {
   return (
     <Modal title={title} onClose={onCancel}>

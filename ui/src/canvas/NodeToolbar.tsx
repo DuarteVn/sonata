@@ -22,7 +22,7 @@ import {
   Type,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { ConfirmDialog } from "../dialogs/ConfirmDialog";
+import { ConfirmDialog, RESTART_CONFIRM } from "../dialogs/ConfirmDialog";
 import { ipc } from "../ipc/commands";
 import { isAppError, isTerminal, noteStyle, type CanvasNode, type NoteColor } from "../ipc/types";
 import { MessageLog } from "../nodes/MessageLog";
@@ -223,13 +223,13 @@ function TerminalActions({ node }: { node: CanvasNode }) {
       {log && <MessageLog nodeId={node.id} onClose={() => setLog(false)} />}
       {confirm && (
         <ConfirmDialog
-          title={confirm === "restart" ? "Restart terminal?" : "Close terminal?"}
+          title={confirm === "restart" ? RESTART_CONFIRM.title : "Close terminal?"}
           body={
             confirm === "restart"
-              ? "A program is still running. Restarting stops it and starts a fresh shell with the terminal's command."
+              ? RESTART_CONFIRM.body
               : "A program is still running. Closing the terminal stops it."
           }
-          confirmLabel={confirm === "restart" ? "Restart" : "Close"}
+          confirmLabel={confirm === "restart" ? RESTART_CONFIRM.confirmLabel : "Close"}
           danger
           onCancel={() => setConfirm(null)}
           onConfirm={() => {

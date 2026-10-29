@@ -13,9 +13,10 @@ use super::{
     Request,
 };
 use crate::App;
+use crate::error::ErrorCode;
 use crate::lanes::confirm::Answer;
 use crate::lanes::ops::Action;
-use crate::model::node::{BrowserContent, DeviceContent, Node, NodeContent};
+use crate::model::node::{BrowserContent, ConversationAgent, DeviceContent, Node, NodeContent};
 use crate::terminal::manager::RunStatus;
 
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10 * 60);
@@ -77,6 +78,7 @@ pub fn handle(app: &App, req: &Request, progress: &mut dyn FnMut(&str)) -> Reply
             Reply::ok("")
         }
         ["_turn", "start"] => Reply::ok(""),
+        ["_conversation", agent, id] => conversation(&ctx, agent, id),
         _ => Reply::err(
             EXIT_USAGE,
             format!(
@@ -1023,12 +1025,34 @@ fn link(ctx: &Ctx<'_>, a: &str, b: &str, create: bool) -> Reply {
 
 fn session(ctx: &Ctx<'_>, agent: &str, hook: &str) -> Reply {
     match ctx.app.prepare_agent_session(ctx.me, hook) {
-        Ok(files) => Reply::ok("").with_data(json!({
-            "agent": agent,
-            "instructionsFile": files.instructions,
-            "settingsFile": files.settings,
-            "codexNotify": super::instructions::codex_notify(hook),
-        })),
+        Ok(files) => {
+            let mut data = json!({
+                "agent": agent,
+                "instructionsFile": files.instructions,
+                "settingsFile": files.settings,
+                "codexNotify": super::instructions::codex_notify(hook),
+            });
+            if let Some(c) = ctx.app.take_resume_offer(ctx.me, agent) {
+                data["resume"] = json!({"agent": c.agent, "id": c.id});
+            }
+            Reply::ok("").with_data(data)
+        }
+        Err(e) => Reply::err(EXIT_ERROR, e.message),
+    }
+}
+
+/// A hook reports the conversation the calling terminal's agent is in (feature 009).
+fn conversation(ctx: &Ctx<'_>, agent: &str, id: &str) -> Reply {
+    let Some(agent) = ConversationAgent::parse(agent) else {
+        return Reply::err(
+            EXIT_USAGE,
+            "Usage: sonata _conversation <claude|codex> <id|none>",
+        );
+    };
+    let id = (id != "none").then_some(id);
+    match ctx.app.record_conversation(ctx.me, agent, id) {
+        Ok(_) => Reply::ok(""),
+        Err(e) if e.code == ErrorCode::InvalidConversation => Reply::err(EXIT_USAGE, e.message),
         Err(e) => Reply::err(EXIT_ERROR, e.message),
     }
 }

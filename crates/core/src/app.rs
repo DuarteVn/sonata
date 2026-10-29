@@ -14,6 +14,7 @@ use crate::error::{AppError, AppResult, ErrorCode};
 use crate::events::{CoreEvent, EventSink};
 use crate::model::link::Link;
 use crate::model::node::NOTE_TEXT_SIZES;
+use crate::model::node::{Conversation, ConversationAgent, validate_conversation_id};
 use crate::model::node::{
     FONT_SIZE_RANGE, Frame, Node, NodeContent, ROLE_TEXT_MAX_CHARS, RoleRef,
     TERMINAL_NAME_MAX_CHARS, TerminalContent,
@@ -650,6 +651,7 @@ impl App {
                 .socket_path
                 .as_ref()
                 .map(|_| self.data_root.path().join("run").join("zsh")),
+            resume: term.conversation.clone(),
         })
     }
 
@@ -1137,17 +1139,42 @@ impl App {
 
     /// Restarts a terminal with its current settings. A busy terminal needs `confirmed`.
     pub fn restart_terminal(&self, node: Uuid, confirmed: bool) -> AppResult<()> {
+        self.check_not_busy(node, confirmed)?;
+        if self.clear_landed_lane(node)? || !self.terminals.contains(node) {
+            return self.start_fresh(node);
+        }
+        self.terminals.restart(node)?;
+        // A restarted agent gets its typed instructions again, like any start (003 FR-019).
+        let ws_id = self.workspace_of_node(node)?;
+        let found = {
+            let m = self.workspaces();
+            m.workspace(ws_id)
+                .and_then(|ws| ws.node(node).cloned().map(|n| (ws.clone(), n)))
+        };
+        if let Some((ws, n)) = found {
+            self.maybe_type_instructions(&ws, &n);
+        }
+        Ok(())
+    }
+
+    /// A busy terminal stops only after the user confirms (`TerminalBusy`).
+    fn check_not_busy(&self, node: Uuid, confirmed: bool) -> AppResult<()> {
         if !confirmed && self.terminals.is_busy(node) {
             return Err(AppError::new(
                 ErrorCode::TerminalBusy,
                 "A program is still running in this terminal. Restart it anyway?",
             ));
         }
-        if self.clear_landed_lane(node)? || !self.terminals.contains(node) {
-            return self.start_fresh(node);
-        }
-        self.terminals.restart(node)?;
         Ok(())
+    }
+
+    /// "Start fresh": forgets the terminal's conversation and restarts it, so the agent starts
+    /// a new one. The agent's own files are not touched (feature 009, research R7).
+    pub fn start_fresh_conversation(&self, node: Uuid, confirmed: bool) -> AppResult<()> {
+        let ws = self.workspace_of_node(node)?;
+        self.check_not_busy(node, confirmed)?;
+        self.set_conversation(ws, node, None)?;
+        self.restart_terminal(node, true)
     }
 
     pub fn update_terminal_settings(
@@ -1597,6 +1624,81 @@ impl App {
             &info,
             hook,
         )?)
+    }
+
+    /// The conversation a terminal's agent reported, or `None` when it reported "no
+    /// conversation" (feature 009, research R6). `None` only forgets a conversation of the same
+    /// agent. A change is saved at once; a repeat does nothing. Returns whether it changed.
+    pub fn record_conversation(
+        &self,
+        node: Uuid,
+        agent: ConversationAgent,
+        id: Option<&str>,
+    ) -> AppResult<bool> {
+        if let Some(id) = id {
+            validate_conversation_id(id)
+                .map_err(|m| AppError::new(ErrorCode::InvalidConversation, m))?;
+        }
+        let ws = self.workspace_of_node(node)?;
+        let current = self
+            .workspaces()
+            .workspace(ws)
+            .and_then(|w| w.node(node))
+            .and_then(Node::terminal)
+            .ok_or_else(|| AppError::node_not_found(node))?
+            .conversation
+            .clone();
+        let next = match id {
+            Some(id)
+                if current
+                    .as_ref()
+                    .is_some_and(|c| c.agent == agent && c.id == id) =>
+            {
+                return Ok(false);
+            }
+            Some(id) => Some(Conversation {
+                agent,
+                id: id.to_string(),
+                recorded_at: Utc::now(),
+            }),
+            None if current.as_ref().is_some_and(|c| c.agent == agent) => None,
+            None => return Ok(false),
+        };
+        self.set_conversation(ws, node, next)?;
+        Ok(true)
+    }
+
+    /// The conversation the first `sonata run` of this terminal start should resume. Any agent
+    /// uses up the offer; only the agent that owns the conversation gets it (research R3).
+    pub fn take_resume_offer(&self, node: Uuid, agent: &str) -> Option<Conversation> {
+        self.terminals
+            .take_resume_offer(node)
+            .filter(|c| c.agent.as_str() == agent)
+    }
+
+    /// Stores a terminal's conversation, saves its workspace at once, and tells the UI.
+    fn set_conversation(
+        &self,
+        ws: Uuid,
+        node: Uuid,
+        conversation: Option<Conversation>,
+    ) -> AppResult<()> {
+        self.update_node(ws, node, |w, id| {
+            let t = w
+                .node_mut(id)
+                .and_then(Node::terminal_mut)
+                .ok_or_else(|| AppError::node_not_found(id))?;
+            t.conversation = conversation.clone();
+            Ok(())
+        })?;
+        self.terminals.set_resume(node, conversation);
+        if let Err(err) = self.workspaces().save(ws) {
+            self.emit(CoreEvent::PersistenceWarning(format!(
+                "Could not save: {err}"
+            )));
+        }
+        self.notify_nodes_changed(ws);
+        Ok(())
     }
 
     /// Types a short instruction into agents that cannot get session instructions (FR-019).

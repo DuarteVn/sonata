@@ -13,6 +13,7 @@ use super::busy;
 use super::pty::{self, SpawnOptions};
 use super::screen::{ScreenModel, Vt100Screen};
 use crate::events::{CoreEvent, EventSink, RunState, TerminalStateEvent};
+use crate::model::node::Conversation;
 
 /// Live output is flushed to views at least this often…
 pub const FLUSH_INTERVAL: Duration = Duration::from_millis(8);
@@ -41,6 +42,8 @@ pub struct SpawnSpec {
     pub session_env: Vec<(String, String)>,
     pub wrap_agents: bool,
     pub zsh_dir: Option<PathBuf>,
+    /// The node's stored conversation; every start offers it once (feature 009, research R3).
+    pub resume: Option<Conversation>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,6 +76,8 @@ struct Terminal {
     last_output: std::time::Instant,
     /// Secret identity of the current start (feature 003, research R2). Never written to disk.
     token: String,
+    /// Conversation offered to the first `sonata run` of the current start (feature 009).
+    resume_offer: Option<Conversation>,
 }
 
 impl Terminal {
@@ -162,6 +167,7 @@ impl TerminalManager {
             output_seq: 0,
             last_output: std::time::Instant::now(),
             token: String::new(),
+            resume_offer: None,
         }));
         lock(&self.terminals).insert(id, terminal.clone());
         self.launch(id, &terminal)
@@ -173,6 +179,7 @@ impl TerminalManager {
             t.generation += 1;
             t.status = RunStatus::Starting;
             t.token = new_token();
+            t.resume_offer = t.spec.resume.clone();
             (t.spec.clone(), t.generation, t.token.clone())
         };
         let mut env = spec.session_env.clone();
@@ -320,6 +327,18 @@ impl TerminalManager {
             t.spec.launch_command = command;
             t.spec.cwd = cwd;
         }
+    }
+
+    /// Conversation offered at the next start or restart.
+    pub fn set_resume(&self, id: Uuid, conversation: Option<Conversation>) {
+        if let Ok(terminal) = self.get(id) {
+            lock(&terminal).spec.resume = conversation;
+        }
+    }
+
+    /// The current start's resume offer; returns it once, then `None` until the next start.
+    pub fn take_resume_offer(&self, id: Uuid) -> Option<Conversation> {
+        self.get(id).ok().and_then(|t| lock(&t).resume_offer.take())
     }
 
     pub fn set_launch_command(&self, id: Uuid, command: Option<String>) {
