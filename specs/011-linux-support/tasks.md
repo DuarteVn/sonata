@@ -23,9 +23,9 @@ Linux-only tests are `#[cfg(target_os = "linux")]` and run on the `linux-app` CI
 
 ## Phase 1: Setup
 
-- [ ] T001 Amend `.specify/memory/constitution.md` to 1.2.0 (R16): principle VII targets macOS and Linux x86_64; principle VI adds the Linux AppImage (self-updating) and `.deb` (manual) install paths; Technology & Platform Constraints add "Linux: Ubuntu 22.04+ or equivalent with WebKitGTK 4.1"; update the Sync Impact Report
-- [ ] T002 Add a `linux-app` job to `.github/workflows/ci.yml` on `ubuntu-22.04`: apt install `libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libssl-dev patchelf file build-essential bubblewrap zsh xvfb imagemagick`; Rust stable with clippy; Node 22; `npm ci`; `cargo clippy --workspace --all-targets -- -D warnings`; `cargo test --workspace --no-fail-fast` (keep `core-and-ui` unchanged)
-- [ ] T003 Push the branch and read the `linux-app` log; record every Linux compile error or test failure as the baseline in `specs/011-linux-support/research.md` (section "CI baseline")
+- [X] T001 Amend `.specify/memory/constitution.md` to 1.2.0 (R16): principle VII targets macOS and Linux x86_64; principle VI adds the Linux AppImage (self-updating) and `.deb` (manual) install paths; Technology & Platform Constraints add "Linux: Ubuntu 22.04+ or equivalent with WebKitGTK 4.1"; update the Sync Impact Report
+- [X] T002 Add a `linux-app` job to `.github/workflows/ci.yml` on `ubuntu-22.04`: apt install `libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libssl-dev patchelf file build-essential bubblewrap zsh xvfb imagemagick`; Rust stable with clippy; Node 22; `npm ci`; `cargo clippy --workspace --all-targets -- -D warnings`; `cargo test --workspace --no-fail-fast` (keep `core-and-ui` unchanged)
+- [X] T003 Push the branch and read the `linux-app` log; record every Linux compile error or test failure as the baseline in `specs/011-linux-support/research.md` (section "CI baseline")
 
 ---
 

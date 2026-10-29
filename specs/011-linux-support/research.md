@@ -239,3 +239,15 @@ Decisions for each row follow in the plan phase.
   that macOS keeps ad-hoc signing and universal builds; Technology & Platform Constraints add
   "Linux: Ubuntu 22.04+ or equivalent with WebKitGTK 4.1". The Windows branch amends the same
   lines later; it rebases on this.
+
+## CI baseline (2026-10-29, run 40872055486, before any Linux code)
+
+On `ubuntu-22.04` the whole workspace (including `src-tauri`) already compiled, and clippy with
+`-D warnings` passed. Two tests failed, both test-environment issues:
+
+- `usage_runner::environment_holds_only_the_allowlist`: `Text file busy (os error 26)`. A script
+  written by one test thread is still open in a child forked by another thread. Fix: the usage
+  runner retries `spawn` briefly on `ETXTBSY`.
+- `zsh_helpers::hand_typed_agents_are_wrapped_and_user_rc_still_loads`: Ubuntu's global zshrc runs
+  `compinit`, which stops at an "insecure directories" prompt on the runner. Fix: the test's
+  `.zshenv` sets `skip_global_compinit=1`.
