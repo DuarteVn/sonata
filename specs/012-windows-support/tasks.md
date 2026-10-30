@@ -147,7 +147,7 @@ the branch and read the `windows` job log after each phase.
 
 - [x] T071 Update README.md: Windows install (installer, SmartScreen "More info → Run anyway", uninstall), shells, shortcuts table per platform, iOS macOS-only note, custom providers note, security notice
 - [x] T072 Run `sh scripts/check.sh`; push; confirm `core-and-ui`, `windows` CI jobs are green; record results in quickstart.md (2026-10-29: `scripts/check.sh` green on macOS; ci run 40898348030 green on `core-and-ui` and `windows`)
-- [ ] T073 After 011 (Linux) and 009 (session restore) merge into `main`: rebase, resolve the constitution wording into one platform list, re-run CI, and verify FR-027 (session restore on Windows) in the Windows job
+- [x] T073 After 011 (Linux) and 009 (session restore) merge into `main`: rebase, resolve the constitution wording into one platform list, re-run CI, and verify FR-027 (session restore on Windows) in the Windows job (2026-10-29: rebased on main with 009, 010, 011; see research R21.)
 - [ ] T074 Ask the user (sonata notify) to run the manual Windows pass of quickstart.md section 4 before the first public Windows release; do not open a PR, merge, tag, or release without their OK
 
 ## Dependencies
