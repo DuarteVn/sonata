@@ -54,7 +54,12 @@ fn agent_session_markers_are_removed_and_user_settings_kept() {
         ws,
         NewTerminal {
             frame,
-            launch_command: Some(format!("env > '{}'", out.display())),
+            // Command Prompt prints the environment with `set` (feature 012).
+            launch_command: Some(if cfg!(windows) {
+                format!("set > \"{}\"", out.display())
+            } else {
+                format!("env > '{}'", out.display())
+            }),
             ..Default::default()
         },
     )
@@ -74,7 +79,12 @@ fn agent_session_markers_are_removed_and_user_settings_kept() {
     app.quit();
 
     // The usage probe's child, even when a marker is passed on explicitly.
-    let mut spec = RunSpec::new(vec!["/usr/bin/env".into()], Duration::from_secs(5));
+    let argv: Vec<String> = if cfg!(windows) {
+        vec![std::env::var("ComSpec").unwrap(), "/C".into(), "set".into()]
+    } else {
+        vec!["/usr/bin/env".into()]
+    };
+    let mut spec = RunSpec::new(argv, Duration::from_secs(5));
     spec.env = SET
         .iter()
         .map(|(k, v)| (k.to_string(), v.to_string()))

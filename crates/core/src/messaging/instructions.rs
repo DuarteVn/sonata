@@ -264,11 +264,16 @@ mod tests {
         let v: serde_json::Value =
             serde_json::from_slice(&std::fs::read(files.settings).unwrap()).unwrap();
         let command = |event: &str| v["hooks"][event][0]["hooks"][0]["command"].clone();
-        assert_eq!(command("SessionStart"), "'/bin/sonata' _hook session-start");
-        assert_eq!(command("Stop"), "'/bin/sonata' _hook claude-stop");
+        // `'/bin/sonata'` on Unix; Windows quotes for Git Bash and cmd (`hook_command`).
+        let hook = hook_command("/bin/sonata");
+        assert_eq!(
+            command("SessionStart"),
+            format!("{hook} _hook session-start")
+        );
+        assert_eq!(command("Stop"), format!("{hook} _hook claude-stop"));
         assert_eq!(
             command("UserPromptSubmit"),
-            "'/bin/sonata' _hook turn-start"
+            format!("{hook} _hook turn-start")
         );
     }
 

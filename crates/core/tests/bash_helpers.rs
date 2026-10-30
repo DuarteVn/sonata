@@ -1,5 +1,7 @@
 //! Typing `claude` by hand in a bash terminal starts it through `sonata run`, and the user's own
 //! login startup files still load and stay unchanged (feature 011, research R8).
+// Unix shells, modes, or sockets; Windows counterparts live in *_windows.rs (feature 012).
+#![cfg(unix)]
 
 mod common;
 
