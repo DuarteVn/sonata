@@ -93,7 +93,7 @@ fn reader_talks_to_the_app_server() {
     assert_eq!(r.read_at, now);
     assert_eq!(r.windows.len(), 2);
     let received = std::fs::read_to_string(dir.path().join("received")).unwrap();
-    let expected: String = request_lines("0.2.0")
+    let expected: String = request_lines(env!("CARGO_PKG_VERSION"))
         .lines()
         .map(|l| format!("{l}\n"))
         .collect();
