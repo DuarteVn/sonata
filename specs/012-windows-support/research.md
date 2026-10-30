@@ -332,3 +332,33 @@ port (011) and this branch touch the same call sites only in small, mechanical w
   history files, agent resume commands typed into PowerShell) are covered by R5–R9; this branch
   verifies FR-027 after it rebases on a `main` that contains 009 and 011. Until then, tasks for
   FR-027 stay open.
+
+## R21. Rebase on 009, 010, and 011 (2026-10-29)
+
+Linux (011) landed first with its own `platform` module, bash helpers, menu, and release flow.
+The rebase keeps one design per concern and adds Windows to it:
+
+- **platform**: 011's per-OS API (`open_url_command`, `reveal_command`, git hints, Android
+  folders, `IOS_SIMULATORS`, AppImage environment) gains `platform/windows.rs` next to
+  `linux.rs` and `macos.rs`. The helpers from R1 (privacy, home, process checks, `PATHEXT`
+  lookup) live in `mod.rs` with bodies in `unix.rs` (shared by Linux and macOS) and
+  `windows.rs`. `ShellExecuteW` (R12) is replaced by 011's `Launch`: `rundll32
+  url.dll,FileProtocolHandler <url>` and `explorer /select,<path>`.
+- **Git Bash** reuses 011's `terminal/bash.rs` rc file (`<run>/bash/bashrc`); the Windows-only
+  `bash.rs` of this branch is gone (R8).
+- **Menu and keys**: Windows uses the Linux menu (Ctrl+Shift for Close Item, Toggle Sidebar,
+  Quit; no Edit menu) and the Linux terminal clipboard keys, plus two Windows habits behind
+  `isWindows`: plain Ctrl+W outside terminals closes the item, and Ctrl+C with a selection
+  copies, Ctrl+V pastes (R15).
+- **Browser data**: 011's per-workspace data folder (`browser-data/<ws>`) serves Windows too;
+  Windows retries its removal while WebView2 lets go (R13).
+- **iOS**: 011 reports `ios: null` where simulators cannot exist; the Windows `supported` flag is
+  gone (R14).
+- **Release**: 011's draft → platform jobs → publish flow gains a `windows` job; the dry-run
+  input of R17 is gone (the flow creates a draft). CI's `windows` job builds the installer on
+  every push instead and uploads it as `windows-installer` (R17).
+- **Kimi (010)**: its hooks are POSIX shell commands; on Windows the integration reports
+  "not available on Windows yet" and changes nothing. `sonata run kimi` itself works.
+- **Session restore (009)**: `sonata run` resumes with the same logic; on Windows the wrapper
+  runs the agent as a child (no `exec`) and ignores Ctrl+C through a console handler.
+- **Constitution**: 011 took 1.2.0; Windows is 1.3.0 and lists macOS, Linux, and Windows.
