@@ -1,5 +1,17 @@
 <!--
 Sync Impact Report
+- Version change: 1.2.0 → 1.3.0 (2026-10-29)
+- Modified principles: V. Server-Side Authorization & Local Security — on Windows the CLI channel
+  is a named pipe whose access list allows only the current user (and SYSTEM) and that rejects
+  remote clients; private data uses user-only access lists instead of modes. VI. Free, Open
+  Distribution — adds the unsigned per-user Windows installer (it updates itself) and the
+  SmartScreen step. VII. Simplicity & Incremental Delivery — target platforms are macOS, Linux
+  x86_64, and Windows x86_64 (feature 012, research R19).
+- Modified section: Technology & Platform Constraints — adds Windows 10 1809 or later and
+  Windows 11 with WebView2; ConPTY; named pipe CLI channel on Windows.
+- Templates requiring updates: none.
+
+Earlier report:
 - Version change: 1.1.1 → 1.2.0 (2026-10-29)
 - Modified principles: VI. Free, Open Distribution — adds the Linux install paths (AppImage that
   updates itself, Debian package installed by hand); VII. Simplicity & Incremental Delivery —
@@ -42,7 +54,7 @@ Previous report:
 
 # Sonata Constitution
 
-Sonata is an open source (MIT) desktop app for macOS and Linux: an infinite spatial canvas holding AI-agent
+Sonata is an open source (MIT) desktop app for macOS, Linux, and Windows: an infinite spatial canvas holding AI-agent
 terminals, notes, and the links between them, organized into multiple workspaces.
 
 ## Core Principles
@@ -105,7 +117,10 @@ Rationale: users can read, back up, diff, and repair their data without the app.
 ### V. Server-Side Authorization & Local Security
 
 - The CLI IPC socket is a Unix socket with permission `0600` inside the user's data directory.
-  Any TCP listener binds to `localhost` only and requires a random per-terminal token.
+  On Windows it is a named pipe whose access list allows only the current user (and SYSTEM)
+  and that rejects remote clients. Any TCP listener binds to `localhost` only and requires a
+  random per-terminal token.
+- Private data uses mode `0700`/`0600` on macOS and Linux and user-only access lists on Windows.
 - Authorization MUST be enforced in the server from the calling terminal's identity (terminal
   id → node → flags). The client is never trusted.
 - Agent-to-agent commands MUST work only between nodes joined by a Link.
@@ -129,15 +144,19 @@ Rationale: the app is unsandboxed and runs commands with the user's full permiss
 - Linux install paths: a prebuilt x86_64 AppImage from GitHub Releases (recommended; it updates
   itself), a Debian package from the same release (updated by hand), and the same build-from-source
   script.
+- Windows install path: a prebuilt x86_64 per-user installer from GitHub Releases (no
+  administrator rights; it updates itself), unsigned like the macOS build.
 - Auto-update uses the project's own updater key on every platform.
 - The README MUST document the one-command install, the Gatekeeper "Open Anyway" step for
-  browser downloads, and a security notice that the app runs shells without a sandbox.
+  browser downloads, the SmartScreen "Run anyway" step on Windows, and a security notice that
+  the app runs shells without a sandbox.
 
 Rationale: friends and contributors must be able to install and ship Sonata at zero cost.
 
 ### VII. Simplicity & Incremental Delivery
 
-- Target platforms are macOS (Apple Silicon and Intel) and Linux x86_64. Platform-specific code
+- Target platforms are macOS (Apple Silicon and Intel), Linux x86_64, and Windows x86_64.
+  Platform-specific code
   lives behind `cfg(target_os)` in one module per OS. Other platforms are out of scope until this
   constitution is amended.
 - Build the smallest slice that works, in phases. Multiple workspaces are part of the first phase
@@ -152,13 +171,15 @@ Rationale: a small team ships a working tool faster than a complete one.
 ## Technology & Platform Constraints
 
 - **App shell**: Tauri 2, macOS 15 or later; Linux with glibc 2.35 or later and WebKitGTK 4.1
-  (Ubuntu 22.04 or an equivalent distribution).
+  (Ubuntu 22.04 or an equivalent distribution); Windows 10 1809 or later and Windows 11 with
+  WebView2.
 - **Frontend**: React, TypeScript, Vite. Terminal rendering with xterm.js. The WebGL renderer is
   used only for visible, legible terminals; all others use a lighter renderer or a static preview.
 - **Core**: Rust, Cargo workspace with `crates/core`, `crates/cli`, and `src-tauri`; frontend in
   `ui/`.
-- **PTY**: `portable-pty`. **Async and IPC**: `tokio`; the CLI channel is newline-delimited JSON
-  over a Unix socket (no HTTP, no network listener).
+- **PTY**: `portable-pty` (ConPTY on Windows). **Async and IPC**: `tokio`; the CLI channel is
+  newline-delimited JSON over a Unix socket, or a named pipe on Windows (no HTTP, no network
+  listener).
 - **Git**: the system `git` binary through process calls. No libgit2.
 - **Language**: English for code, identifiers, UI text, commit messages, and documentation.
 - **License**: MIT.
@@ -187,4 +208,4 @@ Changing an item in this section requires a constitution amendment (MINOR bump a
 - Every code review checks compliance with the principles. A deviation MUST be recorded in the
   plan's Complexity Tracking section with its reason, or the change is rejected.
 
-**Version**: 1.2.0 | **Ratified**: 2026-10-21 | **Last Amended**: 2026-10-29
+**Version**: 1.3.0 | **Ratified**: 2026-10-21 | **Last Amended**: 2026-10-29

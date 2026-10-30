@@ -137,7 +137,7 @@ pub fn write_session(
     ensure_private_dir(run_dir)?;
     let instructions_path = run_dir.join("instructions.md");
     atomic::write(&instructions_path, instructions(info).as_bytes())?;
-    let quoted = format!("'{}'", hook.replace('\'', "'\\''"));
+    let quoted = hook_command(hook);
     let settings = json!({
         "hooks": {
             "SessionStart": [{"hooks": [{"type": "command", "command": format!("{quoted} _hook session-start")}]}],
@@ -163,6 +163,16 @@ pub fn write_session(
 }
 
 /// TOML value for Codex's `-c notify=…` session override.
+/// The hook binary quoted for the agent's shell: POSIX single quotes; on Windows double quotes
+/// around a forward-slash path, which both Git Bash and `cmd.exe` read (feature 012, R9).
+pub fn hook_command(hook: &str) -> String {
+    if cfg!(windows) {
+        format!("\"{}\"", hook.replace('\\', "/").replace('"', ""))
+    } else {
+        format!("'{}'", hook.replace('\'', "'\\''"))
+    }
+}
+
 pub fn codex_notify(hook: &str) -> String {
     let esc = hook.replace('\\', "\\\\").replace('"', "\\\"");
     format!("[\"{esc}\", \"_hook\", \"codex-notify\"]")
@@ -171,6 +181,18 @@ pub fn codex_notify(hook: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hook_command_suits_the_agent_shell() {
+        if cfg!(windows) {
+            assert_eq!(
+                hook_command(r"C:\Users\a b\AppData\Local\Sonata\bin\sonata.exe"),
+                "\"C:/Users/a b/AppData/Local/Sonata/bin/sonata.exe\""
+            );
+        } else {
+            assert_eq!(hook_command("/Apps/it's/sonata"), "'/Apps/it'\\''s/sonata'");
+        }
+    }
 
     fn info(lane: Option<LaneInfo<'static>>) -> SessionInfo<'static> {
         SessionInfo {

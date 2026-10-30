@@ -44,6 +44,7 @@ const COMMANDS: &[&str] = &[
     "role_save",
     "role_delete",
     "presets_detect",
+    "terminal_shells",
     "terminal_attach",
     "terminal_detach",
     "terminal_write",

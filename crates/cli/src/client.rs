@@ -1,6 +1,8 @@
-//! Socket client: one JSON request line, then progress lines and one result line.
+//! Socket client (named pipe on Windows): one JSON request line, then progress lines and one
+//! result line.
 
 use std::io::{BufRead, BufReader, Write};
+#[cfg(unix)]
 use std::os::unix::net::UnixStream;
 use std::process::ExitCode;
 
@@ -41,8 +43,11 @@ pub fn request(
     stdin: Option<String>,
     mut on_progress: impl FnMut(&str),
 ) -> Result<Value, String> {
+    #[cfg(unix)]
     let mut stream = UnixStream::connect(&env.socket)
         .map_err(|e| format!("Sonata is not reachable ({e}). Is the app running?"))?;
+    #[cfg(windows)]
+    let mut stream = crate::pipe::connect(&env.socket)?;
     let cwd = std::env::current_dir()
         .map(|p| p.display().to_string())
         .unwrap_or_default();

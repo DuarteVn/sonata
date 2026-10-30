@@ -11,6 +11,7 @@ const ipc = vi.hoisted(() => ({
   nodeCreateTerminal: vi.fn(),
   terminalUpdateSettings: vi.fn(),
   laneCheck: vi.fn(),
+  terminalShells: vi.fn(),
 }));
 vi.mock("../src/ipc/commands", () => ({ ipc }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(async () => "/picked/dir") }));
@@ -38,6 +39,7 @@ beforeEach(() => {
     { id: "shell", found: true },
   ]);
   ipc.laneCheck.mockResolvedValue({ available: true, baseBranch: "main" });
+  ipc.terminalShells.mockResolvedValue([]);
   ipc.rolesList.mockResolvedValue([{ id: "r1", name: "Reviewer", text: "Review diffs.", createdAt: "" }]);
   ipc.nodeCreateTerminal.mockImplementation(async (_ws, frame, opts) => ({
     id: "t1", frame, z: 1, createdAt: "", modifiedAt: "",
@@ -166,5 +168,38 @@ describe("Run in a lane", () => {
     await screen.findByLabelText("Name");
     expect(screen.queryByRole("checkbox", { name: /Run in a lane/ })).not.toBeInTheDocument();
     expect(ipc.laneCheck).not.toHaveBeenCalled();
+  });
+});
+
+describe("Shell picker (Windows, feature 012)", () => {
+  const shells = [
+    { kind: "pwsh", label: "PowerShell 7", path: "C:\\pwsh.exe", default: true },
+    { kind: "cmd", label: "Command Prompt", path: "C:\\cmd.exe", default: false },
+    { kind: "wsl", distro: "Ubuntu", label: "Ubuntu (WSL)", path: "C:\\wsl.exe", default: false },
+  ];
+
+  it("is hidden when the system has no shell list (macOS)", async () => {
+    render(<TerminalDialog mode={{ kind: "create", at: { x: 0, y: 0 } }} onClose={() => {}} />);
+    await screen.findByRole("button", { name: /Claude Code/ });
+    expect(screen.queryByLabelText("Shell")).toBeNull();
+  });
+
+  it("preselects the default and omits it on create", async () => {
+    ipc.terminalShells.mockResolvedValue(shells);
+    render(<TerminalDialog mode={{ kind: "create", at: { x: 0, y: 0 } }} onClose={() => {}} />);
+    const picker = await screen.findByLabelText("Shell");
+    expect(picker).toHaveDisplayValue("PowerShell 7 (default)");
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(ipc.nodeCreateTerminal).toHaveBeenCalled());
+    expect(ipc.nodeCreateTerminal.mock.calls[0][2].settings.shell).toBeUndefined();
+  });
+
+  it("sends the chosen shell with its WSL distribution", async () => {
+    ipc.terminalShells.mockResolvedValue(shells);
+    render(<TerminalDialog mode={{ kind: "create", at: { x: 0, y: 0 } }} onClose={() => {}} />);
+    await userEvent.selectOptions(await screen.findByLabelText("Shell"), "Ubuntu (WSL)");
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(ipc.nodeCreateTerminal).toHaveBeenCalled());
+    expect(ipc.nodeCreateTerminal.mock.calls[0][2].settings.shell).toEqual({ kind: "wsl", distro: "Ubuntu" });
   });
 });

@@ -3946,6 +3946,8 @@ dependencies = [
  "tracing",
  "uuid",
  "webkit2gtk",
+ "webview2-com",
+ "windows",
 ]
 
 [[package]]
@@ -3955,6 +3957,7 @@ dependencies = [
  "libc",
  "serde",
  "serde_json",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3984,6 +3987,7 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "vt100",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]

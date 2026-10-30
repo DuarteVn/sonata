@@ -33,3 +33,4 @@ test-results/
 
 # CLI copied into the app bundle at build time
 src-tauri/resources/bin/sonata
+src-tauri/resources/bin/sonata.exe

@@ -409,7 +409,7 @@ function DevicePicker({ nodeId }: { nodeId: string }) {
           </ul>
         )}
       </section>
-      {/* Hidden where iOS simulators cannot exist (Linux): the report says null. */}
+      {/* Hidden where iOS simulators cannot exist (Linux, Windows): the report says null. */}
       {report?.ios !== null && (
         <section aria-label="iOS">
           <h3>iOS</h3>

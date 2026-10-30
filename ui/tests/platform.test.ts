@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { revealLabel, shortcut } from "../src/platform";
+import { isCloseItemKey, revealLabel, shortcut } from "../src/platform";
 
 describe("platform labels", () => {
   it("writes shortcut hints the macOS way on a Mac", () => {
@@ -18,5 +18,20 @@ describe("platform labels", () => {
   it("names the file manager of each system", () => {
     expect(revealLabel(true)).toBe("Reveal in Finder");
     expect(revealLabel(false)).toBe("Show in File Manager");
+  });
+
+  it("names File Explorer on Windows (feature 012)", () => {
+    expect(revealLabel(false, true)).toBe("Show in File Explorer");
+  });
+
+  it("closes the item with plain Ctrl+W on Windows only, outside terminals and fields", () => {
+    const key = (k: string, shiftKey = false) => ({ key: k, ctrlKey: true, shiftKey, altKey: false, metaKey: false });
+    const none = { terminal: false, text: false };
+    expect(isCloseItemKey(key("w"), none, true)).toBe(true);
+    expect(isCloseItemKey(key("W"), none, true)).toBe(true);
+    expect(isCloseItemKey(key("w"), { terminal: true, text: false }, true)).toBe(false);
+    expect(isCloseItemKey(key("w"), { terminal: false, text: true }, true)).toBe(false);
+    expect(isCloseItemKey(key("w", true), none, true)).toBe(false);
+    expect(isCloseItemKey(key("w"), none, false)).toBe(false);
   });
 });

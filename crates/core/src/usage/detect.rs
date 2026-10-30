@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use super::Detection;
+#[cfg(unix)]
 use super::runner::{RunSpec, run};
 
 /// Login-shell variables passed on to provider commands when set.
@@ -68,7 +69,64 @@ fn valid_name(name: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
 }
 
+/// Windows apps get the user's environment from the system, so commands are looked up on
+/// `PATH` (with `extra_path` first) and variables are read from this process (feature 012, R11).
+#[cfg(windows)]
+pub fn detect(
+    _shell: &Path,
+    names: &[&str],
+    extra_path: Option<&Path>,
+    _timeout: Duration,
+) -> DetectResult {
+    let mut result = DetectResult::default();
+    let extra = extra_path.map(Path::to_path_buf);
+    for name in names {
+        let found = valid_name(name)
+            .then(|| {
+                extra
+                    .iter()
+                    .flat_map(|d| {
+                        crate::platform::executable_names(name)
+                            .into_iter()
+                            .map(move |n| d.join(n))
+                    })
+                    .find(|p| crate::platform::is_executable(p))
+                    .or_else(|| crate::platform::find_on_path(name))
+            })
+            .flatten();
+        let entry = match found {
+            Some(p) => (Detection::Found, Some(p)),
+            None => (Detection::NotFound, None),
+        };
+        result.commands.insert(name.to_string(), entry);
+    }
+    for key in SHELL_VARS {
+        if let Some(value) = std::env::var_os(key).filter(|v| !v.is_empty()) {
+            result
+                .env
+                .push((key.to_string(), value.to_string_lossy().into_owned()));
+        }
+    }
+    if let Some(extra) = extra {
+        let path = result.env.iter_mut().find(|(k, _)| k == "PATH");
+        let joined = |rest: Option<&str>| {
+            std::env::join_paths(
+                std::iter::once(extra.clone())
+                    .chain(rest.into_iter().flat_map(std::env::split_paths)),
+            )
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_default()
+        };
+        match path {
+            Some((_, p)) => *p = joined(Some(p.as_str())),
+            None => result.env.push(("PATH".into(), joined(None))),
+        }
+    }
+    result
+}
+
 /// Asks `shell -l -c` where `names` are. `extra_path` is put first on the shell's `PATH`.
+#[cfg(unix)]
 pub fn detect(
     shell: &Path,
     names: &[&str],

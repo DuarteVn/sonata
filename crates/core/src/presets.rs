@@ -1,10 +1,14 @@
 //! Quick-start presets for the New Terminal dialog and detection of their programs through the
 //! user's login shell (research R4).
 
+#[cfg(unix)]
 use std::io::Read;
 use std::path::Path;
+#[cfg(unix)]
 use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+#[cfg(unix)]
+use std::time::Instant;
 
 use serde::Serialize;
 
@@ -59,7 +63,24 @@ pub struct PresetStatus {
     pub found: Option<bool>,
 }
 
+/// Looks for the preset programs on `PATH` (with `PATHEXT`), without running a shell
+/// (feature 012).
+#[cfg(windows)]
+pub fn detect(_shell: &Path, _timeout: Duration) -> Vec<PresetStatus> {
+    PRESETS
+        .iter()
+        .map(|p| PresetStatus {
+            id: p.id,
+            found: Some(
+                p.command
+                    .is_none_or(|c| crate::platform::find_on_path(c).is_some()),
+            ),
+        })
+        .collect()
+}
+
 /// Asks `shell -l -c` which preset programs are on its `PATH`.
+#[cfg(unix)]
 pub fn detect(shell: &Path, timeout: Duration) -> Vec<PresetStatus> {
     let names: Vec<&str> = PRESETS.iter().filter_map(|p| p.command).collect();
     let script = format!(
@@ -83,6 +104,7 @@ pub fn detect(shell: &Path, timeout: Duration) -> Vec<PresetStatus> {
         .collect()
 }
 
+#[cfg(unix)]
 fn run_with_timeout(shell: &Path, script: &str, timeout: Duration) -> Option<String> {
     let mut cmd = Command::new(shell);
     crate::platform::child_env().apply_std(&mut cmd);

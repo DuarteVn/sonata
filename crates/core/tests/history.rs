@@ -25,7 +25,11 @@ fn save_cap_restore_and_relaunch() {
             .create_terminal(
                 ws,
                 NewTerminal {
-                    launch_command: Some("echo launched-$((40+2))".into()),
+                    launch_command: Some(if cfg!(windows) {
+                        "echo launched-4^2".into()
+                    } else {
+                        "echo launched-$((40+2))".into()
+                    }),
                     ..Default::default()
                 },
             )

@@ -175,7 +175,7 @@ fn codex_home(env: &[(String, String)]) -> Option<PathBuf> {
     env.iter()
         .find(|(k, _)| k == "CODEX_HOME")
         .map(|(_, v)| PathBuf::from(v))
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".codex")))
+        .or_else(|| crate::platform::home_dir().map(|h| h.join(".codex")))
 }
 
 /// Session files that may hold a snapshot; only the newest few are tried.

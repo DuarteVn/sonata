@@ -1,3 +1,5 @@
+// Drives a POSIX shell loop; Windows terminals are covered by terminal_pwsh.rs.
+#![cfg(unix)]
 mod common;
 
 use common::{Sandbox, WAIT, test_app, wait_until};
@@ -29,7 +31,7 @@ fn terminals_keep_running_in_other_workspaces_and_quit_check_counts_busy() {
     assert!(wait_until(WAIT, || app
         .terminals()
         .screen_text(t.id)
-        .is_some_and(|s| s.contains('$'))));
+        .is_some_and(|s| s.contains(common::PROMPT))));
     assert!(
         app.quit_check().is_empty(),
         "idle shells must not block quit"

@@ -1,5 +1,7 @@
 //! `sonata run` and end-of-turn hooks with fake `claude` and `codex` programs. One test function
 //! because it changes the process PATH and HOME.
+// Unix shells, modes, or sockets; Windows counterparts live in *_windows.rs (feature 012).
+#![cfg(unix)]
 
 mod common;
 

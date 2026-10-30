@@ -83,7 +83,7 @@ export function UsageSettings({ now: fixedNow }: Props) {
       <div className="settings-row">
         <div>
           <div>Warn at 80% and 100%</div>
-          <div className="settings-dim">A macOS notification once per level, each time a limit window starts over.</div>
+          <div className="settings-dim">A system notification once per level, each time a limit window starts over.</div>
         </div>
         <Switch
           label="Warn at 80% and 100%"

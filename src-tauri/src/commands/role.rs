@@ -29,3 +29,13 @@ pub async fn presets_detect(app: State<'_, Arc<App>>) -> Result<Vec<PresetStatus
         .await
         .map_err(|e| AppError::internal(e.to_string()))
 }
+
+/// Shells a terminal can start on Windows; empty on macOS (feature 012). Lists WSL
+/// distributions, so it runs off the main thread.
+#[tauri::command]
+pub async fn terminal_shells() -> Result<Vec<sonata_core::terminal::shells::ShellChoice>, AppError>
+{
+    tauri::async_runtime::spawn_blocking(sonata_core::terminal::shells::discover)
+        .await
+        .map_err(|e| AppError::internal(e.to_string()))
+}

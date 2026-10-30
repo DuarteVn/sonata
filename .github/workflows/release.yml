@@ -1,9 +1,10 @@
 name: release
 # Builds and publishes a release when a version tag is pushed (or on demand for an existing tag).
-# See specs/005-release-distribution/contracts/release.md and
-# specs/011-linux-support/contracts/release.md.
+# See specs/005-release-distribution/contracts/release.md,
+# specs/011-linux-support/contracts/release.md, and
+# specs/012-windows-support/contracts/release-manifest.md.
 #
-# checks → draft → macos | linux → publish. Each platform job uploads its files to the draft;
+# checks → draft → macos | linux | windows → publish. Each platform job uploads its files to the draft;
 # publish writes latest.json and makes the release public only when every build succeeded, so a
 # failed build leaves the previous release (and its latest.json) as "latest".
 on:
@@ -139,8 +140,41 @@ jobs:
           gh release upload "$TAG" --clobber \
             "$appimage" "$appimage.sig" "$bundle/deb/Sonata_${TAG#v}_amd64.deb"
 
+  windows:
+    needs: draft
+    # The per-user NSIS installer, which is also the Windows update file (012 research R16).
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build the Windows installer
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run tauri build -- --bundles nsis
+      - name: Upload the Windows files to the draft
+        run: |
+          setup="target/release/bundle/nsis/Sonata_${TAG#v}_x64-setup.exe"
+          test -f src-tauri/resources/bin/sonata.exe
+          gh release upload "$TAG" --clobber "$setup" "$setup.sig"
+
   publish:
-    needs: [macos, linux]
+    needs: [macos, linux, windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -158,11 +192,14 @@ jobs:
           version="${TAG#v}"
           base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
           appimage="Sonata_${version}_amd64.AppImage"
-          gh release download "$TAG" --dir sigs -p Sonata.app.tar.gz.sig -p "$appimage.sig"
+          setup="Sonata_${version}_x64-setup.exe"
+          gh release download "$TAG" --dir sigs -p Sonata.app.tar.gz.sig -p "$appimage.sig" \
+            -p "$setup.sig"
           gh release view "$TAG" --json body -q .body > notes.md
           node scripts/release/latest-json.mjs --version "$TAG" --notes-file notes.md \
             --sig-file sigs/Sonata.app.tar.gz.sig --url "$base/Sonata.app.tar.gz" \
             --linux-sig-file "sigs/$appimage.sig" --linux-url "$base/$appimage" \
+            --windows-sig-file "sigs/$setup.sig" --windows-url "$base/$setup" \
             > latest.json
           cat latest.json
           gh release upload "$TAG" --clobber latest.json

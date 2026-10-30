@@ -52,7 +52,7 @@ impl Processes for SystemProcesses {
     fn run(&self, program: &Path, args: &[&str], timeout: Duration) -> Result<Output, String> {
         let mut cmd = Command::new(program);
         crate::platform::child_env().apply_std(&mut cmd);
-        let mut child = cmd
+        let mut child = crate::platform::no_window(&mut cmd)
             .args(args)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -83,7 +83,7 @@ impl Processes for SystemProcesses {
     fn spawn(&self, program: &Path, args: &[String]) -> Result<Box<dyn Child>, String> {
         let mut cmd = Command::new(program);
         crate::platform::child_env().apply_std(&mut cmd);
-        let mut child = cmd
+        let mut child = crate::platform::no_window(&mut cmd)
             .args(args)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -114,11 +114,7 @@ impl Processes for SystemProcesses {
     }
 
     fn pid_alive(&self, pid: u32) -> bool {
-        let Ok(pid) = libc::pid_t::try_from(pid) else {
-            return false;
-        };
-        // SAFETY: signal 0 only checks that the process exists.
-        unsafe { libc::kill(pid, 0) == 0 }
+        crate::platform::process_alive(pid)
     }
 }
 

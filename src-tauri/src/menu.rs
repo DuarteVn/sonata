@@ -3,10 +3,10 @@
 //! (Ctrl+Cmd+S) hides or shows the workspace list. The app menu holds the update items
 //! (feature 005) and Settings… (Cmd+,, feature 006).
 //!
-//! Linux (feature 011, research R11): GTK menu shortcuts fire before the page sees the key, so
-//! the Linux menu binds no plain Ctrl+letter that a terminal program needs. Close Item, Toggle
-//! Sidebar, and Quit use Ctrl+Shift; there is no Edit menu (text fields copy and paste on their
-//! own; terminals use Ctrl+Shift+C and Ctrl+Shift+V).
+//! Linux (feature 011, research R11) and Windows (feature 012, research R15): menu shortcuts fire
+//! before the page sees the key, so these menus bind no plain Ctrl+letter that a terminal program
+//! needs. Close Item, Toggle Sidebar, and Quit use Ctrl+Shift; there is no Edit menu (text fields
+//! copy and paste on their own; terminals use Ctrl+Shift+C and Ctrl+Shift+V).
 
 use std::sync::Arc;
 
@@ -22,20 +22,20 @@ pub const CHECK_UPDATES_ID: &str = "check-updates";
 pub const CHECK_UPDATES_EVENT: &str = "app://check-updates";
 pub const AUTO_CHECK_ID: &str = "auto-check-updates";
 pub const SETTINGS_ID: &str = "settings";
-#[cfg(target_os = "linux")]
+#[cfg(not(target_os = "macos"))]
 const QUIT_ID: &str = "quit";
 
 #[cfg(target_os = "macos")]
 const SETTINGS_KEY: &str = "Cmd+,";
-#[cfg(target_os = "linux")]
+#[cfg(not(target_os = "macos"))]
 const SETTINGS_KEY: &str = "Ctrl+,";
 #[cfg(target_os = "macos")]
 const CLOSE_ITEM_KEY: &str = "CmdOrCtrl+W";
-#[cfg(target_os = "linux")]
+#[cfg(not(target_os = "macos"))]
 const CLOSE_ITEM_KEY: &str = "Ctrl+Shift+W";
 #[cfg(target_os = "macos")]
 const TOGGLE_SIDEBAR_KEY: &str = "Cmd+Ctrl+S";
-#[cfg(target_os = "linux")]
+#[cfg(not(target_os = "macos"))]
 const TOGGLE_SIDEBAR_KEY: &str = "Ctrl+Shift+S";
 
 fn settings_item<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<MenuItem<R>> {
@@ -94,7 +94,7 @@ fn view_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
     )
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(not(target_os = "macos"))]
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let sep = || PredefinedMenuItem::separator(app);
     let app_menu = Submenu::with_items(
@@ -180,7 +180,7 @@ pub fn on_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
             let _ = app.emit(CHECK_UPDATES_EVENT, ());
         }
         // The same quit check as Cmd+Q on macOS: the UI asks when programs are running.
-        #[cfg(target_os = "linux")]
+        #[cfg(not(target_os = "macos"))]
         QUIT_ID => {
             let _ = app.emit(crate::QUIT_REQUESTED, ());
         }

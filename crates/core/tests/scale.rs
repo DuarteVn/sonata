@@ -1,5 +1,7 @@
 //! Core-side scale check for SC-004: 100 terminals printing continuously.
 //! Ignored by default (slow, CPU heavy). Run: cargo test -p sonata-core --test scale -- --ignored --nocapture
+// Unix shells, modes, or sockets; Windows counterparts live in *_windows.rs (feature 012).
+#![cfg(unix)]
 
 mod common;
 

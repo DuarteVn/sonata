@@ -5,6 +5,8 @@ pub mod broker;
 pub mod commands;
 pub mod extract;
 pub mod instructions;
+#[cfg(windows)]
+pub mod pipe;
 pub mod server;
 
 use serde::{Deserialize, Serialize};

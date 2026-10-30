@@ -44,6 +44,17 @@ describe("buildLatestJson", () => {
     expect(() => buildLatestJson({ ...base, linux: { sig: "", url: appImage } })).toThrow(/signature/);
     expect(() => buildLatestJson({ ...base, linux: { sig: "x", url: "http://a/b.AppImage" } })).toThrow(/https/);
   });
+
+  it("adds the Windows installer and keeps the Mac and Linux entries (feature 012)", () => {
+    const win = "https://github.com/DuarteVn/sonata/releases/download/v0.2.0/Sonata_0.2.0_x64-setup.exe";
+    const manifest = buildLatestJson({ ...base, windows: { sig: "d2lu\n", url: win } });
+    expect(manifest.platforms).toEqual({
+      "darwin-aarch64": { signature: "c2lnbmF0dXJl", url },
+      "darwin-x86_64": { signature: "c2lnbmF0dXJl", url },
+      "windows-x86_64": { signature: "d2lu", url: win },
+    });
+    expect(() => buildLatestJson({ ...base, windows: { sig: "", url: win } })).toThrow(/signature/);
+  });
 });
 
 describe("parseArgs", () => {
@@ -57,5 +68,13 @@ describe("parseArgs", () => {
     expect(parseArgs([...mac, "--linux-sig-file", "l.sig", "--linux-url", "https://x/y"])["linux-url"]).toBe("https://x/y");
     expect(() => parseArgs([...mac, "--linux-sig-file", "l.sig"])).toThrow(/--linux-url/);
     expect(() => parseArgs([...mac, "--linux-url", "https://x/y"])).toThrow(/--linux-sig-file/);
+  });
+
+  it("needs both Windows flags or neither (feature 012)", () => {
+    expect(parseArgs([...mac, "--windows-sig-file", "w.sig", "--windows-url", "https://x/y"])["windows-url"]).toBe(
+      "https://x/y",
+    );
+    expect(() => parseArgs([...mac, "--windows-sig-file", "w.sig"])).toThrow(/--windows-url/);
+    expect(() => parseArgs([...mac, "--windows-url", "https://x/y"])).toThrow(/--windows-sig-file/);
   });
 });

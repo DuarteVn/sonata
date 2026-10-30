@@ -1,5 +1,7 @@
 //! Sonata's block in Kimi's config file (feature 010, research R4, contracts/kimi-config.md).
 //! Every test uses a temporary Kimi folder and a fake login shell; `~/.kimi-code` is never read.
+// Unix shells, modes, or sockets; Windows counterparts live in *_windows.rs (feature 012).
+#![cfg(unix)]
 
 mod common;
 

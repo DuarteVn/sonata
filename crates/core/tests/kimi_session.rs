@@ -1,5 +1,7 @@
 //! Kimi terminals running a fake `kimi` (feature 010): typed instructions and how asks end.
 //! One test function because it changes the process PATH-related environment and HOME.
+// Unix shells, modes, or sockets; Windows counterparts live in *_windows.rs (feature 012).
+#![cfg(unix)]
 
 mod common;
 

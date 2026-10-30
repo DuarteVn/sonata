@@ -1,5 +1,7 @@
-//! What differs between operating systems (feature 011, research R1). Shared rules live here;
-//! each OS has its own file, chosen at build time, with the same functions.
+//! What differs between operating systems (feature 011, research R1; Windows: feature 012,
+//! research R1). Shared rules live here; each OS has its own file (`linux.rs`, `macos.rs`,
+//! `windows.rs`), chosen at build time, with the same functions. File privacy, process checks,
+//! and program lookup are shared by Linux and macOS in `unix.rs`.
 
 use std::ffi::OsString;
 use std::io;
@@ -11,11 +13,26 @@ pub mod bwrap;
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(unix)]
+mod unix;
+#[cfg(windows)]
+mod windows;
 
 #[cfg(target_os = "linux")]
 use linux as os;
 #[cfg(target_os = "macos")]
 use macos as os;
+#[cfg(unix)]
+use unix as imp;
+#[cfg(windows)]
+use windows as imp;
+#[cfg(windows)]
+use windows as os;
+
+#[cfg(windows)]
+pub use windows::{
+    allowed_sids, child_processes, handle_allowed_sids, process_user_sid, user_sid, wide,
+};
 
 /// Variables the AppImage runtime sets for itself only (research R6).
 const APPIMAGE_ONLY: [&str; 4] = ["APPIMAGE", "APPDIR", "ARGV0", "OWD"];
@@ -190,6 +207,7 @@ pub const CLI_MARKER: &str = "SONATA_TERMINAL_ID";
 /// Copies the bundled CLI to `target` (for example `~/.local/bin/sonata`, research R7) when the
 /// copy is missing or is an older Sonata CLI. Returns whether it wrote. A different program at
 /// `target` is never replaced.
+#[cfg(unix)]
 pub fn install_cli(bundled: &Path, target: &Path) -> io::Result<bool> {
     use std::io::Write;
     use std::os::unix::fs::PermissionsExt;
@@ -212,6 +230,82 @@ pub fn install_cli(bundled: &Path, target: &Path) -> io::Result<bool> {
     Ok(true)
 }
 
+#[cfg(unix)]
 fn contains(haystack: &[u8], needle: &[u8]) -> bool {
     haystack.windows(needle.len()).any(|w| w == needle)
+}
+
+/// What a private path is: folders and files get different permissions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kind {
+    Dir,
+    File,
+}
+
+/// The user's home folder: `$HOME` on Unix, the profile folder (`%USERPROFILE%`) on Windows.
+pub fn home_dir() -> Option<PathBuf> {
+    std::env::home_dir().filter(|p| !p.as_os_str().is_empty())
+}
+
+/// Restricts `path` to the current user: mode `0700`/`0600` on Unix, an access list with only
+/// the user and SYSTEM on Windows.
+pub fn make_private(path: &Path, kind: Kind) -> std::io::Result<()> {
+    imp::make_private(path, kind)
+}
+
+/// Whether only the current user (and SYSTEM on Windows) can use `path`.
+pub fn is_private(path: &Path, kind: Kind) -> std::io::Result<bool> {
+    imp::is_private(path, kind)
+}
+
+/// Creates `path` and its parents; the folders it creates start private on Unix.
+pub fn create_dir_all(path: &Path) -> std::io::Result<()> {
+    imp::create_dir_all(path)
+}
+
+/// Opens `path` for appending, created private.
+pub fn open_private_append(path: &Path) -> std::io::Result<std::fs::File> {
+    imp::open_private_append(path)
+}
+
+/// Keeps a console program started by the app from opening a console window (Windows only).
+pub fn no_window(cmd: &mut std::process::Command) -> &mut std::process::Command {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(windows_sys::Win32::System::Threading::CREATE_NO_WINDOW);
+    }
+    cmd
+}
+
+/// Whether `path` is a file the system can run: an execute bit on Unix, an extension listed in
+/// `PATHEXT` on Windows.
+pub fn is_executable(path: &Path) -> bool {
+    imp::is_executable(path)
+}
+
+/// Whether the process with this id still runs.
+pub fn process_alive(pid: u32) -> bool {
+    imp::process_alive(pid)
+}
+
+/// Removes the `\\?\` prefix that `fs::canonicalize` adds on Windows when the path works
+/// without it (short drive or UNC path), so git and the UI see a normal path. Unchanged on Unix.
+pub fn simplify(path: &Path) -> PathBuf {
+    imp::simplify(path)
+}
+
+/// Executable file names for `name`: `name` on Unix; `name` plus each `PATHEXT` extension on
+/// Windows (`claude.exe`, `claude.cmd`, …).
+pub fn executable_names(name: &str) -> Vec<String> {
+    imp::executable_names(name)
+}
+
+/// Finds `name` on `PATH` without running a shell.
+pub fn find_on_path(name: &str) -> Option<PathBuf> {
+    let paths = std::env::var_os("PATH")?;
+    std::env::split_paths(&paths)
+        .filter(|d| d.is_absolute())
+        .flat_map(|d| executable_names(name).into_iter().map(move |n| d.join(n)))
+        .find(|p| is_executable(p))
 }

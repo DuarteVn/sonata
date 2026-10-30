@@ -1,3 +1,5 @@
+// Unix shells, modes, or sockets; Windows counterparts live in *_windows.rs (feature 012).
+#![cfg(unix)]
 mod common;
 
 use std::os::unix::fs::PermissionsExt;

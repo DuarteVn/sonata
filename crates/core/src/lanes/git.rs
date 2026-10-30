@@ -55,7 +55,12 @@ impl Git {
     pub fn command<S: AsRef<OsStr>>(&self, dir: &Path, args: &[S]) -> Command {
         let mut cmd = Command::new(&self.bin);
         crate::platform::child_env().apply_std(&mut cmd);
-        cmd.arg("-C").arg(dir).args(args);
+        crate::platform::no_window(&mut cmd);
+        // Lane paths can pass 260 characters on Windows (feature 012, research R6).
+        if cfg!(windows) {
+            cmd.args(["-c", "core.longpaths=true"]);
+        }
+        cmd.arg("-C").arg(crate::platform::simplify(dir)).args(args);
         for var in [
             "GIT_DIR",
             "GIT_WORK_TREE",
@@ -142,7 +147,44 @@ pub fn parse_version(text: &str) -> Option<(u32, u32)> {
     Some((major, minor))
 }
 
+/// Git for Windows: `git.exe` on `PATH`, then its default install folders (feature 012, R6).
+#[cfg(windows)]
+pub fn discover(_shell: &Path) -> Result<Git, String> {
+    let var = |k: &str| std::env::var_os(k).map(PathBuf::from);
+    let chosen = crate::platform::find_on_path("git")
+        .or_else(|| {
+            [
+                var("ProgramFiles").map(|p| p.join("Git").join("cmd").join("git.exe")),
+                var("LOCALAPPDATA")
+                    .map(|p| p.join("Programs").join("Git").join("cmd").join("git.exe")),
+            ]
+            .into_iter()
+            .flatten()
+            .find(|p| p.is_file())
+        })
+        .ok_or_else(|| {
+            "Git is not installed. Install Git for Windows from https://git-scm.com/download/win"
+                .to_string()
+        })?;
+    check_version(Git::new(chosen))
+}
+
+#[cfg(windows)]
+fn check_version(git: Git) -> Result<Git, String> {
+    let version = git
+        .version()
+        .map_err(|e| format!("Git could not run: {e}"))?;
+    if version < MIN_VERSION {
+        return Err(format!(
+            "Lanes need git {}.{} or newer; this computer has {}.{}.",
+            MIN_VERSION.0, MIN_VERSION.1, version.0, version.1
+        ));
+    }
+    Ok(git)
+}
+
 /// Finds a usable git without triggering macOS's install prompt (research R2).
+#[cfg(unix)]
 pub fn discover(shell: &Path) -> Result<Git, String> {
     let mut candidates: Vec<PathBuf> = Vec::new();
     if let Ok(out) = Git::new(shell).run_with_raw(&["-l", "-c", "command -v git"]) {
@@ -180,6 +222,7 @@ pub fn discover(shell: &Path) -> Result<Git, String> {
 
 impl Git {
     /// Runs the binary itself (no `-C`); used only to ask the login shell where git is.
+    #[cfg(unix)]
     fn run_with_raw(&self, args: &[&str]) -> Result<Output, GitError> {
         let mut cmd = Command::new(&self.bin);
         crate::platform::child_env().apply_std(&mut cmd);

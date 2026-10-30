@@ -1,7 +1,6 @@
 //! Runs provider commands: argv only, scrubbed environment, time limit, output caps (research R5).
 
 use std::io::{Read, Write};
-use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -10,7 +9,24 @@ use std::time::{Duration, Instant};
 pub const STDOUT_CAP: usize = 64 * 1024;
 pub const STDERR_CAP: usize = 4 * 1024;
 /// Variables passed through from Sonata's own environment. Everything else is dropped.
-pub const ENV_ALLOWLIST: [&str; 6] = ["HOME", "USER", "LOGNAME", "LANG", "TMPDIR", "PATH"];
+#[cfg(unix)]
+pub const ENV_ALLOWLIST: &[&str] = &["HOME", "USER", "LOGNAME", "LANG", "TMPDIR", "PATH"];
+/// Windows programs need the system folders and the profile variables (feature 012, R11).
+#[cfg(windows)]
+pub const ENV_ALLOWLIST: &[&str] = &[
+    "USERPROFILE",
+    "USERNAME",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "TEMP",
+    "TMP",
+    "PATH",
+    "PATHEXT",
+    "SystemRoot",
+    "ComSpec",
+    "HOMEDRIVE",
+    "HOMEPATH",
+];
 
 const POLL: Duration = Duration::from_millis(10);
 const DRAIN: Duration = Duration::from_millis(500);
@@ -87,9 +103,9 @@ fn spawn_retrying(cmd: &mut Command) -> std::io::Result<std::process::Child> {
     }
 }
 
-/// Runs `spec` in a new process group inside an empty temporary folder. The whole group is
-/// killed when the command exits, times out, overflows, or meets `stop_when`, so no child
-/// process outlives the run.
+/// Runs `spec` in a new process group (a Job Object on Windows) inside an empty temporary
+/// folder. The whole group is killed when the command exits, times out, overflows, or meets
+/// `stop_when`, so no child process outlives the run.
 pub fn run(spec: &RunSpec) -> Result<RunOutput, RunError> {
     let (program, args) = spec
         .argv
@@ -100,7 +116,6 @@ pub fn run(spec: &RunSpec) -> Result<RunOutput, RunError> {
     cmd.args(args)
         .env_clear()
         .current_dir(cwd.path())
-        .process_group(0)
         .stdin(if spec.stdin.is_some() {
             Stdio::piped()
         } else {
@@ -108,6 +123,7 @@ pub fn run(spec: &RunSpec) -> Result<RunOutput, RunError> {
         })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    group::prepare(&mut cmd);
     for key in ENV_ALLOWLIST {
         // As seen by user programs: an AppImage's own paths are left out (feature 011, R6).
         if let Some(value) = crate::platform::host_var(key) {
@@ -124,7 +140,7 @@ pub fn run(spec: &RunSpec) -> Result<RunOutput, RunError> {
         std::io::ErrorKind::NotFound => RunError::NotFound,
         _ => RunError::Spawn(e.to_string()),
     })?;
-    let pid = child.id() as i32;
+    let group = group::Group::new(&child);
 
     // Kept open until the function returns; some servers exit on end of input.
     let _stdin = child.stdin.take().map(|mut pipe| {
@@ -149,7 +165,7 @@ pub fn run(spec: &RunSpec) -> Result<RunOutput, RunError> {
             stopped = true;
             break Ok(());
         }
-        if has_exited(pid) {
+        if group.has_exited(&mut child) {
             break Ok(());
         }
         if start.elapsed() >= spec.timeout {
@@ -157,10 +173,7 @@ pub fn run(spec: &RunSpec) -> Result<RunOutput, RunError> {
         }
         std::thread::sleep(POLL);
     };
-    // The leader is not reaped yet, so its pid still names this group.
-    unsafe {
-        libc::killpg(pid, libc::SIGKILL);
-    }
+    group.kill();
     let status = child.wait().ok();
     outcome?;
     stdout.wait_done(DRAIN);
@@ -181,24 +194,115 @@ pub fn run(spec: &RunSpec) -> Result<RunOutput, RunError> {
     })
 }
 
-/// True once the process has exited, without reaping it.
-fn has_exited(pid: i32) -> bool {
-    let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
-    let flags = libc::WEXITED | libc::WNOHANG | libc::WNOWAIT;
-    let r = unsafe { libc::waitid(libc::P_PID, pid as libc::id_t, &mut info, flags) };
-    r == 0 && exited_pid(&info) != 0
+#[cfg(unix)]
+mod group {
+    use std::os::unix::process::CommandExt;
+    use std::process::{Child, Command};
+
+    pub fn prepare(cmd: &mut Command) {
+        cmd.process_group(0);
+    }
+
+    /// The child's process group; its id is the leader's pid.
+    pub struct Group(i32);
+
+    impl Group {
+        pub fn new(child: &Child) -> Self {
+            Self(child.id() as i32)
+        }
+
+        /// True once the process has exited, without reaping it.
+        pub fn has_exited(&self, _child: &mut Child) -> bool {
+            let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+            let flags = libc::WEXITED | libc::WNOHANG | libc::WNOWAIT;
+            let r = unsafe { libc::waitid(libc::P_PID, self.0 as libc::id_t, &mut info, flags) };
+            r == 0 && exited_pid(&info) != 0
+        }
+
+        pub fn kill(&self) {
+            // The leader is not reaped yet, so its pid still names this group.
+            unsafe {
+                libc::killpg(self.0, libc::SIGKILL);
+            }
+        }
+    }
+
+    /// `si_pid` is a plain field on macOS but an accessor method in the Linux `libc` bindings.
+    #[cfg(target_os = "linux")]
+    fn exited_pid(info: &libc::siginfo_t) -> libc::pid_t {
+        // SAFETY: `waitid` with `WEXITED` fills the child-status variant of the union.
+        unsafe { info.si_pid() }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn exited_pid(info: &libc::siginfo_t) -> libc::pid_t {
+        info.si_pid
+    }
 }
 
-/// `si_pid` is a plain field on macOS but an accessor method in the Linux `libc` bindings.
-#[cfg(target_os = "linux")]
-fn exited_pid(info: &libc::siginfo_t) -> libc::pid_t {
-    // SAFETY: `waitid` with `WEXITED` fills the child-status variant of the union.
-    unsafe { info.si_pid() }
-}
+/// A Job Object that kills every process in it when it closes (feature 012, research R11).
+#[cfg(windows)]
+mod group {
+    use std::os::windows::io::AsRawHandle;
+    use std::os::windows::process::CommandExt;
+    use std::process::{Child, Command};
 
-#[cfg(not(target_os = "linux"))]
-fn exited_pid(info: &libc::siginfo_t) -> libc::pid_t {
-    info.si_pid
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows_sys::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, TerminateJobObject,
+    };
+    use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
+
+    pub fn prepare(cmd: &mut Command) {
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    pub struct Group(HANDLE);
+
+    impl Group {
+        pub fn new(child: &Child) -> Self {
+            // SAFETY: null name and attributes create an unnamed job; failures leave null.
+            let job = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
+            if !job.is_null() {
+                let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+                info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+                // SAFETY: `info` has the size passed; the child handle is valid while it runs.
+                unsafe {
+                    SetInformationJobObject(
+                        job,
+                        JobObjectExtendedLimitInformation,
+                        (&info as *const JOBOBJECT_EXTENDED_LIMIT_INFORMATION).cast(),
+                        size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+                    );
+                    AssignProcessToJobObject(job, child.as_raw_handle() as HANDLE);
+                }
+            }
+            Self(job)
+        }
+
+        pub fn has_exited(&self, child: &mut Child) -> bool {
+            // A handle keeps the exit code; checking it does not free the pid for reuse.
+            matches!(child.try_wait(), Ok(Some(_)))
+        }
+
+        pub fn kill(&self) {
+            if !self.0.is_null() {
+                // SAFETY: the job handle is owned.
+                unsafe { TerminateJobObject(self.0, 1) };
+            }
+        }
+    }
+
+    impl Drop for Group {
+        fn drop(&mut self) {
+            if !self.0.is_null() {
+                // SAFETY: closed once; closing also kills what is left (KILL_ON_JOB_CLOSE).
+                unsafe { CloseHandle(self.0) };
+            }
+        }
+    }
 }
 
 /// Reads a pipe on its own thread into a buffer of at most `cap` bytes.

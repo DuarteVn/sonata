@@ -2,7 +2,6 @@ mod common;
 
 use std::path::{Path, PathBuf};
 
-use common::mode;
 use sonata_core::paths::{self, DataRoot, PathError};
 use uuid::Uuid;
 
@@ -27,10 +26,10 @@ fn sonata_home_overrides_default() {
 fn created_folders_are_private() {
     let tmp = tempfile::tempdir().unwrap();
     let root = DataRoot::at(tmp.path().join("sonata")).unwrap();
-    assert_eq!(mode(root.path()), 0o700);
+    common::assert_private_dir(root.path());
     let ws = root.create_workspace_dir(Uuid::new_v4()).unwrap();
-    assert_eq!(mode(&ws), 0o700);
-    assert_eq!(mode(&root.workspaces_dir()), 0o700);
+    common::assert_private_dir(&ws);
+    common::assert_private_dir(&root.workspaces_dir());
 }
 
 #[test]

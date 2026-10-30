@@ -1,6 +1,6 @@
 mod common;
 
-use common::{Sandbox, mode, test_app};
+use common::{Sandbox, test_app};
 use sonata_core::ErrorCode;
 use sonata_core::model::node::{Frame, NoteColor, NoteContent};
 use sonata_core::workspace::manager::CreateWorkspace;
@@ -46,7 +46,7 @@ fn images_are_validated_and_copied() {
     assert!(name.ends_with(".png"));
     let copied = sb.root.workspace_dir(ws).join("files").join(name);
     assert_eq!(std::fs::read(&copied).unwrap(), PNG);
-    assert_eq!(mode(&copied), 0o600);
+    common::assert_private_file(&copied);
     assert_eq!(std::fs::read(&src).unwrap(), PNG, "source changed");
     let second = app.note_insert_image(note, &src).unwrap();
     assert_ne!(second, md, "names must be unique");

@@ -4,6 +4,7 @@
 pub mod fake_bin;
 pub mod fake_device;
 
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
@@ -31,6 +32,7 @@ impl Sandbox {
     }
 }
 
+#[cfg(unix)]
 pub fn mode(path: &Path) -> u32 {
     std::fs::metadata(path)
         .expect("metadata")
@@ -39,9 +41,42 @@ pub fn mode(path: &Path) -> u32 {
         & 0o777
 }
 
+/// Asserts that a file is private: mode `0600` on Unix, a user-only access list on Windows.
+pub fn assert_private_file(path: &Path) {
+    #[cfg(unix)]
+    assert_eq!(mode(path), 0o600, "{}", path.display());
+    #[cfg(windows)]
+    assert!(
+        sonata_core::platform::is_private(path, sonata_core::platform::Kind::File).unwrap(),
+        "{} is not private",
+        path.display()
+    );
+}
+
+/// Asserts that a folder is private: mode `0700` on Unix, a user-only access list on Windows.
+pub fn assert_private_dir(path: &Path) {
+    #[cfg(unix)]
+    assert_eq!(mode(path), 0o700, "{}", path.display());
+    #[cfg(windows)]
+    assert!(
+        sonata_core::platform::is_private(path, sonata_core::platform::Kind::Dir).unwrap(),
+        "{} is not private",
+        path.display()
+    );
+}
+
+/// Changes whenever the file is replaced: the inode on Unix, the last write time on Windows.
 pub fn inode(path: &Path) -> u64 {
-    use std::os::unix::fs::MetadataExt;
-    std::fs::metadata(path).expect("metadata").ino()
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        std::fs::metadata(path).expect("metadata").ino()
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        std::fs::metadata(path).expect("metadata").last_write_time()
+    }
 }
 
 use std::sync::Arc;
@@ -65,11 +100,21 @@ pub fn wait_until(timeout: Duration, mut check: impl FnMut() -> bool) -> bool {
 
 pub const WAIT: Duration = Duration::from_secs(5);
 
-/// An app with `/bin/sh` as the shell, so tests do not depend on the user's shell config.
+/// A shell without user startup files: `/bin/sh`, or Command Prompt on Windows.
+pub fn test_shell() -> PathBuf {
+    #[cfg(unix)]
+    return PathBuf::from("/bin/sh");
+    #[cfg(windows)]
+    return std::env::var_os("ComSpec")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(r"C:\Windows\System32\cmd.exe"));
+}
+
+/// An app with [`test_shell`] as the shell, so tests do not depend on the user's shell config.
 pub fn test_app(sb: &Sandbox) -> (Arc<App>, Arc<RecordingSink>) {
     let sink = Arc::new(RecordingSink::default());
     let opts = AppOptions {
-        shell: Some("/bin/sh".into()),
+        shell: Some(test_shell()),
         ..AppOptions::default()
     };
     let app = App::start_with(sb.root.clone(), sink.clone(), opts).expect("app");
@@ -88,9 +133,12 @@ pub fn cli_bin() -> PathBuf {
                 .status()
                 .expect("cargo build sonata-cli");
             assert!(status.success());
-            root.join("target/debug/sonata")
+            let bin = root
+                .join("target/debug")
+                .join(format!("sonata{}", std::env::consts::EXE_SUFFIX))
                 .canonicalize()
-                .expect("sonata binary")
+                .expect("sonata binary");
+            sonata_core::platform::simplify(&bin)
         })
         .clone()
 }
@@ -100,7 +148,7 @@ pub fn messaging_app(sb: &Sandbox) -> (Arc<App>, Arc<RecordingSink>) {
     let sink = Arc::new(RecordingSink::default());
     let cli_dir = cli_bin().parent().unwrap().to_path_buf();
     let opts = AppOptions {
-        shell: Some("/bin/sh".into()),
+        shell: Some(test_shell()),
         cli_dir: Some(cli_dir),
         socket: true,
         ..AppOptions::default()
@@ -149,6 +197,32 @@ pub fn sonata_with(app: &App, id: uuid::Uuid, args: &[&str], stdin: Option<&str>
         stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
         stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
     }
+}
+
+/// The last character of the test shell's prompt: `$` for `/bin/sh`, `>` for Command Prompt.
+pub const PROMPT: char = if cfg!(windows) { '>' } else { '$' };
+
+/// A command line (with Enter) that keeps the test shell busy for about `ms` milliseconds.
+pub fn sleep_command(ms: u64) -> String {
+    if cfg!(windows) {
+        format!("ping -n {} 127.0.0.1 >nul\r", ms.div_ceil(1000) + 1)
+    } else {
+        format!("sleep {}\r", ms as f64 / 1000.0)
+    }
+}
+
+/// A command line that writes the shell's working folder to `out`, ending with a new line.
+pub fn cwd_command(out: &Path) -> String {
+    if cfg!(windows) {
+        format!("cd > \"{}\"\r", out.display())
+    } else {
+        format!("pwd -P > '{}'\n", out.display())
+    }
+}
+
+/// `path` resolved like `fs::canonicalize`, without Windows' `\\?\` prefix.
+pub fn real(path: &Path) -> PathBuf {
+    sonata_core::platform::simplify(&path.canonicalize().expect("canonical path"))
 }
 
 /// Creates an open workspace with named shell terminals, all ready at a prompt.
@@ -227,6 +301,8 @@ pub fn git_repo(sb: &Sandbox, name: &str) -> PathBuf {
     git(&dir, &["config", "user.name", "Test"]);
     git(&dir, &["config", "user.email", "test@example.com"]);
     git(&dir, &["config", "commit.gpgsign", "false"]);
+    // Git for Windows converts line endings by default; tests compare exact bytes.
+    git(&dir, &["config", "core.autocrlf", "false"]);
     commit_file(&dir, "a.txt", "one\n", "init");
     dir
 }
@@ -244,6 +320,7 @@ pub fn commit_file(dir: &Path, file: &str, content: &str, message: &str) {
 
 /// Writes `dir/name` as a fake agent: it appends its arguments (one line, space-joined) to
 /// `dir/<name>.args`, waits `delay_ms`, and exits with `exit_code`. No test runs a real agent.
+#[cfg(unix)]
 pub fn install_fake_agent(dir: &Path, name: &str, exit_code: i32, delay_ms: u64) -> PathBuf {
     let log = dir.join(format!("{name}.args"));
     let body = format!(
@@ -287,6 +364,7 @@ done
 "#;
 
 /// Writes the fake `kimi` into `dir` (for `SONATA_AGENT_BIN_DIR`).
+#[cfg(unix)]
 pub fn install_fake_kimi(dir: &Path) -> PathBuf {
     fake_bin::fake_bin(dir, "kimi", FAKE_KIMI.trim_start_matches("#!/bin/sh\n"))
 }

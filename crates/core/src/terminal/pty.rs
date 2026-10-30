@@ -1,14 +1,30 @@
 //! Spawning shells in pseudo-terminals (research R5).
 
-use std::ffi::{CStr, OsString};
+#[cfg(unix)]
+use std::ffi::CStr;
+use std::ffi::OsString;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
 use portable_pty::{Child, ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use uuid::Uuid;
 
+use crate::model::node::TerminalShell;
+
+/// The default shell on Windows: PowerShell 7, else Windows PowerShell (feature 012, R7).
+#[cfg(windows)]
+pub fn login_shell() -> PathBuf {
+    let env = super::shells::ShellEnv::current();
+    super::shells::discover_in(&env, |_| Vec::new())
+        .into_iter()
+        .find(|c| c.default)
+        .map(|c| c.path)
+        .unwrap_or_else(crate::platform::default_shell)
+}
+
 /// The user's login shell from the password database, then `$SHELL`, then the platform default
 /// (`/bin/zsh` on macOS, `/bin/bash` on Linux).
+#[cfg(unix)]
 pub fn login_shell() -> PathBuf {
     // SAFETY: getpwuid returns a pointer into static storage or null; we copy the string
     // immediately and do not keep the pointer.
@@ -57,6 +73,8 @@ pub struct SpawnOptions<'a> {
     pub wrap_agents: bool,
     /// Sonata's shell startup folder with `zsh/` and `bash/` (see [`shell_start`]).
     pub shell_helpers: Option<&'a Path>,
+    /// The terminal's shell on Windows (feature 012); `None` = the default shell.
+    pub shell_choice: Option<&'a TerminalShell>,
 }
 
 /// Agents that `sonata run` knows how to start with session instructions and hooks.
@@ -143,9 +161,7 @@ pub fn spawn(opts: SpawnOptions<'_>) -> io::Result<Spawned> {
         })
         .map_err(io::Error::other)?;
 
-    let home = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/"));
+    let home = crate::platform::home_dir().unwrap_or_else(|| PathBuf::from("/"));
     let (cwd, warning) = if opts.cwd.is_dir() {
         (opts.cwd.to_path_buf(), None)
     } else {
@@ -158,15 +174,25 @@ pub fn spawn(opts: SpawnOptions<'_>) -> io::Result<Spawned> {
         )
     };
 
-    let shell = opts
-        .shell
-        .map(Path::to_path_buf)
-        .unwrap_or_else(login_shell);
-    let start = shell_start(
-        &shell,
-        opts.shell_helpers,
-        std::env::var_os("ZDOTDIR").unwrap_or_else(|| home.clone().into_os_string()),
-    );
+    #[cfg(unix)]
+    let (shell, start) = {
+        let shell = opts
+            .shell
+            .map(Path::to_path_buf)
+            .unwrap_or_else(login_shell);
+        let start = shell_start(
+            &shell,
+            opts.shell_helpers,
+            std::env::var_os("ZDOTDIR").unwrap_or_else(|| home.clone().into_os_string()),
+        );
+        (shell, start)
+    };
+    #[cfg(windows)]
+    let (shell, start, warning) = {
+        let (shell, kind, distro, shell_warning) = windows_shell(&opts);
+        let start = windows_start(&opts, kind, distro.as_deref(), &cwd);
+        (shell, start, warning.or(shell_warning))
+    };
     let mut cmd = CommandBuilder::new(&shell);
     cmd.args(&start.args);
     cmd.cwd(&cwd);
@@ -175,6 +201,7 @@ pub fn spawn(opts: SpawnOptions<'_>) -> io::Result<Spawned> {
     cmd.env("TERM_PROGRAM", "Sonata");
     cmd.env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
     cmd.env("SONATA_TERMINAL_ID", opts.node_id.to_string());
+    #[cfg(unix)]
     cmd.env("PWD", &cwd);
     cmd.env_remove("SONATA_HOME");
     for key in AGENT_SESSION_MARKERS {
@@ -205,6 +232,103 @@ pub fn spawn(opts: SpawnOptions<'_>) -> io::Result<Spawned> {
         pid,
         warning,
     })
+}
+
+/// The executable, kind, and WSL distribution to start, and a warning when the chosen shell is
+/// not installed (feature 012, research R7).
+#[cfg(windows)]
+fn windows_shell(
+    opts: &SpawnOptions<'_>,
+) -> (
+    PathBuf,
+    Option<crate::model::node::ShellKind>,
+    Option<String>,
+    Option<String>,
+) {
+    use super::shells::{ShellEnv, discover_in, kind_of, list_wsl};
+    use crate::model::node::ShellKind;
+    if let Some(path) = opts.shell {
+        return (path.to_path_buf(), kind_of(path), None, None);
+    }
+    let want = opts.shell_choice;
+    let wsl = want.is_some_and(|w| w.kind == ShellKind::Wsl);
+    let found = discover_in(&ShellEnv::current(), |exe| {
+        if wsl { list_wsl(exe) } else { Vec::new() }
+    });
+    if let Some(want) = want
+        && let Some(c) = found.iter().find(|c| c.matches(want))
+    {
+        return (c.path.clone(), Some(c.kind), c.distro.clone(), None);
+    }
+    let default = found.into_iter().find(|c| c.default);
+    let warning = want.map(|w| {
+        format!(
+            "The shell {} is not installed; the terminal started in {}.",
+            w.distro
+                .clone()
+                .unwrap_or_else(|| super::shells::kind_label(w.kind).to_string()),
+            default
+                .as_ref()
+                .map(|d| d.label.as_str())
+                .unwrap_or("Windows PowerShell")
+        )
+    });
+    match default {
+        Some(d) => (d.path, Some(d.kind), None, warning),
+        None => (
+            PathBuf::from("powershell.exe"),
+            Some(ShellKind::Powershell),
+            None,
+            warning,
+        ),
+    }
+}
+
+/// Arguments and environment per shell kind (contracts/shell-integration.md). Git Bash reuses
+/// the bash helpers of feature 011 (`<helpers>/bash/bashrc`).
+#[cfg(windows)]
+fn windows_start(
+    opts: &SpawnOptions<'_>,
+    kind: Option<crate::model::node::ShellKind>,
+    distro: Option<&str>,
+    cwd: &Path,
+) -> ShellStart {
+    use crate::model::node::ShellKind;
+    let mut env = Vec::new();
+    let args = match kind {
+        Some(ShellKind::Pwsh | ShellKind::Powershell) => super::powershell::args(opts.wrap_agents),
+        Some(ShellKind::GitBash) => match opts.shell_helpers {
+            Some(helpers) => vec![
+                "--rcfile".into(),
+                helpers
+                    .join("bash")
+                    .join("bashrc")
+                    .display()
+                    .to_string()
+                    .replace('\\', "/"),
+                "-i".into(),
+            ],
+            None => vec!["--login".into(), "-i".into()],
+        },
+        Some(ShellKind::Wsl) => {
+            let mut list = std::env::var("WSLENV").unwrap_or_default();
+            for key in ["SONATA_SOCKET/u", "SONATA_TOKEN/u", "SONATA_TERMINAL_ID/u"] {
+                if !list.is_empty() {
+                    list.push(':');
+                }
+                list.push_str(key);
+            }
+            env.push(("WSLENV".to_string(), OsString::from(list)));
+            let mut a = Vec::new();
+            if let Some(d) = distro {
+                a.extend(["-d".to_string(), d.to_string()]);
+            }
+            a.extend(["--cd".to_string(), cwd.display().to_string()]);
+            a
+        }
+        Some(ShellKind::Cmd) | None => Vec::new(),
+    };
+    ShellStart { args, env }
 }
 
 #[cfg(test)]

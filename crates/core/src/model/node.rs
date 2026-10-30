@@ -191,6 +191,40 @@ pub struct TerminalContent {
     /// The agent conversation to resume when the terminal starts again (feature 009).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conversation: Option<Conversation>,
+    /// The shell to start on Windows; `None` = the default shell (feature 012, data-model.md).
+    /// Ignored on other systems.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shell: Option<TerminalShell>,
+}
+
+/// Shells a Windows terminal can run (feature 012, research R7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ShellKind {
+    Pwsh,
+    Powershell,
+    Cmd,
+    GitBash,
+    Wsl,
+}
+
+/// A terminal's shell choice; `distro` names the WSL distribution and is set only for WSL.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalShell {
+    pub kind: ShellKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub distro: Option<String>,
+}
+
+impl TerminalShell {
+    /// `distro` is required for WSL and absent for every other kind.
+    pub fn is_valid(&self) -> bool {
+        match self.kind {
+            ShellKind::Wsl => self.distro.as_deref().is_some_and(|d| !d.trim().is_empty()),
+            _ => self.distro.is_none(),
+        }
+    }
 }
 
 impl TerminalContent {
@@ -209,6 +243,7 @@ impl TerminalContent {
             send_instructions: None,
             lane: None,
             conversation: None,
+            shell: None,
         }
     }
 

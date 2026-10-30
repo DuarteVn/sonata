@@ -111,15 +111,30 @@ pub fn update_install(
         return Err("The update is not downloaded yet.".into());
     };
     app.update(|s| s.installing());
-    if let Err(err) = update.install(&bytes) {
-        tracing::warn!(error = %err, "update install failed");
-        app.update(|s| s.fail(err.to_string()));
-        return Err(err.to_string());
+    // On Windows the updater starts the installer and ends this process inside `install`, so
+    // everything is saved and stopped first (feature 012). If the installer cannot start,
+    // Sonata restarts on the current version.
+    #[cfg(windows)]
+    {
+        quitting.0.store(true, Ordering::SeqCst);
+        app.quit();
+        if let Err(err) = update.install(&bytes) {
+            tracing::warn!(error = %err, "update install failed");
+        }
+        handle.restart()
     }
-    tracing::info!(version = %update.version, "update installed; restarting");
-    quitting.0.store(true, Ordering::SeqCst);
-    app.quit();
-    handle.restart()
+    #[cfg(not(windows))]
+    {
+        if let Err(err) = update.install(&bytes) {
+            tracing::warn!(error = %err, "update install failed");
+            app.update(|s| s.fail(err.to_string()));
+            return Err(err.to_string());
+        }
+        tracing::info!(version = %update.version, "update installed; restarting");
+        quitting.0.store(true, Ordering::SeqCst);
+        app.quit();
+        handle.restart()
+    }
 }
 
 #[tauri::command]
@@ -184,6 +199,12 @@ fn install_blocker() -> Option<&'static str> {
 
 /// Linux: only an AppImage in a folder the user can write to updates itself; a package belongs
 /// to the package manager (011 research R3).
+/// The per-user installer can always update itself (feature 012).
+#[cfg(windows)]
+fn install_blocker() -> Option<&'static str> {
+    None
+}
+
 #[cfg(target_os = "linux")]
 fn install_blocker() -> Option<&'static str> {
     use tauri::utils::config::BundleType;

@@ -128,6 +128,7 @@ pub fn run() {
             commands::role::role_save,
             commands::role::role_delete,
             commands::role::presets_detect,
+            commands::role::terminal_shells,
             commands::terminal::terminal_attach,
             commands::terminal::terminal_detach,
             commands::terminal::terminal_write,
@@ -245,14 +246,17 @@ fn spawn_launch_window_timer(core: Arc<App>) {
 
 /// Folder with the `sonata` CLI: inside the app bundle, or the Cargo target folder in development.
 fn cli_dir(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    let name = format!("sonata{}", std::env::consts::EXE_SUFFIX);
     let bundled = app.path().resource_dir().ok().map(|d| d.join("bin"));
-    if let Some(dir) = bundled.filter(|d| d.join("sonata").is_file()) {
-        return Some(dir);
+    if let Some(dir) = bundled.filter(|d| d.join(&name).is_file()) {
+        return Some(sonata_core::platform::simplify(&dir));
     }
     let dev = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/debug");
-    dev.join("sonata")
-        .is_file()
-        .then(|| dev.canonicalize().unwrap_or(dev))
+    dev.join(&name).is_file().then(|| {
+        dev.canonicalize()
+            .map(|d| sonata_core::platform::simplify(&d))
+            .unwrap_or(dev)
+    })
 }
 
 /// Keeps `~/.local/bin/sonata` in step with the bundled CLI, so it has a stable path outside

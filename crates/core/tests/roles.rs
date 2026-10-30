@@ -1,6 +1,6 @@
 mod common;
 
-use common::{Sandbox, mode, test_app};
+use common::{Sandbox, test_app};
 use sonata_core::ErrorCode;
 use sonata_core::app::{NewTerminal, TerminalSettings};
 use sonata_core::model::node::RoleRef;
@@ -27,7 +27,7 @@ fn library_save_list_delete_persist() {
         app.quit();
         r.id
     };
-    assert_eq!(mode(&sb.root.path().join("roles.json")), 0o600);
+    common::assert_private_file(&sb.root.path().join("roles.json"));
 
     let (app, _) = test_app(&sb);
     let names: Vec<String> = app.roles_list().into_iter().map(|r| r.name).collect();

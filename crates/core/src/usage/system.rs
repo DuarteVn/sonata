@@ -41,9 +41,7 @@ impl Backend for SystemBackend {
             (ProviderKind::BuiltIn, "claude") => super::claude::read(path, env, now),
             (ProviderKind::BuiltIn, "codex") => super::codex::read(path, env, now),
             (ProviderKind::Custom, _) => {
-                let home = std::env::var_os("HOME")
-                    .map(PathBuf::from)
-                    .unwrap_or_default();
+                let home = crate::platform::home_dir().unwrap_or_default();
                 super::custom::read_custom(&p.id, &p.command, env, &home, self.root.path(), now)
             }
             _ => Reading::unavailable(p.id.clone(), now, "Not supported yet."),

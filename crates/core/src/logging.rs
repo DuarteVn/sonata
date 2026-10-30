@@ -1,20 +1,19 @@
-//! File logging to `<data root>/logs/sonata.log.<date>`. Files are private (`0600`), kept for 7
+//! File logging to `<data root>/logs/sonata.log.<date>`. Files are private (`0600`, or a user-only access list on Windows), kept for 7
 //! days. Terminal content is never logged.
 
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, File};
 use std::io::{self, Write};
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::PathBuf;
 
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::EnvFilter;
 
-use crate::paths::{DataRoot, FILE_MODE, ensure_private_dir};
+use crate::paths::{DataRoot, ensure_private_dir};
 
 const PREFIX: &str = "sonata.log.";
 const KEEP_DAYS: usize = 7;
 
-/// Appends to one file per day, created with mode `0600`.
+/// Appends to one file per day, created private.
 struct DailyFile {
     dir: PathBuf,
     date: String,
@@ -26,11 +25,7 @@ impl DailyFile {
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
         if self.file.is_none() || self.date != today {
             let path = self.dir.join(format!("{PREFIX}{today}"));
-            let file = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .mode(FILE_MODE)
-                .open(path)?;
+            let file = crate::platform::open_private_append(&path)?;
             self.file = Some(file);
             self.date = today;
             prune(&self.dir);
