@@ -123,6 +123,9 @@ pub struct TerminalSettings {
     pub orchestrator: Option<bool>,
     #[serde(default, deserialize_with = "double_option")]
     pub send_instructions: Option<Option<bool>>,
+    /// The Windows shell (feature 012); `Some(None)` returns to the default shell.
+    #[serde(default, deserialize_with = "double_option")]
+    pub shell: Option<Option<crate::model::node::TerminalShell>>,
 }
 
 /// Absent → `None`; `null` → `Some(None)`; value → `Some(Some(v))`.
@@ -148,7 +151,11 @@ fn apply_settings(t: &mut TerminalContent, s: &TerminalSettings) -> AppResult<bo
     if let Some(name) = &s.name {
         t.name = terminal_name(name)?;
     }
-    let before = (t.launch_command.clone(), t.working_directory.clone());
+    let before = (
+        t.launch_command.clone(),
+        t.working_directory.clone(),
+        t.shell.clone(),
+    );
     if let Some(cmd) = &s.launch_command {
         t.launch_command = clean_optional(cmd.clone());
     }
@@ -203,7 +210,21 @@ fn apply_settings(t: &mut TerminalContent, s: &TerminalSettings) -> AppResult<bo
     if let Some(v) = s.send_instructions {
         t.send_instructions = v;
     }
-    Ok(before != (t.launch_command.clone(), t.working_directory.clone()))
+    if let Some(shell) = &s.shell {
+        if shell.as_ref().is_some_and(|sh| !sh.is_valid()) {
+            return Err(AppError::new(
+                ErrorCode::Internal,
+                "A WSL shell needs a distribution name; other shells take none.",
+            ));
+        }
+        t.shell = shell.clone();
+    }
+    Ok(before
+        != (
+            t.launch_command.clone(),
+            t.working_directory.clone(),
+            t.shell.clone(),
+        ))
 }
 
 impl Default for NewTerminal {
@@ -799,6 +820,7 @@ impl App {
                 .as_ref()
                 .map(|_| self.data_root.path().join("run")),
             resume: term.conversation.clone(),
+            shell_choice: term.shell.clone(),
         })
     }
 
@@ -809,9 +831,17 @@ impl App {
         };
         let mut env = vec![("SONATA_SOCKET".to_string(), socket.display().to_string())];
         if let Some(dir) = &self.options.cli_dir {
-            let path = crate::platform::host_var("PATH")
-                .unwrap_or_else(|| "/usr/bin:/bin:/usr/sbin:/sbin".into());
-            env.push(("PATH".into(), format!("{}:{path}", dir.display())));
+            #[cfg(unix)]
+            let fallback = "/usr/bin:/bin:/usr/sbin:/sbin";
+            #[cfg(windows)]
+            let fallback = r"C:\Windows\System32;C:\Windows";
+            let path = crate::platform::host_var("PATH").unwrap_or_else(|| fallback.into());
+            let joined = std::env::join_paths(
+                std::iter::once(dir.clone()).chain(std::env::split_paths(&path)),
+            )
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_else(|_| format!("{}:{path}", dir.display()));
+            env.push(("PATH".into(), joined));
         }
         env
     }
@@ -1348,6 +1378,7 @@ impl App {
         let cwd = t.working_directory.clone().unwrap_or(default_dir);
         self.terminals
             .set_spawn_settings(node, t.launch_command.clone(), cwd);
+        self.terminals.set_shell_choice(node, t.shell.clone());
         let running = matches!(
             self.terminals.status(node),
             Some(crate::terminal::manager::RunStatus::Running { .. })

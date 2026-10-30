@@ -1,5 +1,7 @@
 //! On Linux the app keeps a copy of its CLI at `~/.local/bin/sonata` (feature 011, R7). It never
 //! replaces a program that is not a Sonata CLI.
+// Unix shells, modes, or sockets; Windows counterparts live in *_windows.rs (feature 012).
+#![cfg(unix)]
 
 use std::os::unix::fs::PermissionsExt;
 

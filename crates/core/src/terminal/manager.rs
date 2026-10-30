@@ -45,6 +45,8 @@ pub struct SpawnSpec {
     pub shell_helpers: Option<PathBuf>,
     /// The node's stored conversation; every start offers it once (feature 009, research R3).
     pub resume: Option<Conversation>,
+    /// The terminal's shell on Windows (feature 012); `None` = the default shell.
+    pub shell_choice: Option<crate::model::node::TerminalShell>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -222,6 +224,7 @@ impl TerminalManager {
             env: &env,
             wrap_agents: spec.wrap_agents,
             shell_helpers: spec.shell_helpers.as_deref(),
+            shell_choice: spec.shell_choice.as_ref(),
         })?;
         let pid = spawned.pid;
         let launch = spec
@@ -364,6 +367,13 @@ impl TerminalManager {
     /// The current start's resume offer; returns it once, then `None` until the next start.
     pub fn take_resume_offer(&self, id: Uuid) -> Option<Conversation> {
         self.get(id).ok().and_then(|t| lock(&t).resume_offer.take())
+    }
+
+    /// The Windows shell used at the next start or restart (feature 012).
+    pub fn set_shell_choice(&self, id: Uuid, shell: Option<crate::model::node::TerminalShell>) {
+        if let Ok(terminal) = self.get(id) {
+            lock(&terminal).spec.shell_choice = shell;
+        }
     }
 
     pub fn set_launch_command(&self, id: Uuid, command: Option<String>) {
@@ -548,6 +558,7 @@ fn spawn_reader(
         .name("sonata-pty-reader".into())
         .spawn(move || {
             let mut buf = vec![0u8; 16 * 1024];
+            let mut tail: Vec<u8> = Vec::new();
             loop {
                 let n = match reader.read(&mut buf) {
                     Ok(0) | Err(_) => break,
@@ -561,6 +572,17 @@ fn spawn_reader(
                     break;
                 }
                 t.screen.process(&buf[..n]);
+                // ConPTY asks for the cursor position at start and waits for the answer. With no
+                // view attached, nobody else answers, so Sonata does (feature 012).
+                if cfg!(windows) && t.sink.is_none() && asks_cursor_position(&tail, &buf[..n]) {
+                    let (row, col) = t.screen.cursor();
+                    if let Some(w) = t.writer.as_mut() {
+                        let _ = w.write_all(format!("\x1b[{};{}R", row + 1, col + 1).as_bytes());
+                        let _ = w.flush();
+                    }
+                }
+                tail.clear();
+                tail.extend_from_slice(&buf[n.saturating_sub(3)..n]);
                 t.output_seq += 1;
                 t.last_output = std::time::Instant::now();
                 if t.sink.is_some() {
@@ -572,6 +594,18 @@ fn spawn_reader(
             }
         })
         .expect("spawn reader thread");
+}
+
+/// Whether the output asks for the cursor position (`ESC [ 6 n`), also when the sequence is
+/// split between the previous chunk's last bytes (`tail`) and this one.
+pub fn asks_cursor_position(tail: &[u8], chunk: &[u8]) -> bool {
+    const DSR: &[u8] = b"\x1b[6n";
+    if chunk.windows(DSR.len()).any(|w| w == DSR) {
+        return true;
+    }
+    let mut joined = tail.to_vec();
+    joined.extend_from_slice(&chunk[..chunk.len().min(DSR.len() - 1)]);
+    joined.windows(DSR.len()).any(|w| w == DSR)
 }
 
 /// Types the launch command once the shell is ready: it printed something and then stayed quiet
@@ -667,4 +701,19 @@ fn new_token() -> String {
 
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::asks_cursor_position;
+
+    #[test]
+    fn cursor_position_requests_are_found_across_chunks() {
+        assert!(asks_cursor_position(b"", b"abc\x1b[6ndef"));
+        assert!(asks_cursor_position(b"x\x1b[", b"6n"));
+        assert!(asks_cursor_position(b"\x1b", b"[6n"));
+        assert!(!asks_cursor_position(b"", b"\x1b[5n"));
+        assert!(!asks_cursor_position(b"\x1b[6", b"m"));
+        assert!(!asks_cursor_position(b"", b""));
+    }
 }

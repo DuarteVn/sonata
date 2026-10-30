@@ -13,7 +13,7 @@ setup() {
 echo "cargo $*" >>"$LOG"
 dir=target/release
 case "$*" in *"--target "*) dir="target/$(echo "$*" | sed 's/.*--target \([^ ]*\).*/\1/')/release" ;; esac
-mkdir -p "$dir" && echo bin >"$dir/sonata"
+mkdir -p "$dir" && echo bin >"$dir/sonata" && echo exe >"$dir/sonata.exe"
 STUB
   cat >"$work/stubs/lipo" <<'STUB'
 #!/bin/sh
@@ -32,6 +32,16 @@ setup
 grep -q "cargo build -q --release -p sonata-cli$" "$LOG" || fail "host build not run"
 grep -q lipo "$LOG" && fail "lipo used for host build"
 [ -x "$work/src-tauri/resources/bin/sonata" ] || fail "host CLI not installed"
+[ -e "$work/src-tauri/resources/bin/sonata.exe" ] && fail "exe written for a Unix build"
+
+# Windows build (feature 012): sonata.exe from the host build, no lipo.
+for mode in TAURI_ENV_TARGET_TRIPLE=x86_64-pc-windows-msvc OS=Windows_NT; do
+  setup
+  (cd "$work" && env -u TAURI_ENV_TARGET_TRIPLE -u SONATA_UNIVERSAL -u OS "$mode" PATH="$work/stubs:$PATH" sh scripts/build-cli.sh)
+  grep -q "cargo build -q --release -p sonata-cli$" "$LOG" || fail "$mode: host build not run"
+  grep -q lipo "$LOG" && fail "$mode: lipo used"
+  [ "$(cat "$work/src-tauri/resources/bin/sonata.exe")" = exe ] || fail "$mode: sonata.exe not installed"
+done
 
 # Universal build from Tauri's target triple and from the fallback variable.
 for mode in TAURI_ENV_TARGET_TRIPLE=universal-apple-darwin SONATA_UNIVERSAL=1; do

@@ -5,7 +5,6 @@
 //! without them), and it never changes anything on the system.
 
 use std::collections::HashMap;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -29,9 +28,7 @@ pub struct Env {
 impl Env {
     pub fn current() -> Self {
         Self {
-            home: std::env::var_os("HOME")
-                .map(PathBuf::from)
-                .unwrap_or_default(),
+            home: crate::platform::home_dir().unwrap_or_default(),
             vars: std::env::vars().collect(),
             brew_prefixes: crate::platform::brew_prefixes(),
         }
@@ -79,20 +76,30 @@ pub struct ToolReport {
 
 impl AndroidReport {
     pub fn emulator(&self) -> Option<PathBuf> {
-        self.sdk.as_ref().map(|s| s.join("emulator/emulator"))
+        self.sdk
+            .as_ref()
+            .map(|s| s.join("emulator").join(exe("emulator")))
     }
 
     pub fn adb(&self) -> Option<PathBuf> {
-        self.sdk.as_ref().map(|s| s.join("platform-tools/adb"))
+        self.sdk
+            .as_ref()
+            .map(|s| s.join("platform-tools").join(exe("adb")))
     }
 }
 
 fn executable(path: &Path) -> bool {
-    std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+    crate::platform::is_executable(path)
 }
 
 fn complete_sdk(dir: &Path) -> bool {
-    executable(&dir.join("emulator/emulator")) && executable(&dir.join("platform-tools/adb"))
+    executable(&dir.join("emulator").join(exe("emulator")))
+        && executable(&dir.join("platform-tools").join(exe("adb")))
+}
+
+/// `name.exe` on Windows, `name` elsewhere.
+fn exe(name: &str) -> String {
+    format!("{name}{}", std::env::consts::EXE_SUFFIX)
 }
 
 /// Preference, `ANDROID_HOME`, `ANDROID_SDK_ROOT`, the platform's default folders (on macOS

@@ -63,7 +63,7 @@ fn update_settings_applies_and_validates() {
     assert!(wait_until(WAIT, || app
         .terminals()
         .screen_text(node)
-        .is_some_and(|s| s.contains('$'))));
+        .is_some_and(|s| s.contains(common::PROMPT))));
 
     let res = app
         .update_terminal_settings(
@@ -119,7 +119,9 @@ fn update_settings_applies_and_validates() {
         ..Default::default()
     };
     assert!(app.update_terminal_settings(node, bad_color).is_err());
-    let busy = app.terminals().write(node, b"sleep 10\r");
+    let busy = app
+        .terminals()
+        .write(node, common::sleep_command(10_000).as_bytes());
     assert!(busy.is_ok());
     assert!(wait_until(WAIT, || app.terminals().is_busy(node)));
     assert_eq!(

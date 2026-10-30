@@ -1,7 +1,9 @@
-//! The Unix socket the `sonata` CLI talks to (research 003 R1). One request per connection,
-//! JSON lines. Each connection runs on its own thread because asks can wait for minutes.
+//! The Unix socket the `sonata` CLI talks to (research 003 R1), or a named pipe on Windows
+//! (feature 012, research R3). One request per connection, JSON lines. Each connection runs on
+//! its own thread because asks can wait for minutes.
 
 use std::io::{self, BufRead, BufReader, Read, Write};
+#[cfg(unix)]
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -12,12 +14,27 @@ use serde_json::json;
 
 use super::{EXIT_DENIED, EXIT_USAGE, MAX_REQUEST_BYTES, Reply, Request};
 use crate::App;
+#[cfg(unix)]
 use crate::paths::{ensure_private_dir, set_mode};
 
+/// One client connection.
+#[cfg(unix)]
+type Conn = UnixStream;
+#[cfg(windows)]
+type Conn = std::fs::File;
+
 /// macOS limits socket paths to 104 bytes.
+#[cfg(unix)]
 const MAX_SOCKET_PATH: usize = 100;
 
+/// The pipe name for this user and data root (research R3).
+#[cfg(windows)]
+pub fn socket_path(root: &Path) -> io::Result<PathBuf> {
+    super::pipe::pipe_name(root)
+}
+
 /// `<root>/run/sonata.sock`, or a private temp folder when that path is too long.
+#[cfg(unix)]
 pub fn socket_path(root: &Path) -> io::Result<PathBuf> {
     let preferred = root.join("run").join("sonata.sock");
     if preferred.as_os_str().len() <= MAX_SOCKET_PATH {
@@ -40,6 +57,33 @@ pub struct Server {
 }
 
 impl Server {
+    #[cfg(windows)]
+    pub fn start(app: Weak<App>, path: PathBuf) -> io::Result<Self> {
+        let mut listener = super::pipe::PipeListener::bind(&path)?;
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop_flag = stop.clone();
+        std::thread::Builder::new()
+            .name("sonata-pipe".into())
+            .spawn(move || {
+                loop {
+                    let conn = listener.accept();
+                    if stop_flag.load(Ordering::SeqCst) {
+                        break;
+                    }
+                    let Ok(conn) = conn else { continue };
+                    let app = app.clone();
+                    let _ = std::thread::Builder::new()
+                        .name("sonata-request".into())
+                        .spawn(move || {
+                            handle(app, &conn);
+                            super::pipe::flush(&conn);
+                        });
+                }
+            })?;
+        Ok(Self { path, stop })
+    }
+
+    #[cfg(unix)]
     pub fn start(app: Weak<App>, path: PathBuf) -> io::Result<Self> {
         let _ = std::fs::remove_file(&path);
         let listener = UnixListener::bind(&path)?;
@@ -57,7 +101,7 @@ impl Server {
                     let app = app.clone();
                     let _ = std::thread::Builder::new()
                         .name("sonata-request".into())
-                        .spawn(move || handle(app, stream));
+                        .spawn(move || handle(app, &stream));
                 }
             })?;
         Ok(Self { path, stop })
@@ -71,35 +115,40 @@ impl Server {
 impl Drop for Server {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::SeqCst);
-        let _ = UnixStream::connect(&self.path);
-        let _ = std::fs::remove_file(&self.path);
+        #[cfg(unix)]
+        {
+            let _ = UnixStream::connect(&self.path);
+            let _ = std::fs::remove_file(&self.path);
+        }
+        #[cfg(windows)]
+        let _ = super::pipe::connect(&self.path);
     }
 }
 
-fn send_line(stream: &mut UnixStream, value: &serde_json::Value) -> io::Result<()> {
+fn send_line(mut stream: &Conn, value: &serde_json::Value) -> io::Result<()> {
     let mut line = serde_json::to_vec(value)?;
     line.push(b'\n');
     stream.write_all(&line)
 }
 
-fn send_result(stream: &mut UnixStream, reply: &Reply) {
+fn send_result(stream: &Conn, reply: &Reply) {
     let mut v = serde_json::to_value(reply).unwrap_or_default();
     v["type"] = json!("result");
     let _ = send_line(stream, &v);
 }
 
-fn handle(app: Weak<App>, mut stream: UnixStream) {
+fn handle(app: Weak<App>, stream: &Conn) {
     let mut line = String::new();
-    let read = BufReader::new((&stream).take(MAX_REQUEST_BYTES as u64 + 1)).read_line(&mut line);
+    let read = BufReader::new(stream.take(MAX_REQUEST_BYTES as u64 + 1)).read_line(&mut line);
     if read.is_err() || line.len() > MAX_REQUEST_BYTES {
-        send_result(&mut stream, &Reply::err(EXIT_USAGE, "Request too large."));
+        send_result(stream, &Reply::err(EXIT_USAGE, "Request too large."));
         return;
     }
     let req: Request = match serde_json::from_str(&line) {
         Ok(r) => r,
         Err(e) => {
             send_result(
-                &mut stream,
+                stream,
                 &Reply::err(EXIT_USAGE, format!("Malformed request: {e}")),
             );
             return;
@@ -109,17 +158,14 @@ fn handle(app: Weak<App>, mut stream: UnixStream) {
     if req.v != 1 || !app.terminals().check_token(req.terminal_id, &req.token) {
         tracing::warn!(terminal = %req.terminal_id, "refused CLI request with a bad identity");
         send_result(
-            &mut stream,
+            stream,
             &Reply::err(EXIT_DENIED, "This terminal's Sonata identity is not valid."),
         );
         return;
     }
-    let mut progress_stream = stream.try_clone().ok();
-    let mut progress = move |message: &str| {
-        if let Some(s) = progress_stream.as_mut() {
-            let _ = send_line(s, &json!({"type": "progress", "message": message}));
-        }
+    let mut progress = |message: &str| {
+        let _ = send_line(stream, &json!({"type": "progress", "message": message}));
     };
     let reply = super::commands::handle(&app, &req, &mut progress);
-    send_result(&mut stream, &reply);
+    send_result(stream, &reply);
 }

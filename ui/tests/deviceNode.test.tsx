@@ -84,7 +84,7 @@ describe("device node picker (US2)", () => {
     expect(ipc.deviceOpenHelp).toHaveBeenCalledWith("xcode");
   });
 
-  it("hides iOS where simulators cannot exist (Linux)", async () => {
+  it("hides iOS where simulators cannot exist (Linux, Windows)", async () => {
     ipc.deviceTools.mockResolvedValue({ ...ready, ios: null });
     render(<DeviceNode node={node} />);
     await screen.findByRole("region", { name: "Android" });

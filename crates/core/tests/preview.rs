@@ -1,3 +1,5 @@
+// Drives a POSIX shell loop; Windows terminals are covered by terminal_pwsh.rs.
+#![cfg(unix)]
 mod common;
 
 use std::time::{Duration, Instant};
@@ -25,7 +27,7 @@ fn only_subscribed_terminals_emit_previews_at_most_once_per_second() {
         assert!(wait_until(WAIT, || app
             .terminals()
             .screen_text(id)
-            .is_some_and(|s| s.contains('$'))));
+            .is_some_and(|s| s.contains(common::PROMPT))));
         app.terminals()
             .write(id, b"while :; do echo tick; sleep 0.05; done\r")
             .unwrap();

@@ -52,6 +52,7 @@
     "allow-role-save",
     "allow-role-delete",
     "allow-presets-detect",
+    "allow-terminal-shells",
     "allow-terminal-attach",
     "allow-terminal-detach",
     "allow-terminal-write",

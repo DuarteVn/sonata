@@ -102,3 +102,18 @@ fn browser_nodes_persist_and_link() {
     assert!(app.workspaces().workspace(ws).unwrap().links.is_empty());
     app.quit();
 }
+
+#[test]
+fn windows_paths_are_not_addresses() {
+    // Feature 012: a drive path or a file URL never opens in a browser node.
+    for input in [
+        r"C:\Users\a\page.html",
+        "C:/Users/a/page.html",
+        "file:///C:/x.html",
+    ] {
+        assert!(
+            sonata_core::browser::normalize_url(input).is_err(),
+            "{input} was accepted"
+        );
+    }
+}

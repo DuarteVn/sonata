@@ -1,4 +1,6 @@
 //! Finding the Android SDK, virtual devices, and Xcode without changing anything (US2, R6).
+// Unix shells, modes, or sockets; Windows counterparts live in *_windows.rs (feature 012).
+#![cfg(unix)]
 
 mod common;
 

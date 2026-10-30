@@ -1,6 +1,8 @@
 //! Kimi Code CLI through Sonata (feature 010): session files, the `sonata run kimi` wrapper,
 //! recruit, and `sonata _hook kimi …`. Nothing here changes the process environment; the
 //! wrapper runs with its own environment and a fake `kimi`.
+// Unix shells, modes, or sockets; Windows counterparts live in *_windows.rs (feature 012).
+#![cfg(unix)]
 
 mod common;
 

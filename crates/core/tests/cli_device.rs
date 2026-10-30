@@ -1,4 +1,6 @@
 //! `sonata device …` from linked terminals, against a fake device (US3, contracts/cli.md).
+// Unix shells, modes, or sockets; Windows counterparts live in *_windows.rs (feature 012).
+#![cfg(unix)]
 
 mod common;
 

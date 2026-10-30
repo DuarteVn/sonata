@@ -4,6 +4,7 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { ipc } from "../ipc/commands";
+import { isMac, isWindows } from "../platform";
 import type { TerminalStateEvent } from "../ipc/types";
 import { clipboardAction, keyOverride } from "./xtermKeys";
 
@@ -40,7 +41,7 @@ export class XtermSession {
     this.zoom = opts.zoom;
     this.term = new Terminal({
       fontSize: opts.baseFontSize * opts.zoom,
-      fontFamily: '"SF Mono", Menlo, Monaco, "DejaVu Sans Mono", "Ubuntu Mono", "Liberation Mono", monospace',
+      fontFamily: '"SF Mono", Menlo, Monaco, "DejaVu Sans Mono", "Ubuntu Mono", "Liberation Mono", "Cascadia Mono", Consolas, monospace',
       scrollback: 10000,
       cursorBlink: true,
       allowProposedApi: true,
@@ -63,7 +64,7 @@ export class XtermSession {
     }
     this.term.resize(this.cols, this.rows);
     this.term.attachCustomKeyEventHandler((ev) => {
-      const clip = clipboardAction(ev);
+      const clip = clipboardAction(ev, isMac, isWindows, this.term.hasSelection());
       if (clip) {
         if (ev.type === "keydown") void this.clipboard(clip);
         ev.preventDefault();

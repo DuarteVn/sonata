@@ -8,7 +8,9 @@ import {
   type PresetStatus,
   type Role,
   type RoleRef,
+  type ShellChoice,
   type TerminalSettings,
+  type TerminalShell,
 } from "../ipc/types";
 import { useCanvas, type TerminalDialogMode } from "../state/canvas";
 import { useWorkspaces } from "../state/workspaces";
@@ -56,11 +58,15 @@ export function TerminalDialog({ mode, onClose }: Props) {
   const [restartNotice, setRestartNotice] = useState(false);
   const [laneCheck, setLaneCheck] = useState<LaneAvailability | null>(null);
   const [lane, setLane] = useState(false);
+  // Windows only: the shells found on this PC; empty elsewhere (feature 012).
+  const [shells, setShells] = useState<ShellChoice[]>([]);
+  const [shellKey, setShellKey] = useState(current?.shell ? shellChoiceKey(current.shell) : "");
   const workspaceId = useCanvas((s) => s.workspaceId);
 
   useEffect(() => {
     ipc.presetsDetect().then(setPresets).catch(() => setPresets([]));
     ipc.rolesList().then(setLibrary).catch(() => setLibrary([]));
+    (ipc.terminalShells?.() ?? Promise.resolve([])).then(setShells).catch(() => setShells([]));
   }, []);
 
   // Lanes are chosen only when a terminal is created (feature 008).
@@ -71,6 +77,11 @@ export function TerminalDialog({ mode, onClose }: Props) {
       .then(setLaneCheck)
       .catch((err) => setLaneCheck({ available: false, reason: isAppError(err) ? err.message : String(err) }));
   }, [mode.kind, workspaceId]);
+
+  const chosenShell = (): TerminalShell | null => {
+    const c = shells.find((s) => !s.default && shellChoiceKey(s) === shellKey);
+    return c ? (c.distro ? { kind: c.kind, distro: c.distro } : { kind: c.kind }) : null;
+  };
 
   const report = (err: unknown) => setError(isAppError(err) ? err.message : String(err));
   const found = (id: string) => presets.find((p) => p.id === id)?.found;
@@ -135,6 +146,7 @@ export function TerminalDialog({ mode, onClose }: Props) {
               monitorActivity: monitor,
               orchestrator,
               sendInstructions,
+              shell: chosenShell() ?? undefined,
             },
           },
         );
@@ -151,6 +163,7 @@ export function TerminalDialog({ mode, onClose }: Props) {
           monitorActivity: monitor,
           orchestrator,
           sendInstructions,
+          ...(shells.length > 0 ? { shell: chosenShell() } : {}),
         };
         const res = await ipc.terminalUpdateSettings(mode.nodeId, settings);
         useCanvas.getState().replaceNode(res.node);
@@ -223,6 +236,18 @@ export function TerminalDialog({ mode, onClose }: Props) {
                 Browse…
               </button>
             </div>
+            {shells.length > 0 && (
+              <label>
+                Shell
+                <select value={shellKey} onChange={(e) => setShellKey(e.target.value)}>
+                  {shells.map((s) => (
+                    <option key={shellChoiceKey(s)} value={s.default ? "" : shellChoiceKey(s)}>
+                      {s.default ? `${s.label} (default)` : s.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {mode.kind === "create" && (
               <label className="check">
                 <input
@@ -360,4 +385,9 @@ export function TerminalDialog({ mode, onClose }: Props) {
       </form>
     </Modal>
   );
+}
+
+/** One string per shell choice, for the picker's values. */
+function shellChoiceKey(s: { kind: string; distro?: string }): string {
+  return s.distro ? `${s.kind}:${s.distro}` : s.kind;
 }

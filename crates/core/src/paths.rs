@@ -3,10 +3,11 @@
 use std::ffi::OsString;
 use std::fs;
 use std::io;
-use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::{Component, Path, PathBuf};
 
 use uuid::Uuid;
+
+use crate::platform::{self, Kind};
 
 pub const DIR_MODE: u32 = 0o700;
 pub const FILE_MODE: u32 = 0o600;
@@ -41,16 +42,21 @@ pub fn reject_parent_components(path: &Path) -> Result<(), PathError> {
     }
 }
 
-/// Creates `path` (and parents) and forces mode `0700` on it.
+/// Creates `path` (and parents) and makes it private (mode `0700` on Unix, a user-only access
+/// list on Windows).
 pub fn ensure_private_dir(path: &Path) -> io::Result<()> {
-    fs::DirBuilder::new()
-        .recursive(true)
-        .mode(DIR_MODE)
-        .create(path)?;
-    set_mode(path, DIR_MODE)
+    platform::create_dir_all(path)?;
+    platform::make_private(path, Kind::Dir)
 }
 
+/// Makes a file private (mode `0600` on Unix, a user-only access list on Windows).
+pub fn make_private_file(path: &Path) -> io::Result<()> {
+    platform::make_private(path, Kind::File)
+}
+
+#[cfg(unix)]
 pub fn set_mode(path: &Path, mode: u32) -> io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
     fs::set_permissions(path, fs::Permissions::from_mode(mode))
 }
 
@@ -61,11 +67,10 @@ pub struct DataRoot {
 }
 
 impl DataRoot {
-    /// Resolves the root from `SONATA_HOME` / `HOME` and creates it.
+    /// Resolves the root from `SONATA_HOME` / the home folder and creates it.
     pub fn from_env() -> io::Result<Self> {
-        let home = std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .ok_or_else(|| io::Error::other("HOME is not set"))?;
+        let home =
+            platform::home_dir().ok_or_else(|| io::Error::other("the home folder is unknown"))?;
         Self::at(resolve_root(std::env::var_os("SONATA_HOME"), &home))
     }
 
@@ -158,7 +163,8 @@ impl DataRoot {
     }
 }
 
-/// Forces `0700` on folders and `0600` on files under `root`. Returns how many entries were
+/// Makes every folder and file under `root` private (`0700`/`0600` on Unix, user-only access
+/// lists on Windows). Returns how many entries were
 /// fixed (FR-015a). Symbolic links are left alone, and so are lane checkouts
 /// (`<root>/lanes/<id>/<slug>`), which hold the user's project files (feature 008, research R4).
 pub fn enforce_private_tree(root: &Path) -> io::Result<usize> {
@@ -176,10 +182,9 @@ pub fn enforce_private_tree(root: &Path) -> io::Result<usize> {
                 continue;
             }
             let path = entry.path();
-            let wanted = if kind.is_dir() { DIR_MODE } else { FILE_MODE };
-            let current = entry.metadata()?.permissions().mode() & 0o777;
-            if current != wanted {
-                set_mode(&path, wanted)?;
+            let wanted = if kind.is_dir() { Kind::Dir } else { Kind::File };
+            if !platform::is_private(&path, wanted)? {
+                platform::make_private(&path, wanted)?;
                 fixed += 1;
             }
             if kind.is_dir() {
@@ -187,9 +192,8 @@ pub fn enforce_private_tree(root: &Path) -> io::Result<usize> {
             }
         }
     }
-    let current = fs::metadata(root)?.permissions().mode() & 0o777;
-    if current != DIR_MODE {
-        set_mode(root, DIR_MODE)?;
+    if !platform::is_private(root, Kind::Dir)? {
+        platform::make_private(root, Kind::Dir)?;
         fixed += 1;
     }
     Ok(fixed)

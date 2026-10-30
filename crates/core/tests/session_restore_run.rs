@@ -1,6 +1,8 @@
 //! `sonata run` resuming the stored conversation, with fake agents (feature 009). The wrapper
 //! runs as a subprocess with the terminal's identity, so no test changes the process
 //! environment.
+// Unix shells, modes, or sockets; Windows counterparts live in *_windows.rs (feature 012).
+#![cfg(unix)]
 
 mod common;
 

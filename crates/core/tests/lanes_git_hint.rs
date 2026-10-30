@@ -19,3 +19,12 @@ fn linux_points_to_the_package_manager() {
         "Git is not installed. Install it with your package manager, for example: sudo apt install git"
     );
 }
+
+#[cfg(windows)]
+#[test]
+fn windows_points_to_git_for_windows() {
+    assert_eq!(
+        git_install_hint(),
+        "Git is not installed. Install Git for Windows from https://git-scm.com/download/win"
+    );
+}

@@ -5,12 +5,18 @@
 //! the user confirms Apply or Remove, and only adds or removes its own `[[hooks]]` tables. The
 //! edit is line based: a table is Sonata's when its `command` calls `sonata _hook kimi`.
 
+#[cfg(unix)]
 use std::io::Read;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+#[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
+#[cfg(unix)]
 use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+#[cfg(unix)]
+use std::time::Instant;
 
 use serde::Serialize;
 
@@ -19,6 +25,9 @@ use crate::paths::FILE_MODE;
 use crate::persistence::atomic;
 
 pub const KIMI_BLOCK_VERSION: u32 = 1;
+
+/// Kimi's hooks are POSIX shell commands, so Windows has no integration yet (feature 012).
+pub const WINDOWS_UNAVAILABLE: &str = "The Kimi Code integration is not available on Windows yet: its hooks are shell commands for macOS and Linux.";
 
 /// The exact lines Apply appends (block version 1).
 pub const BLOCK_V1: &str = r#"# >>> Sonata integration (v1). Managed by Sonata: Settings > Agents > Kimi Code. >>>
@@ -303,7 +312,19 @@ struct ShellRun {
     output: String,
 }
 
+/// Windows: no login shell to ask (see [`WINDOWS_UNAVAILABLE`]).
+#[cfg(windows)]
+fn run_shell(
+    _shell: &Path,
+    _script: &str,
+    _env: &[(&str, &Path)],
+    _timeout: Duration,
+) -> Option<ShellRun> {
+    None
+}
+
 /// Runs `shell -l -c script` in its own process group; `None` on timeout (the group is killed).
+#[cfg(unix)]
 fn run_shell(
     shell: &Path,
     script: &str,
@@ -357,8 +378,7 @@ pub fn kimi_home(shell: &Path) -> PathBuf {
         .filter(|s| !s.is_empty())
         .map(PathBuf::from)
         .unwrap_or_else(|| {
-            std::env::var_os("HOME")
-                .map(PathBuf::from)
+            crate::platform::home_dir()
                 .unwrap_or_else(|| PathBuf::from("/"))
                 .join(".kimi-code")
         })
@@ -479,6 +499,10 @@ pub fn integration(home: &Path, shell: &Path) -> KimiIntegration {
         last_backup: backups(home).pop().map(|(_, p)| p),
         validated: false,
     };
+    if cfg!(windows) {
+        out.message = Some(WINDOWS_UNAVAILABLE.into());
+        return out;
+    }
     if !home.is_dir() {
         out.message = Some(missing_folder(home));
         return out;
@@ -519,6 +543,12 @@ fn change(
     timeout: Duration,
     edit: impl FnOnce(&str) -> AppResult<String>,
 ) -> AppResult<KimiIntegration> {
+    if cfg!(windows) {
+        return Err(AppError::new(
+            ErrorCode::KimiUnavailable,
+            WINDOWS_UNAVAILABLE,
+        ));
+    }
     if !home.is_dir() {
         return Err(AppError::new(
             ErrorCode::KimiUnavailable,
@@ -527,10 +557,7 @@ fn change(
     }
     let path = config_path(home);
     let (old, mode) = match std::fs::read_to_string(&path) {
-        Ok(t) => {
-            let mode = std::fs::metadata(&path)?.permissions().mode() & 0o777;
-            (Some(t), mode)
-        }
+        Ok(t) => (Some(t), file_mode(&path)?),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => (None, FILE_MODE),
         Err(e) => {
             return Err(AppError::new(
@@ -580,8 +607,22 @@ fn change(
 /// Atomic write; the file then gets `mode` back (it can hold API keys).
 fn write_keeping_mode(path: &Path, text: &str, mode: u32) -> AppResult<()> {
     atomic::write(path, text.as_bytes())?;
+    #[cfg(unix)]
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))?;
+    #[cfg(windows)]
+    let _ = mode;
     Ok(())
+}
+
+#[cfg(unix)]
+fn file_mode(path: &Path) -> std::io::Result<u32> {
+    Ok(std::fs::metadata(path)?.permissions().mode() & 0o777)
+}
+
+/// Windows has no modes; atomic writes are private to the user already.
+#[cfg(windows)]
+fn file_mode(_path: &Path) -> std::io::Result<u32> {
+    Ok(FILE_MODE)
 }
 
 #[cfg(test)]

@@ -1,4 +1,6 @@
 //! Starting, attaching to, and stopping Android emulators with fake processes (US1, R1, R7).
+// Unix shells, modes, or sockets; Windows counterparts live in *_windows.rs (feature 012).
+#![cfg(unix)]
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};

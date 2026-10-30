@@ -1,6 +1,6 @@
 // Key overrides for live terminals.
 
-import { isMac } from "../platform";
+import { isMac, isWindows } from "../platform";
 
 /** Shift+Enter sends Escape + Return (Meta+Enter), which agent CLIs read as "new line". */
 export const SHIFT_ENTER_SEQUENCE = "\x1b\r";
@@ -27,9 +27,19 @@ export function keyOverride(ev: KeyLike, mac = isMac): string | null {
 /**
  * Linux terminals copy and paste with Ctrl+Shift+C and Ctrl+Shift+V, because Ctrl+C and Ctrl+V
  * belong to the program in the terminal. On a Mac the Edit menu does this with Cmd+C and Cmd+V.
+ * Windows adds its terminals' habit (feature 012): Ctrl+C copies when text is selected (and
+ * otherwise reaches the program), and Ctrl+V pastes.
  */
-export function clipboardAction(ev: KeyLike, mac = isMac): "copy" | "paste" | null {
-  if (mac || !ev.ctrlKey || !ev.shiftKey || ev.altKey || ev.metaKey) return null;
+export function clipboardAction(
+  ev: KeyLike,
+  mac = isMac,
+  windows = isWindows,
+  hasSelection = false,
+): "copy" | "paste" | null {
+  if (mac || !ev.ctrlKey || ev.altKey || ev.metaKey) return null;
   const k = ev.key.toLowerCase();
-  return k === "c" ? "copy" : k === "v" ? "paste" : null;
+  if (ev.shiftKey) return k === "c" ? "copy" : k === "v" ? "paste" : null;
+  if (!windows) return null;
+  if (k === "c" && hasSelection) return "copy";
+  return k === "v" ? "paste" : null;
 }
