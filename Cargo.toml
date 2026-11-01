@@ -20,6 +20,10 @@ prost = { version = "0.14", default-features = false, features = ["derive", "std
 quick-xml = "0.42"
 pretty_assertions = "1"
 rand = "0.9"
+# Bug reports over HTTPS (feature 013, research R1). Same rustls + ring stack the updater
+# already builds; `rustls-no-provider` avoids pulling aws-lc-rs.
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "multipart", "system-proxy"] }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri = { version = "2.12", features = ["protocol-asset", "unstable", "devtools"] }
