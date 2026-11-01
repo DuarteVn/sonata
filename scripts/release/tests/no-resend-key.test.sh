@@ -5,8 +5,9 @@ set -eu
 cd "$(dirname "$0")/../../.."
 pattern='(^|[^A-Za-z0-9_])re_[A-Za-z0-9_]{20,}'
 
-# The pattern itself must catch a key and ignore ordinary identifiers.
-printf 'key = "re_AbCdEfGh12345678_ijklmnop"\n' | grep -Eq "$pattern"
+# The pattern itself must catch a key and ignore ordinary identifiers. The sample key is built
+# at run time so this file does not match itself.
+printf 'key = "%s_%s"\n' re AbCdEfGh12345678_ijklmnop | grep -Eq "$pattern"
 if printf 'prepare_default_provider_install\n' | grep -Eq "$pattern"; then
   echo "pattern matches an ordinary identifier" >&2
   exit 1
