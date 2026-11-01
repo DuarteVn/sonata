@@ -116,8 +116,8 @@ diagnostics.
 
 ## Phase 8: Polish & Cross-Cutting
 
-- [ ] T039 [P] Add a test in ui/tests/windowsStrings.test.ts (or confirm the existing scan) so the dialog has no `Cmd`/`⌘` text on Windows and Linux (paste hint uses `keyLabel`)
-- [ ] T040 [P] Update CLAUDE.md/AGENTS.md agent context if the repo keeps one, and record the Portuguese-string exception next to the language rule comment in ui/src/report/ReportBugDialog.tsx
+- [x] T039 [P] Add a test in ui/tests/windowsStrings.test.ts (or confirm the existing scan) so the dialog has no `Cmd`/`⌘` text on Windows and Linux (paste hint uses `keyLabel`)
+- [x] T040 [P] Update CLAUDE.md/AGENTS.md agent context if the repo keeps one, and record the Portuguese-string exception next to the language rule comment in ui/src/report/ReportBugDialog.tsx
 - [ ] T041 Run `sh scripts/check.sh` and the worker checks; push the branch; confirm CI jobs `core-and-ui`, `linux-app`, `windows`, `worker` are green; record results in quickstart.md
 - [ ] T042 Ask the user to create the Cloudflare and Resend accounts and the public alias, deploy (quickstart section 2), set the GitHub variables, and run Scenarios A–D in a dev build; do not open a PR, merge, tag, or release without their OK
 
