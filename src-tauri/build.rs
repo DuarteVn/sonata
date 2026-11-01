@@ -88,6 +88,7 @@ const COMMANDS: &[&str] = &[
     "report_config",
     "report_send",
     "report_read_image",
+    "report_fallback",
 ];
 
 fn main() {

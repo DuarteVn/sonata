@@ -91,7 +91,8 @@
     "allow-kimi-open-settings",
     "allow-report-config",
     "allow-report-send",
-    "allow-report-read-image"
+    "allow-report-read-image",
+    "allow-report-fallback"
   ],
   "webviews": [
     "main"

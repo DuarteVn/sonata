@@ -5,7 +5,8 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use sonata_core::App;
-use sonata_core::report::{self, BugReport, ReportError, ReportImage, diagnostics};
+use sonata_core::platform;
+use sonata_core::report::{self, BugReport, ReportError, ReportImage, diagnostics, mailto};
 use tauri::{AppHandle, State};
 
 /// Build-time configuration (research R5). An empty value counts as absent.
@@ -118,6 +119,51 @@ pub async fn report_send(
         report::SEND_TIMEOUT,
     )
     .await
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FallbackResult {
+    opened: bool,
+    text: String,
+    truncated: bool,
+}
+
+/// Opens a `mailto:` to the public alias with the report filled in, and always returns the
+/// full text so the UI can copy it when the link was not opened or was cut.
+#[tauri::command]
+pub fn report_fallback(
+    handle: AppHandle,
+    input: ReportInput,
+) -> Result<FallbackResult, ReportError> {
+    let report = input.into_report()?.validate()?;
+    let diagnostics = diagnostics::collect_now(&app_version(&handle));
+    // A mail link cannot carry files, so ticked logs are reported as unavailable.
+    let logs = if report.include_logs {
+        mailto::LogsState::RequestedButUnavailable
+    } else {
+        mailto::LogsState::NotRequested
+    };
+    let Some(alias) = config().fallback_email else {
+        return Ok(FallbackResult {
+            opened: false,
+            text: mailto::plain_text(&report, &diagnostics, logs),
+            truncated: false,
+        });
+    };
+    let link = mailto::build(alias, &report, &diagnostics, logs);
+    let opened = match platform::open_url_command(&link.url).spawn() {
+        Ok(()) => true,
+        Err(err) => {
+            tracing::warn!(error = %err, "could not open the mail app");
+            false
+        }
+    };
+    Ok(FallbackResult {
+        opened,
+        text: link.text,
+        truncated: link.truncated,
+    })
 }
 
 #[cfg(test)]
