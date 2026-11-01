@@ -1,0 +1,17 @@
+# Sonata report service (feature 013). Deploy by hand: `npx wrangler deploy`.
+# Secrets (never in this file): `npx wrangler secret put RESEND_API_KEY` and `REPORT_TO`.
+name = "sonata-report"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+[vars]
+REPORT_FROM = "Sonata Reports <onboarding@resend.dev>"
+
+[[durable_objects.bindings]]
+name = "LIMITER"
+class_name = "Limiter"
+
+# The Workers free plan supports only SQLite-backed Durable Objects.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Limiter"]
