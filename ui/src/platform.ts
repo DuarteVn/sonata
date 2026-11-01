@@ -9,7 +9,7 @@ export const isMac = /Macintosh|Mac OS X/.test(userAgent);
 /** True in the Windows app (WebView2 reports "Windows NT"). */
 export const isWindows = /Windows/.test(userAgent);
 
-export type ShortcutName = "toggleSidebar" | "closeItem" | "settings" | "quit";
+export type ShortcutName = "toggleSidebar" | "closeItem" | "settings" | "quit" | "paste";
 
 /** Shortcut hints as each OS writes them; Linux uses Ctrl+Shift where Ctrl alone is a terminal key. */
 const SHORTCUTS: Record<ShortcutName, [mac: string, linux: string]> = {
@@ -17,6 +17,7 @@ const SHORTCUTS: Record<ShortcutName, [mac: string, linux: string]> = {
   closeItem: ["⌘W", "Ctrl+Shift+W"],
   settings: ["⌘,", "Ctrl+,"],
   quit: ["⌘Q", "Ctrl+Shift+Q"],
+  paste: ["⌘V", "Ctrl+V"],
 };
 
 export function shortcut(name: ShortcutName, mac = isMac): string {

@@ -4,7 +4,7 @@ import type { ReportImageMime } from "../ipc/types";
 // The Report Bug draft (data-model.md "Draft"): kept in memory for the app session so closing
 // the dialog loses nothing (FR-019); cleared after a successful send; never written to disk.
 
-export type DraftImage = { bytes: Uint8Array; mime: ReportImageMime };
+export type DraftImage = { bytes: Uint8Array<ArrayBuffer>; mime: ReportImageMime };
 
 export type Draft = {
   name: string;

@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Bootstrap, ReportConfigView, UpdateState } from "../src/ipc/types";
@@ -21,9 +21,17 @@ vi.mock("@tauri-apps/api/event", () => ({
     return () => {};
   }),
 }));
-vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(async () => null) }));
+const dialog = vi.hoisted(() => ({ open: vi.fn(async (): Promise<string | null> => null) }));
+vi.mock("@tauri-apps/plugin-dialog", () => dialog);
+type DropHandler = (e: { payload: { type: string; paths?: string[] } }) => void;
+const drop = vi.hoisted(() => ({ handler: null as DropHandler | null, unlisten: vi.fn() }));
 vi.mock("@tauri-apps/api/webview", () => ({
-  getCurrentWebview: () => ({ onDragDropEvent: vi.fn(async () => () => {}) }),
+  getCurrentWebview: () => ({
+    onDragDropEvent: vi.fn(async (cb: DropHandler) => {
+      drop.handler = cb;
+      return drop.unlisten;
+    }),
+  }),
 }));
 
 import { App } from "../src/App";
@@ -42,9 +50,17 @@ const boot: Bootstrap = {
   warnings: [],
 };
 
+const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1];
+const JPEG = [0xff, 0xd8, 0xff, 0xe0, 2];
+
+URL.createObjectURL = vi.fn(() => `blob:preview-${Math.random()}`);
+URL.revokeObjectURL = vi.fn();
+
 beforeEach(() => {
   vi.clearAllMocks();
   handlers.clear();
+  drop.handler = null;
+  dialog.open.mockResolvedValue(null);
   clearDraft();
   localStorage.clear();
   ipc.reportConfig.mockResolvedValue({ serviceConfigured: true, fallbackEmail: "bugs@example.test" });
@@ -155,5 +171,115 @@ describe("opening the dialog", () => {
     render(<App />);
     await userEvent.click(await screen.findByRole("button", { name: "Report Bug" }));
     expect(screen.getByRole("dialog", { name: "Report Bug" })).toBeInTheDocument();
+  });
+});
+
+function pasteFile(target: Element, file: File) {
+  fireEvent.paste(target, {
+    clipboardData: {
+      items: [{ kind: "file", type: file.type, getAsFile: () => file }],
+      getData: () => "",
+    },
+  });
+}
+
+const preview = () => screen.queryByRole("img", { name: "Attached image" });
+
+describe("attaching an image", () => {
+  it("attaches a pasted PNG and sends its bytes", async () => {
+    openDialog();
+    await fill();
+    pasteFile(screen.getByLabelText("What happened?"), new File([new Uint8Array(PNG)], "image.png", { type: "image/png" }));
+    expect(await screen.findByRole("img", { name: "Attached image" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(ipc.reportSend).toHaveBeenCalledWith(
+      expect.objectContaining({ image: { bytes: PNG, mime: "image/png" } }),
+    );
+  });
+
+  it("pastes text as text", async () => {
+    openDialog();
+    await userEvent.click(screen.getByLabelText("What happened?"));
+    await userEvent.paste("copied words");
+    expect(screen.getByLabelText("What happened?")).toHaveValue("copied words");
+    expect(preview()).toBeNull();
+  });
+
+  it("refuses a pasted image over 5 MB before reading it, keeping the earlier one", async () => {
+    openDialog();
+    pasteFile(document.body.querySelector(".report-dialog")!, new File([new Uint8Array(PNG)], "a.png", { type: "image/png" }));
+    await screen.findByRole("img", { name: "Attached image" });
+    const big = new File([new Uint8Array(PNG)], "big.png", { type: "image/png" });
+    Object.defineProperty(big, "size", { value: 5 * 1024 * 1024 + 1 });
+    const read = vi.spyOn(big, "arrayBuffer");
+    pasteFile(screen.getByLabelText("What happened?"), big);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/5 MB/);
+    expect(read).not.toHaveBeenCalled();
+    expect(preview()).toBeInTheDocument();
+  });
+
+  it("refuses a pasted GIF", async () => {
+    openDialog();
+    pasteFile(screen.getByLabelText("What happened?"), new File(["GIF89a"], "a.gif", { type: "image/gif" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/PNG or JPEG/);
+    expect(preview()).toBeNull();
+  });
+
+  it("attaches a chosen file through core and replaces the earlier image", async () => {
+    openDialog();
+    await fill();
+    dialog.open.mockResolvedValueOnce("/pics/a.png").mockResolvedValueOnce("/pics/b.jpg");
+    ipc.reportReadImage
+      .mockResolvedValueOnce({ bytes: PNG, mime: "image/png" })
+      .mockResolvedValueOnce({ bytes: JPEG, mime: "image/jpeg" });
+    await userEvent.click(screen.getByRole("button", { name: "Attach image…" }));
+    await screen.findByRole("img", { name: "Attached image" });
+    expect(dialog.open).toHaveBeenCalledWith(
+      expect.objectContaining({ filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg"] }] }),
+    );
+    expect(ipc.reportReadImage).toHaveBeenCalledWith("/pics/a.png");
+    await userEvent.click(screen.getByRole("button", { name: "Attach image…" }));
+    await waitFor(() => expect(ipc.reportReadImage).toHaveBeenCalledWith("/pics/b.jpg"));
+    await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalled());
+    expect(screen.getAllByRole("img", { name: "Attached image" })).toHaveLength(1);
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(ipc.reportSend).toHaveBeenCalledWith(
+      expect.objectContaining({ image: { bytes: JPEG, mime: "image/jpeg" } }),
+    );
+  });
+
+  it("shows why core rejected a file and keeps the earlier preview", async () => {
+    openDialog();
+    dialog.open.mockResolvedValueOnce("/pics/a.png").mockResolvedValueOnce("/pics/huge.png");
+    ipc.reportReadImage
+      .mockResolvedValueOnce({ bytes: PNG, mime: "image/png" })
+      .mockRejectedValueOnce({ kind: "invalid", field: "image", reason: "too_large" });
+    await userEvent.click(screen.getByRole("button", { name: "Attach image…" }));
+    await screen.findByRole("img", { name: "Attached image" });
+    await userEvent.click(screen.getByRole("button", { name: "Attach image…" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/5 MB/);
+    expect(preview()).toBeInTheDocument();
+  });
+
+  it("attaches the first dropped file while open and stops listening when closed", async () => {
+    const { unmount } = openDialog();
+    ipc.reportReadImage.mockResolvedValueOnce({ bytes: JPEG, mime: "image/jpeg" });
+    await waitFor(() => expect(drop.handler).not.toBeNull());
+    act(() => drop.handler!({ payload: { type: "over" } }));
+    act(() => drop.handler!({ payload: { type: "drop", paths: ["/d/one.jpg", "/d/two.png"] } }));
+    expect(await screen.findByRole("img", { name: "Attached image" })).toBeInTheDocument();
+    expect(ipc.reportReadImage).toHaveBeenCalledTimes(1);
+    expect(ipc.reportReadImage).toHaveBeenCalledWith("/d/one.jpg");
+    unmount();
+    expect(drop.unlisten).toHaveBeenCalled();
+  });
+
+  it("removes the image", async () => {
+    openDialog();
+    pasteFile(screen.getByLabelText("What happened?"), new File([new Uint8Array(PNG)], "a.png", { type: "image/png" }));
+    await screen.findByRole("img", { name: "Attached image" });
+    await userEvent.click(screen.getByRole("button", { name: "Remove image" }));
+    expect(preview()).toBeNull();
+    expect(URL.revokeObjectURL).toHaveBeenCalled();
   });
 });

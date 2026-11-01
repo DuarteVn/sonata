@@ -1,8 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { open as openFile } from "@tauri-apps/plugin-dialog";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent } from "react";
 import { Modal } from "../dialogs/Modal";
 import { ipc } from "../ipc/commands";
-import type { ReportConfigView, ReportError, ReportInput } from "../ipc/types";
-import { clearDraft, getDraft, setDraft, useDraft } from "./draft";
+import type { ReportConfigView, ReportError, ReportImageMime, ReportInput } from "../ipc/types";
+import { shortcut } from "../platform";
+import { clearDraft, getDraft, setDraft, useDraft, type DraftImage } from "./draft";
 
 // UI text is English (constitution), except this one sentence, which the maintainer chose on
 // purpose and must stay exactly as written (spec FR-003, plan Complexity Tracking).
@@ -10,7 +14,20 @@ export const IMPROVEMENT_POINTS = "Nosso sistema não tem bugs, tem PONTOS DE ME
 
 export const MAX_NAME = 100;
 export const MAX_DESCRIPTION = 10_000;
+export const MAX_IMAGE = 5 * 1024 * 1024;
 const COUNTER_FROM = 9_000;
+const IMAGE_TYPES: readonly string[] = ["image/png", "image/jpeg"];
+
+const IMAGE_PROBLEM: Record<string, string> = {
+  too_large: "That image is larger than 5 MB.",
+  unsupported_type: "Only PNG or JPEG images can be attached.",
+  unreadable: "Could not read that file.",
+};
+
+function imageProblem(err: unknown): string {
+  const reason = (err as { reason?: unknown } | null)?.reason;
+  return (typeof reason === "string" && IMAGE_PROBLEM[reason]) || IMAGE_PROBLEM.unreadable;
+}
 
 type Phase =
   | { kind: "editing" }
@@ -45,15 +62,92 @@ const count = (s: string) => [...s].length;
 
 type Props = { onClose: () => void };
 
+/** A preview address for the image, revoked when the image changes or the dialog closes. */
+function usePreview(image: DraftImage | null): string | null {
+  const url = useMemo(
+    () => (image ? URL.createObjectURL(new Blob([image.bytes], { type: image.mime })) : null),
+    [image],
+  );
+  useEffect(() => () => {
+    if (url) URL.revokeObjectURL(url);
+  }, [url]);
+  return url;
+}
+
 export function ReportBugDialog({ onClose }: Props) {
-  const { name, description } = useDraft();
+  const { name, description, image } = useDraft();
   const [phase, setPhase] = useState<Phase>({ kind: "editing" });
+  const [imageError, setImageError] = useState<string | null>(null);
   const config = useRef<Promise<ReportConfigView> | null>(null);
   const busy = useRef(false);
+  const previewUrl = usePreview(image);
 
   useEffect(() => {
     config.current = ipc.reportConfig().catch(() => ({ serviceConfigured: false, fallbackEmail: null }));
   }, []);
+
+  const attach = (bytes: Uint8Array<ArrayBuffer>, mime: ReportImageMime) => {
+    setImageError(null);
+    edit({ image: { bytes, mime } });
+  };
+
+  // A dropped or chosen file goes through core, which checks its size and type.
+  const attachPath = async (path: string) => {
+    try {
+      const view = await ipc.reportReadImage(path);
+      attach(new Uint8Array(view.bytes), view.mime);
+    } catch (err) {
+      setImageError(imageProblem(err));
+    }
+  };
+  const attachPathRef = useRef(attachPath);
+  attachPathRef.current = attachPath;
+
+  // Tauri takes file drops before the page sees them; listen only while the dialog is open.
+  useEffect(() => {
+    let stop: (() => void) | null = null;
+    let closed = false;
+    getCurrentWebview()
+      .onDragDropEvent((e) => {
+        if (e.payload.type === "drop" && e.payload.paths.length > 0) void attachPathRef.current(e.payload.paths[0]);
+      })
+      .then((off) => (closed ? off() : (stop = off)))
+      .catch(() => {});
+    return () => {
+      closed = true;
+      stop?.();
+    };
+  }, []);
+
+  async function chooseFile() {
+    const path = await openFile({
+      multiple: false,
+      directory: false,
+      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg"] }],
+    }).catch(() => null);
+    if (typeof path === "string") await attachPath(path);
+  }
+
+  // Pasting an image attaches it; pasting text stays normal.
+  function onPaste(e: ClipboardEvent) {
+    const items = Array.from(e.clipboardData?.items ?? []);
+    const item = items.find((i) => i.kind === "file" && i.type.startsWith("image/"));
+    if (!item) return;
+    e.preventDefault();
+    const file = item.getAsFile();
+    if (!file || !IMAGE_TYPES.includes(item.type)) {
+      setImageError(IMAGE_PROBLEM.unsupported_type);
+      return;
+    }
+    if (file.size > MAX_IMAGE) {
+      setImageError(IMAGE_PROBLEM.too_large);
+      return;
+    }
+    file
+      .arrayBuffer()
+      .then((buf) => attach(new Uint8Array(buf), item.type as ReportImageMime))
+      .catch(() => setImageError(IMAGE_PROBLEM.unreadable));
+  }
 
   const ready = name.trim() !== "" && description.trim() !== "";
   const sending = phase.kind === "sending";
@@ -96,7 +190,7 @@ export function ReportBugDialog({ onClose }: Props) {
 
   return (
     <Modal title="Report Bug" onClose={onClose}>
-      <div className="report-dialog">
+      <div className="report-dialog" onPaste={onPaste}>
         <p className="report-headline">{IMPROVEMENT_POINTS}</p>
         <form
           className="form"
@@ -128,6 +222,36 @@ export function ReportBugDialog({ onClose }: Props) {
               {chars.toLocaleString("en-US")} / {MAX_DESCRIPTION.toLocaleString("en-US")}
             </small>
           )}
+          <div className="report-image">
+            {image && previewUrl ? (
+              <div className="report-preview">
+                <img src={previewUrl} alt="Attached image" />
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="Remove image"
+                  onClick={() => {
+                    setImageError(null);
+                    edit({ image: null });
+                  }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <small className="field-label">
+                Paste a screenshot ({shortcut("paste")}), drop a PNG or JPEG here, or attach one. Up to 5 MB.
+              </small>
+            )}
+            <button type="button" onClick={() => void chooseFile()}>
+              Attach image…
+            </button>
+            {imageError && (
+              <p role="alert" className="error">
+                {imageError}
+              </p>
+            )}
+          </div>
           <p role="status" className="report-status" data-phase={phase.kind}>
             {status}
           </p>
