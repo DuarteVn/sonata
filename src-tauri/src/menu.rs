@@ -7,6 +7,9 @@
 //! before the page sees the key, so these menus bind no plain Ctrl+letter that a terminal program
 //! needs. Close Item, Toggle Sidebar, and Quit use Ctrl+Shift; there is no Edit menu (text fields
 //! copy and paste on their own; terminals use Ctrl+Shift+C and Ctrl+Shift+V).
+//!
+//! Help → Report Bug… (feature 013, research R10) exists on every platform; on macOS the Help
+//! menu is last and registered with the system so its search field appears.
 
 use std::sync::Arc;
 
@@ -22,6 +25,9 @@ pub const CHECK_UPDATES_ID: &str = "check-updates";
 pub const CHECK_UPDATES_EVENT: &str = "app://check-updates";
 pub const AUTO_CHECK_ID: &str = "auto-check-updates";
 pub const SETTINGS_ID: &str = "settings";
+pub const HELP_ID: &str = "help";
+pub const REPORT_BUG_ID: &str = "report-bug";
+pub const REPORT_BUG_EVENT: &str = "report-bug";
 #[cfg(not(target_os = "macos"))]
 const QUIT_ID: &str = "quit";
 
@@ -94,6 +100,37 @@ fn view_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
     )
 }
 
+fn help_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
+    Submenu::with_id_and_items(
+        app,
+        HELP_ID,
+        "Help",
+        true,
+        &[&MenuItem::with_id(
+            app,
+            REPORT_BUG_ID,
+            "Report Bug…",
+            true,
+            None::<&str>,
+        )?],
+    )
+}
+
+/// Registers the Help menu with macOS once the menu is installed (no-op elsewhere).
+pub fn register_help_menu<R: Runtime>(app: &AppHandle<R>) {
+    #[cfg(target_os = "macos")]
+    if let Some(help) = app
+        .menu()
+        .and_then(|m| m.get(HELP_ID))
+        .and_then(|i| i.as_submenu().cloned())
+        && let Err(err) = help.set_as_help_menu_for_nsapp()
+    {
+        tracing::warn!(error = %err, "could not register the Help menu");
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = app;
+}
+
 #[cfg(not(target_os = "macos"))]
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let sep = || PredefinedMenuItem::separator(app);
@@ -111,7 +148,15 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &MenuItem::with_id(app, QUIT_ID, "Quit Sonata", true, Some("Ctrl+Shift+Q"))?,
         ],
     )?;
-    Menu::with_items(app, &[&app_menu, &file_menu(app)?, &view_menu(app)?])
+    Menu::with_items(
+        app,
+        &[
+            &app_menu,
+            &file_menu(app)?,
+            &view_menu(app)?,
+            &help_menu(app)?,
+        ],
+    )
 }
 
 #[cfg(target_os = "macos")]
@@ -165,7 +210,8 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &PredefinedMenuItem::fullscreen(app, None)?,
         ],
     )?;
-    Menu::with_items(app, &[&app_menu, &file, &edit, &view, &window])
+    let help = help_menu(app)?;
+    Menu::with_items(app, &[&app_menu, &file, &edit, &view, &window, &help])
 }
 
 pub fn on_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
@@ -178,6 +224,9 @@ pub fn on_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
         }
         CHECK_UPDATES_ID => {
             let _ = app.emit(CHECK_UPDATES_EVENT, ());
+        }
+        REPORT_BUG_ID => {
+            let _ = app.emit(REPORT_BUG_EVENT, ());
         }
         // The same quit check as Cmd+Q on macOS: the UI asks when programs are running.
         #[cfg(not(target_os = "macos"))]
