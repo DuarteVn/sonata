@@ -10,8 +10,9 @@ cd "$(dirname "$0")/.."
 need() { command -v "$1" >/dev/null 2>&1 || { echo "Missing: $1 ($2)"; exit 1; }; }
 # SONATA_ASSUME_TTY=1 lets scripts/release/tests/install-prompt.test.sh answer the prompt.
 interactive() { [ -t 0 ] || [ "${SONATA_ASSUME_TTY:-}" = 1 ]; }
-# SONATA_UNAME and SONATA_OS_RELEASE let the tests pick the system.
+# SONATA_UNAME, SONATA_MACHINE, and SONATA_OS_RELEASE let the tests pick the system.
 system="${SONATA_UNAME:-$(uname -s)}"
+machine="${SONATA_MACHINE:-$(uname -m)}"
 
 if ! command -v cargo >/dev/null 2>&1; then
   answer=""
@@ -65,6 +66,11 @@ install_macos() {
 }
 
 install_linux() {
+  # Releases and CI cover x86_64 only (README "Linux").
+  if [ "$machine" != x86_64 ]; then
+    echo "Sonata on Linux supports x86_64 only (this machine: $machine)."
+    exit 1
+  fi
   if ! command -v pkg-config >/dev/null 2>&1 || ! pkg-config --exists webkit2gtk-4.1; then
     echo "Missing: WebKitGTK 4.1 development files. Install them with:"
     echo "  $(linux_packages)"

@@ -4,9 +4,10 @@
 //! usage JSON. It runs without a shell, with a 10-second limit, inside a sandbox that blocks
 //! credential stores and Sonata's own data (FR-019).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use chrono::{DateTime, TimeZone, Utc};
@@ -404,13 +405,29 @@ pub fn read_custom_bwrap(
             Path::exists,
         ))
         .collect();
+    // A probe that passed once passes again for the same wrapper, so its result is cached.
+    // Failures are probed again: the system may be fixed while Sonata runs.
+    static PROBED: OnceLock<Mutex<HashSet<Vec<String>>>> = OnceLock::new();
+    let probed = PROBED.get_or_init(Mutex::default);
+    if probed
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .contains(&wrapper)
+    {
+        return run_wrapped(id, argv, env, &wrapper, TIMEOUT, now);
+    }
     let probe = wrapper
         .iter()
         .cloned()
         .chain(["/bin/true".to_string()])
         .collect();
     match run(&RunSpec::new(probe, Duration::from_secs(5))) {
-        Ok(out) if out.code == Some(0) => {}
+        Ok(out) if out.code == Some(0) => {
+            probed
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(wrapper.clone());
+        }
         Ok(out) => {
             let first = out
                 .stderr
