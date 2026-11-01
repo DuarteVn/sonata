@@ -95,16 +95,26 @@ pub async fn report_read_image(path: std::path::PathBuf) -> Result<ImageView, Re
 #[tauri::command]
 pub async fn report_send(
     handle: AppHandle,
-    _core: State<'_, Arc<App>>,
+    core: State<'_, Arc<App>>,
     input: ReportInput,
 ) -> Result<(), ReportError> {
     let report = input.into_report()?.validate()?;
     let diagnostics = diagnostics::collect_now(&app_version(&handle));
+    // Logs are read only on the user's explicit opt-in (FR-008).
+    let log = if report.include_logs {
+        let dir = core.logs_dir();
+        tauri::async_runtime::spawn_blocking(move || report::log_tail::read(&dir))
+            .await
+            .ok()
+            .flatten()
+    } else {
+        None
+    };
     report::send(
         config().service_url,
         report,
         &diagnostics,
-        None,
+        log,
         report::SEND_TIMEOUT,
     )
     .await
