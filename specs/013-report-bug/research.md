@@ -129,3 +129,29 @@
 - **Decision**: the sentence lives in one exported constant `IMPROVEMENT_POINTS` in
   `ReportBugDialog.tsx`; `ui/tests/windowsStrings.test.ts` is unaffected (it scans for macOS
   terms, not language). The plan's Complexity Tracking records the deviation.
+
+## Verification during implementation (2026-11-01)
+
+- **R4 Resend** (resend.com/docs/api-reference/emails/send-email): `POST
+  https://api.resend.com/emails`, `Authorization: Bearer <key>`; `from` accepts
+  `Name <address>`; `to` is a string or an array (max 50); `text` is optional; `attachments`
+  is an array of objects with `filename` and `content` (Buffer or Base64 string) or `path`;
+  the content type is derived from `filename` when not set. Limit: 40 MB per email after
+  Base64 encoding, far above our 5 MB image + 1 MB log. Success returns `{"id": "…"}`.
+  The plan's field names (`filename`, base64 `content`) are confirmed. The onboarding-sender
+  restriction (`onboarding@resend.dev` delivers only to the account owner's address) is
+  a Resend account rule; the maintainer confirms it at deploy time (T042).
+- **R3 Durable Objects** (developers.cloudflare.com/durable-objects/platform/pricing):
+  available on Workers Free; only the SQLite storage backend is available there (so the
+  `new_sqlite_classes` migration in `wrangler.toml` is required). Free limits: 100,000
+  requests a day, 13,000 GB-s duration a day, 5 million rows read and 100,000 rows written a
+  day, 5 GB stored; daily limits reset at 00:00 UTC. With at most 100 reports a day plus
+  rejected bursts this stays far below every limit.
+- **R11 test tooling**: `@cloudflare/vitest-pool-workers` is deprecated and renamed to
+  `@cloudflare/vitest-plugin` (Vite plugin `cloudflareTest`, supports Vitest 4 and 5). The
+  Worker uses the new package. `fetchMock` is gone; tests call the Worker's `fetch` handler
+  directly and replace `globalThis.fetch` with a Vitest spy for the Resend call.
+- **R1 `reqwest` features**: the `rustls` feature of `reqwest` 0.13 pulls `aws-lc-rs`, a new
+  C-built crypto crate. Core instead enables `rustls-no-provider` + `multipart` and installs
+  the `ring` provider that the updater already builds (same pattern as
+  `tauri-plugin-updater`). The only new crates are `mime_guess` and `unicase`.
