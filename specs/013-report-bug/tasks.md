@@ -93,11 +93,11 @@ diagnostics.
 
 **Independent Test**: quickstart Scenario B.
 
-- [ ] T030 [P] [US3] Write failing tests in crates/core/src/report/log_tail.rs (tempdir): newest non-empty `sonata.log.*` chosen; file under 1 MB returned whole; file over 1 MB returns at most 1 MB starting right after a newline; invalid UTF-8 replaced, not an error; no log dir or only empty files → `None`
-- [ ] T031 [US3] Implement `log_tail::read(logs_dir) -> Option<LogExcerpt>` in crates/core/src/report/log_tail.rs per research R7, using the same `sonata.log.` prefix as crates/core/src/logging.rs (expose the prefix as `pub(crate)` there instead of duplicating it)
-- [ ] T032 [US3] In src-tauri/src/report.rs `report_send`, read the excerpt only when `includeLogs` is true and send `logsRequested`; extend crates/core/tests/report_send.rs: ticked with log → `log` part present; ticked without log → no `log` part, `logsRequested=true`; unticked → no `log` part and `logsRequested=false`
-- [ ] T033 [P] [US3] Worker: body line `Logs: included | requested but unavailable | not requested` and `sonata-log.txt` attachment; tests in worker/test/report.test.ts
-- [ ] T034 [P] [US3] UI: `Include logs` checkbox unticked by default with the hint `Logs can contain folder paths and project names.`; test in ui/tests/reportBugDialog.test.tsx
+- [x] T030 [P] [US3] Write failing tests in crates/core/src/report/log_tail.rs (tempdir): newest non-empty `sonata.log.*` chosen; file under 1 MB returned whole; file over 1 MB returns at most 1 MB starting right after a newline; invalid UTF-8 replaced, not an error; no log dir or only empty files → `None`
+- [x] T031 [US3] Implement `log_tail::read(logs_dir) -> Option<LogExcerpt>` in crates/core/src/report/log_tail.rs per research R7, using the same `sonata.log.` prefix as crates/core/src/logging.rs (expose the prefix as `pub(crate)` there instead of duplicating it)
+- [x] T032 [US3] In src-tauri/src/report.rs `report_send`, read the excerpt only when `includeLogs` is true and send `logsRequested`; extend crates/core/tests/report_send.rs: ticked with log → `log` part present; ticked without log → no `log` part, `logsRequested=true`; unticked → no `log` part and `logsRequested=false`
+- [x] T033 [P] [US3] Worker: body line `Logs: included | requested but unavailable | not requested` and `sonata-log.txt` attachment; tests in worker/test/report.test.ts
+- [x] T034 [P] [US3] UI: `Include logs` checkbox unticked by default with the hint `Logs can contain folder paths and project names.`; test in ui/tests/reportBugDialog.test.tsx
 
 **Checkpoint**: T030–T034 green.
 

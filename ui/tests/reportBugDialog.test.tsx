@@ -283,3 +283,16 @@ describe("attaching an image", () => {
     expect(URL.revokeObjectURL).toHaveBeenCalled();
   });
 });
+
+describe("logs", () => {
+  it("are off by default, explain the risk, and are sent only when ticked", async () => {
+    openDialog();
+    await fill();
+    const box = screen.getByRole("checkbox", { name: /Include logs/ });
+    expect(box).not.toBeChecked();
+    expect(screen.getByText("Logs can contain folder paths and project names.")).toBeInTheDocument();
+    await userEvent.click(box);
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(ipc.reportSend).toHaveBeenCalledWith(expect.objectContaining({ includeLogs: true }));
+  });
+});

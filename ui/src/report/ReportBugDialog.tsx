@@ -75,7 +75,7 @@ function usePreview(image: DraftImage | null): string | null {
 }
 
 export function ReportBugDialog({ onClose }: Props) {
-  const { name, description, image } = useDraft();
+  const { name, description, image, includeLogs } = useDraft();
   const [phase, setPhase] = useState<Phase>({ kind: "editing" });
   const [imageError, setImageError] = useState<string | null>(null);
   const config = useRef<Promise<ReportConfigView> | null>(null);
@@ -252,6 +252,17 @@ export function ReportBugDialog({ onClose }: Props) {
               </p>
             )}
           </div>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={includeLogs}
+              onChange={(e) => edit({ includeLogs: e.target.checked })}
+            />
+            <span>
+              Include logs
+              <small>Logs can contain folder paths and project names.</small>
+            </span>
+          </label>
           <p role="status" className="report-status" data-phase={phase.kind}>
             {status}
           </p>
