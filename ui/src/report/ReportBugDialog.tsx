@@ -33,7 +33,8 @@ type Phase =
   | { kind: "editing" }
   | { kind: "sending" }
   | { kind: "sent" }
-  | { kind: "failed"; error: ReportError["kind"] };
+  | { kind: "failed"; error: ReportError["kind"] }
+  | { kind: "fallback"; message: string };
 
 const FAILURE: Record<ReportError["kind"], string> = {
   invalid: "The report service did not accept this report.",
@@ -42,6 +43,9 @@ const FAILURE: Record<ReportError["kind"], string> = {
   refused: "The report service did not accept this report.",
   not_configured: "This build cannot send reports directly.",
 };
+
+const MAIL_OPENED = "Your mail app opened. Attach the image by hand if you have one.";
+const COPIED = "Report copied to the clipboard. Paste it in a message to the maintainer.";
 
 function errorKind(err: unknown): ReportError["kind"] {
   const kind = (err as { kind?: unknown } | null)?.kind;
@@ -172,6 +176,30 @@ export function ReportBugDialog({ onClose }: Props) {
     }
   }
 
+  // Mail app with the report filled in, or the clipboard when that is not possible (FR-011).
+  async function sendByEmail() {
+    if (busy.current) return;
+    busy.current = true;
+    try {
+      const result = await ipc.reportFallback(toInput());
+      const messages: string[] = [];
+      if (result.opened) messages.push(MAIL_OPENED);
+      if (!result.opened || result.truncated) {
+        try {
+          await navigator.clipboard.writeText(result.text);
+          messages.push(COPIED);
+        } catch {
+          messages.push("Could not copy the report. Select the text above and copy it by hand.");
+        }
+      }
+      setPhase({ kind: "fallback", message: messages.join(" ") });
+    } catch {
+      setPhase({ kind: "fallback", message: "Could not prepare the email. Please try again later." });
+    } finally {
+      busy.current = false;
+    }
+  }
+
   const edit = (patch: Parameters<typeof setDraft>[0]) => {
     setDraft(patch);
     if (phase.kind === "sent") setPhase({ kind: "editing" });
@@ -184,7 +212,10 @@ export function ReportBugDialog({ onClose }: Props) {
         ? "Thanks! Your report was sent."
         : phase.kind === "failed"
           ? FAILURE[phase.error]
-          : "";
+          : phase.kind === "fallback"
+            ? phase.message
+            : "";
+  const failed = phase.kind === "failed" ? phase.error : null;
 
   const chars = count(description);
 
@@ -266,6 +297,18 @@ export function ReportBugDialog({ onClose }: Props) {
           <p role="status" className="report-status" data-phase={phase.kind}>
             {status}
           </p>
+          {failed && (
+            <div className="report-fallback">
+              {failed !== "not_configured" && (
+                <button type="button" onClick={() => void send()}>
+                  Try again
+                </button>
+              )}
+              <button type="button" onClick={() => void sendByEmail()}>
+                Send by email instead
+              </button>
+            </div>
+          )}
           <div className="actions">
             <button type="button" onClick={onClose}>
               Close

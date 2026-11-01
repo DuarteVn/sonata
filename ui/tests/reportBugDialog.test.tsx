@@ -296,3 +296,75 @@ describe("logs", () => {
     expect(ipc.reportSend).toHaveBeenCalledWith(expect.objectContaining({ includeLogs: true }));
   });
 });
+
+describe("when sending fails", () => {
+  const writeText = vi.fn(async () => {});
+  beforeEach(() => {
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    writeText.mockClear();
+  });
+
+  async function failWith(error: unknown) {
+    ipc.reportSend.mockRejectedValueOnce(error);
+    openDialog();
+    await fill();
+    pasteFile(screen.getByLabelText("What happened?"), new File([new Uint8Array(PNG)], "a.png", { type: "image/png" }));
+    await screen.findByRole("img", { name: "Attached image" });
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+  }
+
+  it.each([
+    [{ kind: "unreachable" }, "Could not reach the report service. Check your connection and try again."],
+    [{ kind: "rate_limited", retryAfterSecs: 120 }, "Too many reports right now. Please try again later."],
+    [{ kind: "refused", code: "invalid_field:name" }, "The report service did not accept this report."],
+    ["boom", "Could not reach the report service. Check your connection and try again."],
+  ])("explains %o, keeps the report, and retries", async (error, message) => {
+    await failWith(error);
+    expect(await screen.findByRole("status")).toHaveTextContent(message);
+    expect(screen.getByLabelText("Your name")).toHaveValue("Ana");
+    expect(screen.getByLabelText("What happened?")).toHaveValue("The note vanished.");
+    expect(preview()).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(ipc.reportSend).toHaveBeenCalledTimes(2);
+    expect(await screen.findByRole("status")).toHaveTextContent("Thanks! Your report was sent.");
+  });
+
+  it("opens the mail app as a fallback", async () => {
+    ipc.reportFallback.mockResolvedValueOnce({ opened: true, text: "full text", truncated: false });
+    await failWith({ kind: "unreachable" });
+    await userEvent.click(await screen.findByRole("button", { name: "Send by email instead" }));
+    expect(ipc.reportFallback).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Ana", image: { bytes: PNG, mime: "image/png" } }),
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Your mail app opened. Attach the image by hand if you have one.",
+    );
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ opened: false, text: "full text", truncated: false }],
+    [{ opened: true, text: "full text", truncated: true }],
+  ])("copies the report when the mail link is missing or cut (%o)", async (result) => {
+    ipc.reportFallback.mockResolvedValueOnce(result);
+    await failWith({ kind: "unreachable" });
+    await userEvent.click(await screen.findByRole("button", { name: "Send by email instead" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("full text"));
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Report copied to the clipboard. Paste it in a message to the maintainer.",
+    );
+  });
+
+  it("goes straight to the fallback when this build has no report service", async () => {
+    ipc.reportConfig.mockResolvedValue({ serviceConfigured: false, fallbackEmail: null });
+    ipc.reportFallback.mockResolvedValueOnce({ opened: false, text: "full text", truncated: false });
+    openDialog();
+    await fill();
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("This build cannot send reports directly.");
+    expect(ipc.reportSend).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Send by email instead" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("full text"));
+  });
+});
