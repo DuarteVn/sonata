@@ -40,6 +40,7 @@ export type EventMap = {
   "lane://confirm-closed": { requestId: string };
   "kimi://integration": import("./types").KimiIntegration;
   "settings://section": string;
+  "report-bug": null;
 };
 
 export function onEvent<K extends keyof EventMap>(
@@ -47,4 +48,9 @@ export function onEvent<K extends keyof EventMap>(
   handler: (payload: EventMap[K]) => void,
 ): Promise<UnlistenFn> {
   return listen<EventMap[K]>(name, (e) => handler(e.payload));
+}
+
+/** Help → Report Bug… (feature 013). */
+export function onReportBug(handler: () => void): Promise<UnlistenFn> {
+  return onEvent("report-bug", () => handler());
 }
