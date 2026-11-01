@@ -5,7 +5,10 @@ pub mod diagnostics;
 
 use std::time::Duration;
 
+use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
+
+use diagnostics::Diagnostics;
 
 /// Longest name, in Unicode scalar values, after trimming.
 pub const MAX_NAME: usize = 100;
@@ -69,6 +72,14 @@ pub struct BugReport {
     pub description: String,
     pub image: Option<ReportImage>,
     pub include_logs: bool,
+}
+
+/// The end of the newest log file, sent only when the user ticks "Include logs".
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LogExcerpt {
+    pub text: String,
+    /// The file it came from, for example `sonata.log.2026-11-01`.
+    pub source: String,
 }
 
 /// Why a report was not sent. Serialized for the UI as `{"kind": …}` per
@@ -139,6 +150,111 @@ impl BugReport {
             image,
             include_logs: self.include_logs,
         })
+    }
+}
+
+/// When a 429 carries no usable `Retry-After`.
+const DEFAULT_RETRY_AFTER_SECS: u64 = 3600;
+
+/// Validates `report` and posts it with `diagnostics` (and `log`, only when the user asked for
+/// logs) to the report service at `url` as `multipart/form-data`, per
+/// `contracts/report-service.md`. Nothing connects when the report is invalid or `url` is
+/// `None`.
+pub async fn send(
+    url: Option<&str>,
+    report: BugReport,
+    diagnostics: &Diagnostics,
+    log: Option<LogExcerpt>,
+    timeout: Duration,
+) -> Result<(), ReportError> {
+    let report = report.validate()?;
+    let url = url
+        .filter(|u| !u.trim().is_empty())
+        .ok_or(ReportError::NotConfigured)?;
+    let log = log.filter(|_| report.include_logs);
+    let form = form(report, diagnostics, log)?;
+
+    install_crypto_provider();
+    let client = reqwest::Client::builder()
+        .user_agent(format!("Sonata/{}", diagnostics.app_version))
+        .timeout(timeout)
+        .build()
+        .map_err(|err| {
+            tracing::warn!(error = %err, "could not build the report client");
+            ReportError::Unreachable
+        })?;
+    let response = client
+        .post(url)
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|err| {
+            tracing::info!(error = %err, "report service unreachable");
+            ReportError::Unreachable
+        })?;
+    let status = response.status();
+    tracing::info!(status = status.as_u16(), "report service answered");
+    if status.is_success() {
+        return Ok(());
+    }
+    if status.as_u16() == 429 {
+        let retry_after_secs = response
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.trim().parse().ok())
+            .unwrap_or(DEFAULT_RETRY_AFTER_SECS);
+        return Err(ReportError::RateLimited { retry_after_secs });
+    }
+    if status.is_client_error() {
+        #[derive(Deserialize)]
+        struct Body {
+            error: Option<String>,
+        }
+        let code = response
+            .bytes()
+            .await
+            .ok()
+            .and_then(|b| serde_json::from_slice::<Body>(&b).ok())
+            .and_then(|b| b.error)
+            .unwrap_or_else(|| format!("http_{}", status.as_u16()));
+        return Err(ReportError::Refused { code });
+    }
+    Err(ReportError::Unreachable)
+}
+
+fn form(report: BugReport, d: &Diagnostics, log: Option<LogExcerpt>) -> Result<Form, ReportError> {
+    let mut form = Form::new()
+        .text("name", report.name)
+        .text("description", report.description)
+        .text("appVersion", d.app_version.clone())
+        .text("os", d.os.clone())
+        .text("osVersion", d.os_version.clone())
+        .text("arch", d.arch.clone())
+        .text("sentAt", d.sent_at.clone())
+        .text("logsRequested", report.include_logs.to_string());
+    let part = |bytes: Vec<u8>, file: &'static str, mime: &str| {
+        Part::bytes(bytes)
+            .file_name(file)
+            .mime_str(mime)
+            .map_err(|_| ReportError::invalid("image", "unsupported_type"))
+    };
+    if let Some(image) = report.image {
+        let mime = image.mime;
+        form = form.part("image", part(image.bytes, mime.file_name(), mime.as_str())?);
+    }
+    if let Some(log) = log {
+        let mut text = log.text.into_bytes();
+        text.truncate(MAX_LOG);
+        form = form.part("log", part(text, "sonata-log.txt", "text/plain")?);
+    }
+    Ok(form)
+}
+
+/// `reqwest` is built without a bundled crypto provider; use `ring`, as the updater does.
+fn install_crypto_provider() {
+    if rustls::crypto::CryptoProvider::get_default().is_none() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
     }
 }
 
