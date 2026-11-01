@@ -64,7 +64,7 @@ jobs:
   macos:
     needs: draft
     # macOS is needed for the app bundle, lipo, and the disk image.
-    runs-on: macos-14
+    runs-on: macos-15
     permissions:
       contents: write
     env:
