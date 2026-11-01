@@ -184,6 +184,63 @@ Run the same script again to update. If Rust is missing, the script offers to in
 the official installer (rustup) and does nothing without your "yes". An app you build yourself
 opens without any Gatekeeper prompt.
 
+## Reporting bugs
+
+Help → Report Bug… (or the Report Bug button at the bottom of the sidebar) opens a short form:
+your name, what happened, and one optional PNG or JPEG image (up to 5 MB). Paste a screenshot,
+drag a file onto the dialog, or choose one with Attach image…. The text you type is kept until
+you quit Sonata, so closing the dialog loses nothing.
+
+Besides what you type, a report contains the Sonata version, the operating system and its
+version, the processor architecture, and the time it was sent. Logs are sent only when you
+tick Include logs (the end of today's log file, at most 1 MB); logs can contain folder paths
+and project names, never terminal output.
+
+If the report service cannot be reached, the dialog offers Try again and Send by email
+instead, which opens your mail app with the report filled in (attach the image by hand), or
+copies the report to the clipboard when no mail app or address is available.
+
+## Running the report service
+
+Reports go to a small Cloudflare Worker in `worker/`, which checks them, limits them (5 per
+address per hour, 100 per day in total), and emails them through Resend. Both services have
+free plans that cover this. The Resend API key and the destination address live only in the
+Worker's secrets: they are never in this repository, in the app, or in its release files.
+
+1. Create free Cloudflare and Resend accounts. With Resend's shared sender
+   (`onboarding@resend.dev`) emails reach only the Resend account's own address, so sign up
+   with the address that should receive reports. Create an API key in Resend.
+2. Deploy and set the secrets (each `secret put` prompts for the value):
+
+   ```sh
+   cd worker
+   npm ci
+   npx wrangler login
+   npx wrangler deploy                   # prints https://sonata-report.<account>.workers.dev
+   npx wrangler secret put RESEND_API_KEY
+   npx wrangler secret put REPORT_TO
+   ```
+
+3. Test it without the app:
+
+   ```sh
+   curl -sS -F name=Test -F description='Hello from curl' -F appVersion=0.3.0 -F os=macos \
+     -F osVersion=15.6 -F arch=aarch64 -F sentAt=2026-11-01T12:00:00Z -F logsRequested=false \
+     -F image=@screenshot.png https://sonata-report.<account>.workers.dev/report
+   ```
+
+   Expected: `{"ok":true}` and one email with `screenshot.png` attached within a minute.
+4. In the GitHub repository settings (Secrets and variables → Actions → Variables), set
+   `SONATA_REPORT_URL` to `https://sonata-report.<account>.workers.dev/report` and
+   `SONATA_REPORT_FALLBACK_EMAIL` to a public address for the email fallback (an alias, not
+   your private inbox). Release builds read both; a build without them still works and offers
+   only the fallback. For a local build, set the same two environment variables before
+   `npm run tauri build`.
+
+Security: never put the Resend key or the destination address in a file in this repository;
+`scripts/release/tests/no-resend-key.test.sh` fails when something shaped like a Resend key is
+committed. Worker development checks: `cd worker && npm ci && npm run typecheck && npm test`.
+
 ## Security notice
 
 Sonata runs shells, `git`, and AI agents with your user permissions, without a sandbox. Only run

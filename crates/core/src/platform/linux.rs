@@ -57,3 +57,16 @@ pub fn reveal_command(path: &Path) -> Launch {
         args: vec![folder.into()],
     }
 }
+
+/// The distribution's `PRETTY_NAME` and the kernel release, for example
+/// `Ubuntu 24.04.1 LTS (6.8.0-45-generic)`; either part alone when the other is missing.
+pub fn os_version() -> Option<String> {
+    let pretty = ["/etc/os-release", "/usr/lib/os-release"]
+        .iter()
+        .find_map(|p| super::linux_pretty_name(&std::fs::read_to_string(p).ok()?));
+    let kernel = super::command_line("uname", &["-r"]);
+    match (pretty, kernel) {
+        (Some(p), Some(k)) => Some(format!("{p} ({k})")),
+        (p, k) => p.or(k),
+    }
+}

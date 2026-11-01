@@ -87,6 +87,9 @@ jobs:
           SONATA_UNIVERSAL: '1'
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Report Bug (feature 013): public values, so repository variables, not secrets.
+          SONATA_REPORT_URL: ${{ vars.SONATA_REPORT_URL }}
+          SONATA_REPORT_FALLBACK_EMAIL: ${{ vars.SONATA_REPORT_FALLBACK_EMAIL }}
         run: npm run tauri build -- --target universal-apple-darwin --bundles app,dmg
       - name: Check both architectures are present
         run: |
@@ -132,6 +135,9 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Report Bug (feature 013): public values, so repository variables, not secrets.
+          SONATA_REPORT_URL: ${{ vars.SONATA_REPORT_URL }}
+          SONATA_REPORT_FALLBACK_EMAIL: ${{ vars.SONATA_REPORT_FALLBACK_EMAIL }}
         run: npm run tauri build -- --bundles appimage,deb
       - name: Upload the Linux files to the draft
         run: |
@@ -166,6 +172,9 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Report Bug (feature 013): public values, so repository variables, not secrets.
+          SONATA_REPORT_URL: ${{ vars.SONATA_REPORT_URL }}
+          SONATA_REPORT_FALLBACK_EMAIL: ${{ vars.SONATA_REPORT_FALLBACK_EMAIL }}
         run: npm run tauri build -- --bundles nsis
       - name: Upload the Windows files to the draft
         run: |

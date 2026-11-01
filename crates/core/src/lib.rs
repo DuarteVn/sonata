@@ -20,6 +20,7 @@ pub mod paths;
 pub mod persistence;
 pub mod platform;
 pub mod presets;
+pub mod report;
 pub mod roles;
 pub mod terminal;
 pub mod update;

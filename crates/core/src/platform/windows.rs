@@ -501,3 +501,22 @@ pub fn child_processes(pid: u32) -> Vec<(u32, String)> {
     }
     out
 }
+
+/// `major.minor.build` from `RtlGetVersion`, which, unlike `GetVersionEx`, is not capped by the
+/// manifest, for example `10.0.26100`.
+pub fn os_version() -> Option<String> {
+    use windows_sys::Wdk::System::SystemServices::RtlGetVersion;
+    use windows_sys::Win32::System::SystemInformation::OSVERSIONINFOW;
+
+    // SAFETY: OSVERSIONINFOW is plain data; zeroed is a valid value once the size is set.
+    let mut info: OSVERSIONINFOW = unsafe { std::mem::zeroed() };
+    info.dwOSVersionInfoSize = std::mem::size_of::<OSVERSIONINFOW>() as u32;
+    // SAFETY: `info` is a valid, writable OSVERSIONINFOW with its size field set.
+    let status = unsafe { RtlGetVersion(&mut info) };
+    (status == 0).then(|| {
+        format!(
+            "{}.{}.{}",
+            info.dwMajorVersion, info.dwMinorVersion, info.dwBuildNumber
+        )
+    })
+}

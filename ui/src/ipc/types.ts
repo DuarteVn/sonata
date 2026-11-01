@@ -406,3 +406,36 @@ export type ConsentRequest = {
 };
 
 export type RefreshReason = "panelOpen" | "manual";
+
+// Report Bug (feature 013, contracts/app-commands.md).
+export type ReportImageMime = "image/png" | "image/jpeg";
+
+export type ReportConfigView = {
+  serviceConfigured: boolean;
+  fallbackEmail: string | null;
+};
+
+export type ImageView = {
+  bytes: number[];
+  mime: ReportImageMime;
+};
+
+export type ReportInput = {
+  name: string;
+  description: string;
+  image: ImageView | null;
+  includeLogs: boolean;
+};
+
+export type ReportError =
+  | { kind: "invalid"; field: string; reason: string }
+  | { kind: "not_configured" }
+  | { kind: "unreachable" }
+  | { kind: "rate_limited"; retryAfterSecs: number }
+  | { kind: "refused"; code: string };
+
+export type FallbackResult = {
+  opened: boolean;
+  text: string;
+  truncated: boolean;
+};

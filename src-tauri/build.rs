@@ -85,9 +85,16 @@ const COMMANDS: &[&str] = &[
     "dismiss_kimi_notice",
     "kimi_watch",
     "kimi_open_settings",
+    "report_config",
+    "report_send",
+    "report_read_image",
+    "report_fallback",
 ];
 
 fn main() {
+    // Report Bug build-time configuration (feature 013, research R5).
+    println!("cargo:rerun-if-env-changed=SONATA_REPORT_URL");
+    println!("cargo:rerun-if-env-changed=SONATA_REPORT_FALLBACK_EMAIL");
     tauri_build::try_build(
         tauri_build::Attributes::new()
             .app_manifest(tauri_build::AppManifest::new().commands(COMMANDS)),

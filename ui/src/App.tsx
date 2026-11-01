@@ -5,8 +5,9 @@ import { Canvas } from "./canvas/Canvas";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import { QuitDialog } from "./dialogs/QuitDialog";
 import { ipc } from "./ipc/commands";
-import { onEvent } from "./ipc/events";
+import { onEvent, onReportBug } from "./ipc/events";
 import type { BusyWorkspace } from "./ipc/types";
+import { ReportBugDialog } from "./report/ReportBugDialog";
 import { CreateWorkspaceDialog } from "./sidebar/CreateWorkspaceDialog";
 import { clampSidebarWidth, Sidebar, SIDEBAR_DEFAULT_WIDTH } from "./sidebar/Sidebar";
 import { useCanvas } from "./state/canvas";
@@ -46,6 +47,7 @@ export function App() {
   const workspaces = useWorkspaces((s) => s.workspaces);
   const active = useWorkspaces((s) => s.active);
   const [creating, setCreating] = useState(false);
+  const [reporting, setReporting] = useState(false);
   const [quitBusy, setQuitBusy] = useState<BusyWorkspace[] | null>(null);
   const [updateBusy, setUpdateBusy] = useState<BusyWorkspace[] | null>(null);
   const updateState = useUpdate((s) => s.state);
@@ -120,6 +122,8 @@ export function App() {
       onEvent("lane://confirm-closed", (e) => useCanvas.getState().closeLaneRequest(e.requestId)),
       onEvent("kimi://integration", (i) => useKimi.getState().set(i)),
       // Sonata → Check for Updates…: always report the result (FR-013).
+      // Help → Report Bug… (feature 013).
+      onReportBug(() => setReporting(true)),
       onEvent("app://check-updates", async () => {
         try {
           const state = await ipc.updateCheck(true);
@@ -201,6 +205,7 @@ export function App() {
           width={sidebarWidth}
           onResize={setSidebarWidth}
           onInstallUpdate={() => void installUpdate()}
+          onReportBug={() => setReporting(true)}
         />
       )}
       <main className="main">
@@ -229,6 +234,7 @@ export function App() {
         {active && <Canvas key={active.id} />}
       </main>
       {creating && <CreateWorkspaceDialog onClose={() => setCreating(false)} />}
+      {reporting && <ReportBugDialog onClose={() => setReporting(false)} />}
       {consent && (
         <UsageConsentDialog
           key={consent.providerId}

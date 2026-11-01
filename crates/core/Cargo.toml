@@ -15,6 +15,9 @@ portable-pty.workspace = true
 prost.workspace = true
 quick-xml.workspace = true
 rand.workspace = true
+# Bug reports (feature 013).
+reqwest.workspace = true
+rustls.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
@@ -39,3 +42,5 @@ tempfile.workspace = true
 # A fake emulator gRPC server in tests only.
 tonic = { workspace = true, features = ["server", "router"] }
 tokio-stream = { workspace = true, features = ["net"] }
+# A local HTTP stub in the report tests (feature 013).
+tokio = { workspace = true, features = ["net", "io-util"] }

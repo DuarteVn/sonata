@@ -4,6 +4,7 @@ mod browser;
 mod commands;
 mod events;
 mod menu;
+mod report;
 mod settings;
 
 use std::sync::Arc;
@@ -70,6 +71,7 @@ pub fn run() {
             spawn_launch_window_timer(core.clone());
             spawn_usage_loop(core.clone());
             menu::set_auto_check(tauri_app.handle(), core.auto_update_check());
+            menu::register_help_menu(tauri_app.handle());
             commands::update::spawn_background_checks(tauri_app.handle().clone(), core.clone());
             tauri_app.manage(core);
             Ok(())
@@ -86,6 +88,10 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::app::app_bootstrap,
+            report::report_config,
+            report::report_send,
+            report::report_read_image,
+            report::report_fallback,
             commands::app::app_quit_check,
             commands::app::app_quit,
             commands::app::app_reveal_path,

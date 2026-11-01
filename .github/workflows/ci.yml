@@ -35,6 +35,24 @@ jobs:
         with:
           args: -color
 
+  worker:
+    # The bug report service (feature 013): typecheck and tests in the Workers runtime. Deploy
+    # stays manual, so CI never needs Cloudflare credentials.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
   linux-app:
     # The whole workspace, including the Tauri shell, on the oldest supported Linux baseline
     # (feature 011): Linux-only code and tests run here.

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-report-read-image"
+description = "Enables the report_read_image command without any pre-configured scope."
+commands.allow = ["report_read_image"]
+
+[[permission]]
+identifier = "deny-report-read-image"
+description = "Denies the report_read_image command without any pre-configured scope."
+commands.deny = ["report_read_image"]

@@ -1,4 +1,4 @@
-import { PanelLeftClose, Plus } from "lucide-react";
+import { Bug, PanelLeftClose, Plus } from "lucide-react";
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { startDrag as startPointerDrag } from "../canvas/useDrag";
 import { ConfirmDialog } from "../dialogs/ConfirmDialog";
@@ -26,9 +26,11 @@ type Props = {
   onResize: (width: number) => void;
   /** Starts the update install flow from the banner (feature 005). */
   onInstallUpdate?: () => void;
+  /** Opens the Report Bug dialog (feature 013). */
+  onReportBug?: () => void;
 };
 
-export function Sidebar({ onCreate, onHide, width, onResize, onInstallUpdate }: Props) {
+export function Sidebar({ onCreate, onHide, width, onResize, onInstallUpdate, onReportBug }: Props) {
   const workspaces = useWorkspaces((s) => s.workspaces);
   const activeId = useWorkspaces((s) => s.activeId);
   const loadFailures = useWorkspaces((s) => s.loadFailures);
@@ -117,6 +119,14 @@ export function Sidebar({ onCreate, onHide, width, onResize, onInstallUpdate }: 
         ))}
       </ul>
       {onInstallUpdate && <UpdateBanner onInstall={onInstallUpdate} />}
+      {onReportBug && (
+        <footer className="sidebar-footer">
+          <button type="button" className="report-bug-button" onClick={onReportBug}>
+            <Bug size={14} aria-hidden="true" />
+            Report Bug
+          </button>
+        </footer>
+      )}
       <div
         className="sidebar-resize"
         role="separator"

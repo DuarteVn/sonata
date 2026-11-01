@@ -309,3 +309,75 @@ pub fn find_on_path(name: &str) -> Option<PathBuf> {
         .flat_map(|d| executable_names(name).into_iter().map(move |n| d.join(n)))
         .find(|p| is_executable(p))
 }
+
+/// The operating system version for bug reports (feature 013, research R6), for example
+/// `15.6.1`, `Ubuntu 24.04.1 LTS (6.8.0-45-generic)`, or `10.0.26100`. Never fails: anything
+/// that cannot be read gives `unknown`.
+pub fn os_version() -> String {
+    os::os_version()
+        .map(|v| v.trim().to_owned())
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| "unknown".to_owned())
+}
+
+/// The `PRETTY_NAME` value of an `/etc/os-release` text, without quotes.
+pub fn linux_pretty_name(text: &str) -> Option<String> {
+    let value = text
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("PRETTY_NAME="))?
+        .trim();
+    let value = ['"', '\'']
+        .iter()
+        .find_map(|q| value.strip_prefix(*q)?.strip_suffix(*q))
+        .unwrap_or(value)
+        .trim();
+    (!value.is_empty()).then(|| value.to_owned())
+}
+
+/// The first line a program prints, when it runs and succeeds.
+#[cfg(unix)]
+fn command_line(program: &str, args: &[&str]) -> Option<String> {
+    let out = std::process::Command::new(program)
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    let line = text.lines().next()?.trim();
+    (!line.is_empty()).then(|| line.to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn os_version_is_never_empty() {
+        let v = os_version();
+        assert!(!v.trim().is_empty());
+        assert_eq!(v, v.trim());
+    }
+
+    #[test]
+    fn reads_pretty_name_from_os_release() {
+        let text = "NAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nPRETTY_NAME=\"Ubuntu 24.04.1 LTS\"\nID=ubuntu\n";
+        assert_eq!(
+            linux_pretty_name(text).as_deref(),
+            Some("Ubuntu 24.04.1 LTS")
+        );
+        assert_eq!(
+            linux_pretty_name("PRETTY_NAME='Fedora Linux 41'\n").as_deref(),
+            Some("Fedora Linux 41")
+        );
+        assert_eq!(
+            linux_pretty_name("PRETTY_NAME=Arch\n").as_deref(),
+            Some("Arch")
+        );
+        assert_eq!(linux_pretty_name("NAME=x\nPRETTY_NAME=\"\"\n"), None);
+        assert_eq!(linux_pretty_name(""), None);
+    }
+}

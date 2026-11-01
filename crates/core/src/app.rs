@@ -343,6 +343,11 @@ pub struct App {
 }
 
 impl App {
+    /// Where the daily log files live (bug reports read the newest one, feature 013).
+    pub fn logs_dir(&self) -> std::path::PathBuf {
+        self.data_root.logs_dir()
+    }
+
     pub fn start(root: DataRoot, events: Arc<dyn EventSink>) -> std::io::Result<Arc<Self>> {
         Self::start_with(root, events, AppOptions::default())
     }

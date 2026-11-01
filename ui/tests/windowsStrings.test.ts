@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { shortcut } from "../src/platform";
 
 // Feature 012 (SC-007): text that names macOS keys or apps must sit behind an `isMac` choice,
 // so Windows never shows Cmd, ⌘, ⌃, Finder, or macOS.
@@ -21,5 +22,13 @@ describe("text shown on Windows", () => {
         }),
       );
     expect(offenders).toEqual([]);
+  });
+
+  it("gives the Report Bug paste hint the key of each system (feature 013)", () => {
+    expect(shortcut("paste", true)).toBe("⌘V");
+    expect(shortcut("paste", false)).toBe("Ctrl+V");
+    const dialog = Object.entries(SOURCES).find(([file]) => file.endsWith("report/ReportBugDialog.tsx"))?.[1];
+    expect(dialog).toContain('shortcut("paste")');
+    expect(dialog).not.toMatch(MAC_ONLY);
   });
 });

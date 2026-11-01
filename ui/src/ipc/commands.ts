@@ -30,6 +30,10 @@ import type {
   TerminalStateEvent,
   Workspace,
   WorkspaceSummary,
+  FallbackResult,
+  ImageView,
+  ReportConfigView,
+  ReportInput,
 } from "./types";
 
 // Typed wrappers for the Tauri commands in contracts/ipc.md. Argument names are camelCase;
@@ -148,6 +152,12 @@ export const ipc = {
   dismissKimiNotice: (status: KimiNoticeDismissed) => invoke<void>("dismiss_kimi_notice", { status }),
   kimiWatch: (on: boolean) => invoke<void>("kimi_watch", { on }),
   kimiOpenSettings: () => invoke<void>("kimi_open_settings"),
+
+  // Report Bug (feature 013).
+  reportConfig: () => invoke<ReportConfigView>("report_config"),
+  reportSend: (input: ReportInput) => invoke<void>("report_send", { input }),
+  reportReadImage: (path: string) => invoke<ImageView>("report_read_image", { path }),
+  reportFallback: (input: ReportInput) => invoke<FallbackResult>("report_fallback", { input }),
 };
 
 export type Ipc = typeof ipc;
