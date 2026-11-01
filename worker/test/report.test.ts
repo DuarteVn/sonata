@@ -78,4 +78,29 @@ describe("POST /report", () => {
     expect(raw).not.toContain("test-key");
     expect(raw).not.toContain("network");
   });
+
+  it("attaches the log and says so when logs are included", async () => {
+    const resend = mockResend();
+    const log = new TextEncoder().encode("line one\nline two\n");
+    const res = await call(post(form({ logsRequested: "true", log: new Blob([log]) })));
+    expect(res.status).toBe(200);
+    const body = await resendBody(resend);
+    expect(body.text).toContain("\nLogs: included\n");
+    expect(body.attachments).toEqual([{ filename: "sonata-log.txt", content: base64(log) }]);
+  });
+
+  it("says logs were requested but unavailable when none came", async () => {
+    const resend = mockResend();
+    await call(post(form({ logsRequested: "true" })));
+    const body = await resendBody(resend);
+    expect(body.text).toContain("\nLogs: requested but unavailable\n");
+    expect(body.attachments ?? []).toEqual([]);
+  });
+
+  it("orders the screenshot before the log", async () => {
+    const resend = mockResend();
+    await call(post(form({ logsRequested: "true", image: new Blob([PNG]), log: new Blob(["x\n"]) })));
+    const names = (await resendBody(resend)).attachments?.map((a) => a.filename);
+    expect(names).toEqual(["screenshot.png", "sonata-log.txt"]);
+  });
 });
