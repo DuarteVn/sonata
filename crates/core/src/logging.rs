@@ -10,7 +10,7 @@ use tracing_subscriber::EnvFilter;
 
 use crate::paths::{DataRoot, ensure_private_dir};
 
-const PREFIX: &str = "sonata.log.";
+pub(crate) const PREFIX: &str = "sonata.log.";
 const KEEP_DAYS: usize = 7;
 
 /// Appends to one file per day, created private.

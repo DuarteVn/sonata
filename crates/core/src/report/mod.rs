@@ -2,6 +2,7 @@
 //! report service. The UI never talks to the network; the shell passes user input here.
 
 pub mod diagnostics;
+pub mod log_tail;
 
 use std::time::Duration;
 
