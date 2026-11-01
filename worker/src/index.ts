@@ -1,12 +1,16 @@
 // Sonata report service (feature 013): POST /report → validate → email through Resend.
 
 import { sendEmail } from "./email";
+import { type Limiter, hashAddress, limiterStub } from "./limiter";
 import { parseReport } from "./validate";
+
+export { Limiter } from "./limiter";
 
 export interface Env {
   RESEND_API_KEY: string;
   REPORT_TO: string;
   REPORT_FROM: string;
+  LIMITER: DurableObjectNamespace<Limiter>;
 }
 
 function answer(status: number, error?: string, headers?: HeadersInit): Response {
@@ -28,6 +32,13 @@ export default {
     }
     const { report } = parsed;
     const sizes = { image: report.image?.bytes.length ?? 0, log: report.log?.length ?? 0 };
+    // A slot is taken before sending; if Resend then fails, it stays used (research R3).
+    const address = request.headers.get("CF-Connecting-IP") ?? "unknown";
+    const verdict = await limiterStub(env).reserve(await hashAddress(address), Date.now());
+    if (!verdict.ok) {
+      log(429, verdict.error, sizes);
+      return answer(429, verdict.error, { "Retry-After": String(verdict.retryAfter) });
+    }
     if (!(await sendEmail(env, report))) {
       log(502, "email_failed", sizes);
       return answer(502, "email_failed");
