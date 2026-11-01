@@ -85,6 +85,46 @@ fn without_bubblewrap_nothing_runs() {
     assert!(!marker.exists());
 }
 
+#[test]
+fn a_passing_probe_runs_once() {
+    let tmp = tempfile::tempdir().unwrap();
+    let count = tmp.path().join("probes");
+    // Stands in for bubblewrap: drops its options and runs the command after `--`.
+    let fake = common::fake_bin::fake_bin(
+        tmp.path(),
+        "bwrap",
+        &format!(
+            "while [ \"$1\" != -- ]; do shift; done; shift\n\
+             [ \"$1\" = /bin/true ] && {{ echo probe >>'{}'; exit 0; }}\n\
+             exec \"$@\"",
+            count.display()
+        ),
+    );
+    let tool = common::fake_bin::fake_bin(
+        tmp.path(),
+        "tool",
+        r#"echo '{"windows":[{"kind":"short","usedPercent":5}]}'"#,
+    );
+    for _ in 0..2 {
+        let r = sonata_core::usage::custom::read_custom_bwrap(
+            &fake,
+            "m",
+            &[tool.display().to_string()],
+            &[],
+            tmp.path(),
+            tmp.path(),
+            chrono::Utc::now(),
+        );
+        assert_eq!(
+            r.status,
+            sonata_core::usage::ReadingStatus::Ok,
+            "{:?}",
+            r.message
+        );
+    }
+    assert_eq!(std::fs::read_to_string(&count).unwrap().lines().count(), 1);
+}
+
 #[cfg(target_os = "linux")]
 mod linux {
     use chrono::Utc;

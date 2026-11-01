@@ -29,10 +29,10 @@ STUB
   chmod +x "$work/stubs/"*
 }
 
-run() { # $1: os-release content
+run() { # $1: os-release content, $2: machine (default x86_64)
   printf '%s\n' "$1" >"$work/os-release"
   (cd "$work" && env HOME="$work/home" PATH="$work/stubs:/usr/bin:/bin" SONATA_UNAME=Linux \
-    SONATA_OS_RELEASE="$work/os-release" sh scripts/install.sh >"$work/out" 2>&1)
+    SONATA_MACHINE="${2:-x86_64}" SONATA_OS_RELEASE="$work/os-release" sh scripts/install.sh >"$work/out" 2>&1)
 }
 
 setup 1; run 'ID=ubuntu
@@ -57,4 +57,8 @@ h="$work/home/.local"
 [ "$(cat "$h/bin/sonata")" = cli ] || fail "no ~/.local/bin/sonata"
 [ -f "$h/share/icons/hicolor/128x128/apps/sonata.png" ] || fail "no icon"
 grep -q "^Exec=$h/bin/sonata-app$" "$h/share/applications/sonata.desktop" || fail "bad desktop entry"
+setup 0; run 'ID=ubuntu' aarch64; code=$?
+[ "$code" = 1 ] || fail "aarch64: expected exit 1, got $code"
+grep -q "x86_64 only (this machine: aarch64)" "$work/out" || fail "no arch message: $(cat "$work/out")"
+grep -q "npm" "$LOG" && fail "built on aarch64"
 echo ok

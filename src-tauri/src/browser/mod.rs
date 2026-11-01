@@ -345,10 +345,19 @@ impl Browsers {
         #[cfg(target_os = "macos")]
         snapshot::remove_data_store(&self.app, ws);
         #[cfg(target_os = "linux")]
-        if let Err(err) = std::fs::remove_dir_all(self.data_dir.join(ws.simple().to_string()))
-            && err.kind() != std::io::ErrorKind::NotFound
         {
-            tracing::warn!(error = %err, "could not delete the workspace's browsing data");
+            let dir = self.data_dir.join(ws.simple().to_string());
+            // Only a folder right under the browser data root is deleted.
+            let under_root = self.data_dir.is_absolute()
+                && self.data_dir.file_name() == Some("browser-data".as_ref())
+                && dir.parent() == Some(self.data_dir.as_path());
+            if !under_root {
+                tracing::warn!(dir = %dir.display(), "browsing data is outside its root; kept");
+            } else if let Err(err) = std::fs::remove_dir_all(&dir)
+                && err.kind() != std::io::ErrorKind::NotFound
+            {
+                tracing::warn!(error = %err, "could not delete the workspace's browsing data");
+            }
         }
         // WebView2 holds the folder for a moment after its views close (feature 012).
         #[cfg(windows)]

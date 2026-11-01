@@ -25,7 +25,8 @@ HOME="$home" xvfb-run -a -s "-screen 0 1400x900x24" sh -c '
   done
   echo "socket ready"
   sleep 5
-  import -window root "$3"
+  kill -0 "$app" 2>/dev/null || exit 5
+  import -window root "$3" && [ -s "$3" ] || { kill "$app"; exit 6; }
   kill "$app"
   wait "$app" 2>/dev/null || true
 ' smoke "$(realpath "$appimage")" "$log" "$(realpath -m "$shot")" || {
@@ -34,6 +35,8 @@ HOME="$home" xvfb-run -a -s "-screen 0 1400x900x24" sh -c '
   case "$code" in
     3) fail "no IPC socket after 60 s" ;;
     4) fail "the app exited before its IPC socket appeared" ;;
+    5) fail "the app exited after its IPC socket appeared" ;;
+    6) fail "no screenshot" ;;
     *) fail "smoke run failed ($code)" ;;
   esac
 }
