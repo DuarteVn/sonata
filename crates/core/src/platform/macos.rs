@@ -51,3 +51,8 @@ pub fn reveal_command(path: &Path) -> Launch {
         args: vec!["-R".into(), path.into()],
     }
 }
+
+/// `sw_vers -productVersion`, for example `15.6.1`.
+pub fn os_version() -> Option<String> {
+    super::command_line("/usr/bin/sw_vers", &["-productVersion"])
+}
