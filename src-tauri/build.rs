@@ -87,6 +87,7 @@ const COMMANDS: &[&str] = &[
     "kimi_open_settings",
     "report_config",
     "report_send",
+    "report_read_image",
 ];
 
 fn main() {

@@ -65,6 +65,28 @@ impl ReportImage {
     }
 }
 
+/// Reads a dropped or chosen image file: size from metadata first, then at most
+/// [`MAX_IMAGE`] + 1 bytes, then the magic number.
+pub fn read_image(path: &std::path::Path) -> Result<ReportImage, ReportError> {
+    use std::io::Read;
+
+    let unreadable = |_| ReportError::invalid("image", "unreadable");
+    let file = std::fs::File::open(path).map_err(unreadable)?;
+    let meta = file.metadata().map_err(unreadable)?;
+    if !meta.is_file() {
+        return Err(ReportError::invalid("image", "unreadable"));
+    }
+    if meta.len() > MAX_IMAGE as u64 {
+        return Err(ReportError::invalid("image", "too_large"));
+    }
+    // The file may grow after the metadata check; never read more than one byte past the limit.
+    let mut bytes = Vec::with_capacity(meta.len() as usize);
+    file.take(MAX_IMAGE as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(unreadable)?;
+    ReportImage::from_bytes(bytes)
+}
+
 /// What the user typed and attached.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct BugReport {
@@ -365,6 +387,43 @@ mod tests {
             mime: ImageMime::Png,
         });
         assert_eq!(r.validate().unwrap().image.unwrap().mime, ImageMime::Jpeg);
+    }
+
+    #[test]
+    fn reads_image_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let write = |name: &str, bytes: &[u8]| {
+            let path = dir.path().join(name);
+            std::fs::write(&path, bytes).unwrap();
+            path
+        };
+        // The file name never decides the type.
+        let png = read_image(&write("shot.jpg", PNG)).unwrap();
+        assert_eq!((png.mime, png.bytes.as_slice()), (ImageMime::Png, PNG));
+        assert_eq!(
+            read_image(&write("photo.jpeg", JPEG)).unwrap().mime,
+            ImageMime::Jpeg
+        );
+        assert_eq!(
+            read_image(&write("anim.png", GIF)),
+            Err(ReportError::invalid("image", "unsupported_type"))
+        );
+        let mut big = PNG.to_vec();
+        big.resize(MAX_IMAGE + 1, 0);
+        assert_eq!(
+            read_image(&write("big.png", &big)),
+            Err(ReportError::invalid("image", "too_large"))
+        );
+        big.truncate(MAX_IMAGE);
+        assert!(read_image(&write("edge.png", &big)).is_ok());
+        assert_eq!(
+            read_image(&dir.path().join("missing.png")),
+            Err(ReportError::invalid("image", "unreadable"))
+        );
+        assert_eq!(
+            read_image(dir.path()),
+            Err(ReportError::invalid("image", "unreadable"))
+        );
     }
 
     #[test]

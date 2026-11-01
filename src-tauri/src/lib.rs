@@ -90,6 +90,7 @@ pub fn run() {
             commands::app::app_bootstrap,
             report::report_config,
             report::report_send,
+            report::report_read_image,
             commands::app::app_quit_check,
             commands::app::app_quit,
             commands::app::app_reveal_path,

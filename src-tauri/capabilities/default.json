@@ -90,7 +90,8 @@
     "allow-dismiss-kimi-notice",
     "allow-kimi-open-settings",
     "allow-report-config",
-    "allow-report-send"
+    "allow-report-send",
+    "allow-report-read-image"
   ],
   "webviews": [
     "main"

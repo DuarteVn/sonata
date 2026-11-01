@@ -77,6 +77,21 @@ pub fn report_config() -> ReportConfigView {
     }
 }
 
+/// Reads a dropped or chosen image; core checks its size and type.
+#[tauri::command]
+pub async fn report_read_image(path: std::path::PathBuf) -> Result<ImageView, ReportError> {
+    let image = tauri::async_runtime::spawn_blocking(move || report::read_image(&path))
+        .await
+        .map_err(|_| ReportError::Invalid {
+            field: "image",
+            reason: "unreadable",
+        })??;
+    Ok(ImageView {
+        mime: image.mime.as_str().to_owned(),
+        bytes: image.bytes,
+    })
+}
+
 #[tauri::command]
 pub async fn report_send(
     handle: AppHandle,
