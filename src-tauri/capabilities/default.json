@@ -88,7 +88,9 @@
     "allow-lane-confirm-answer",
     "allow-kimi-integration",
     "allow-dismiss-kimi-notice",
-    "allow-kimi-open-settings"
+    "allow-kimi-open-settings",
+    "allow-report-config",
+    "allow-report-send"
   ],
   "webviews": [
     "main"

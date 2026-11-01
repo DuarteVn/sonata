@@ -25,6 +25,11 @@ pub fn collect(app_version: &str, now: DateTime<Utc>) -> Diagnostics {
     }
 }
 
+/// [`collect`] at the current time.
+pub fn collect_now(app_version: &str) -> Diagnostics {
+    collect(app_version, Utc::now())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

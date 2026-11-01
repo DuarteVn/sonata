@@ -4,6 +4,7 @@ mod browser;
 mod commands;
 mod events;
 mod menu;
+mod report;
 mod settings;
 
 use std::sync::Arc;
@@ -87,6 +88,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::app::app_bootstrap,
+            report::report_config,
+            report::report_send,
             commands::app::app_quit_check,
             commands::app::app_quit,
             commands::app::app_reveal_path,
