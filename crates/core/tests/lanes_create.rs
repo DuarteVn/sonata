@@ -57,17 +57,17 @@ fn lane_terminal(app: &App, ws: Uuid, name: &str) -> (Uuid, Lane) {
     (node.id, lane)
 }
 
-/// The folder the terminal's shell runs in, read with `pwd -P`.
+/// The folder the terminal's shell runs in, as printed by the shell and then resolved.
 fn shell_cwd(app: &Arc<App>, sb: &Sandbox, node: Uuid) -> PathBuf {
     let out = sb.tmp.path().join(format!("cwd-{node}"));
     assert!(wait_until(WAIT, || app
         .terminal_ready(node, Duration::from_millis(300))));
     app.terminals()
-        .write(node, format!("pwd -P > '{}'\n", out.display()).as_bytes())
+        .write(node, common::cwd_command(&out).as_bytes())
         .unwrap();
     assert!(wait_until(WAIT, || std::fs::read_to_string(&out)
         .is_ok_and(|s| s.ends_with('\n'))));
-    PathBuf::from(std::fs::read_to_string(&out).unwrap().trim())
+    common::real(Path::new(std::fs::read_to_string(&out).unwrap().trim()))
 }
 
 #[test]
@@ -115,14 +115,8 @@ fn lane_terminals_work_in_isolated_checkouts() {
     );
     assert_eq!(git(&repo, &["rev-parse", "lane/alpha"]), base);
     assert_eq!(lb.branch, "lane/beta");
-    assert_eq!(
-        shell_cwd(&app, &sb, alpha),
-        la.checkout_path.canonicalize().unwrap()
-    );
-    assert_eq!(
-        shell_cwd(&app, &sb, beta),
-        lb.checkout_path.canonicalize().unwrap()
-    );
+    assert_eq!(shell_cwd(&app, &sb, alpha), common::real(&la.checkout_path));
+    assert_eq!(shell_cwd(&app, &sb, beta), common::real(&lb.checkout_path));
 
     commit_file(&la.checkout_path, "a.txt", "alpha\n", "alpha");
     commit_file(&lb.checkout_path, "a.txt", "beta\n", "beta");
@@ -144,7 +138,7 @@ fn subfolder_workspace_runs_in_same_subfolder_of_lane() {
     assert_eq!(lane.subdirectory.as_deref(), Some(Path::new("web")));
     assert_eq!(
         shell_cwd(&app, &sb, id),
-        lane.checkout_path.join("web").canonicalize().unwrap()
+        common::real(&lane.checkout_path.join("web"))
     );
     app.quit();
 }
@@ -199,9 +193,6 @@ fn lane_terminal_comes_back_in_its_checkout_after_restart() {
     };
     let (app, _) = test_app(&sb);
     app.open_workspace(ws).unwrap();
-    assert_eq!(
-        shell_cwd(&app, &sb, id),
-        lane.checkout_path.canonicalize().unwrap()
-    );
+    assert_eq!(shell_cwd(&app, &sb, id), common::real(&lane.checkout_path));
     app.quit();
 }

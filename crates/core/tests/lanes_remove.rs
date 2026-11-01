@@ -1,6 +1,6 @@
 mod common;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use common::{Sandbox, WAIT, commit_file, git, git_repo, test_app, wait_until};
@@ -94,13 +94,13 @@ fn clean_lane_is_removed_and_branch_kept() {
         .terminal_ready(id, Duration::from_millis(300))));
     s.app
         .terminals()
-        .write(id, format!("pwd -P > '{}'\n", out.display()).as_bytes())
+        .write(id, common::cwd_command(&out).as_bytes())
         .unwrap();
     assert!(wait_until(WAIT, || std::fs::read_to_string(&out)
         .is_ok_and(|t| t.ends_with('\n'))));
     assert_eq!(
-        std::fs::read_to_string(&out).unwrap().trim(),
-        s.repo.canonicalize().unwrap().display().to_string()
+        common::real(Path::new(std::fs::read_to_string(&out).unwrap().trim())),
+        common::real(&s.repo)
     );
     s.app.quit();
 }
@@ -181,6 +181,11 @@ fn missing_folder_can_be_forgotten() {
     let (id, lane) = s.lane("Api");
     let err = s.app.lane_forget(id).unwrap_err();
     assert_eq!(err.code, ErrorCode::LaneBlocked);
+    // Windows cannot delete a folder a running shell is in; the user would quit it first.
+    if cfg!(windows) {
+        s.app.terminals().stop(id);
+        std::thread::sleep(Duration::from_millis(500));
+    }
     std::fs::remove_dir_all(&lane.checkout_path).unwrap();
     s.app.lane_forget(id).unwrap();
     assert!(s.node(id).unwrap().terminal().unwrap().lane.is_none());

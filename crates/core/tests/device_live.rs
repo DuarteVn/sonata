@@ -1,4 +1,6 @@
 //! Live screen frames and node input (US1, research R2, R3).
+// Unix shells, modes, or sockets; Windows counterparts live in *_windows.rs (feature 012).
+#![cfg(unix)]
 
 mod common;
 

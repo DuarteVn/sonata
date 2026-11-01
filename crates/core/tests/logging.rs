@@ -23,7 +23,12 @@ fn terminal_output_is_not_logged() {
         .create_terminal(
             ws,
             NewTerminal {
-                launch_command: Some("echo TOKEN-$((6*7))-SECRET".into()),
+                // The shell computes 42, so the typed command alone never matches.
+                launch_command: Some(if cfg!(windows) {
+                    "echo TOKEN-4^2-SECRET".into()
+                } else {
+                    "echo TOKEN-$((6*7))-SECRET".into()
+                }),
                 ..Default::default()
             },
         )

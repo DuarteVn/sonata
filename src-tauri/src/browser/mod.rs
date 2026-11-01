@@ -74,9 +74,9 @@ pub struct Browsers {
     app: AppHandle,
     core: Weak<App>,
     image_dir: PathBuf,
-    /// Linux keeps each workspace's browsing data in a folder of its own (011 research R10);
-    /// macOS uses WebKit data stores instead.
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    /// Linux and Windows keep each workspace's browsing data in a folder of its own (011
+    /// research R10, 012 research R13); macOS uses WebKit data stores instead.
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
     data_dir: PathBuf,
     views: Mutex<HashMap<Uuid, View>>,
 }
@@ -153,7 +153,7 @@ impl Browsers {
         let builder = WebviewBuilder::new(&label, WebviewUrl::External(parsed));
         #[cfg(target_os = "macos")]
         let builder = builder.data_store_identifier(*ws.as_bytes());
-        #[cfg(target_os = "linux")]
+        #[cfg(not(target_os = "macos"))]
         let builder = {
             let dir = self.data_dir.join(ws.simple().to_string());
             sonata_core::paths::ensure_private_dir(&dir)
@@ -349,6 +349,20 @@ impl Browsers {
             && err.kind() != std::io::ErrorKind::NotFound
         {
             tracing::warn!(error = %err, "could not delete the workspace's browsing data");
+        }
+        // WebView2 holds the folder for a moment after its views close (feature 012).
+        #[cfg(windows)]
+        {
+            let dir = self.data_dir.join(ws.simple().to_string());
+            std::thread::spawn(move || {
+                for _ in 0..20 {
+                    if !dir.exists() || std::fs::remove_dir_all(&dir).is_ok() {
+                        return;
+                    }
+                    std::thread::sleep(Duration::from_millis(500));
+                }
+                tracing::warn!("could not delete the workspace's browsing data");
+            });
         }
     }
 

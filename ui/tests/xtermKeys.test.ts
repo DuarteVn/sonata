@@ -47,4 +47,14 @@ describe("terminal clipboard keys", () => {
     expect(clipboardAction(key("v", { ctrlKey: true }), false)).toBeNull();
     expect(clipboardAction(key("C", { ctrlKey: true, shiftKey: true }), true)).toBeNull();
   });
+
+  it("copies a selection with Ctrl+C and pastes with Ctrl+V on Windows (feature 012)", () => {
+    expect(clipboardAction(key("c", { ctrlKey: true }), false, true, true)).toBe("copy");
+    expect(clipboardAction(key("c", { ctrlKey: true }), false, true, false)).toBeNull();
+    expect(clipboardAction(key("v", { ctrlKey: true }), false, true)).toBe("paste");
+    expect(clipboardAction(key("C", { ctrlKey: true, shiftKey: true }), false, true)).toBe("copy");
+    expect(clipboardAction(key("w", { ctrlKey: true }), false, true)).toBeNull();
+    // Linux keeps Ctrl+C for the program even with a selection.
+    expect(clipboardAction(key("c", { ctrlKey: true }), false, false, true)).toBeNull();
+  });
 });

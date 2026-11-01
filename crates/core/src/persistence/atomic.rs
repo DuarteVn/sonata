@@ -1,10 +1,10 @@
-//! All-or-nothing file writes: temp file in the same folder, fsync, rename, fsync folder.
+//! All-or-nothing file writes: temp file in the same folder, fsync, rename, fsync folder (Unix).
 
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::Path;
 
-use crate::paths::{FILE_MODE, set_mode};
+use crate::paths::make_private_file;
 
 pub fn write(path: &Path, bytes: &[u8]) -> io::Result<()> {
     write_with(path, |file| file.write_all(bytes))
@@ -17,10 +17,12 @@ pub fn write_with(path: &Path, fill: impl FnOnce(&mut File) -> io::Result<()>) -
         .parent()
         .ok_or_else(|| io::Error::other("path has no parent folder"))?;
     let mut tmp = tempfile::Builder::new().prefix(".tmp-").tempfile_in(dir)?;
-    set_mode(tmp.path(), FILE_MODE)?;
+    make_private_file(tmp.path())?;
     fill(tmp.as_file_mut())?;
     tmp.as_file().sync_all()?;
     tmp.persist(path).map_err(|e| e.error)?;
+    // Windows cannot open a folder as a file; NTFS journals the rename itself.
+    #[cfg(unix)]
     File::open(dir)?.sync_all()?;
     Ok(())
 }

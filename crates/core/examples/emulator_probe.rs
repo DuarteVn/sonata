@@ -16,7 +16,8 @@ fn main() {
     let avd = args.first().expect("avd name");
     let width: u32 = args.get(1).and_then(|v| v.parse().ok()).unwrap_or(720);
     let height: u32 = args.get(2).and_then(|v| v.parse().ok()).unwrap_or(1600);
-    let dir = std::path::PathBuf::from(std::env::var("HOME").unwrap())
+    let dir = sonata_core::platform::home_dir()
+        .expect("home folder")
         .join("Library/Caches/TemporaryItems/avd/running");
     let ini = std::fs::read_dir(&dir)
         .expect("discovery folder")

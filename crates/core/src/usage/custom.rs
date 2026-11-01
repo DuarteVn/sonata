@@ -6,7 +6,6 @@
 
 use std::collections::HashMap;
 use std::io;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -24,6 +23,10 @@ pub const DEFINITION_TYPE: &str = "usageProvider";
 pub const DEFINITION_SCHEMA_VERSION: u32 = 1;
 pub const TIMEOUT: Duration = Duration::from_secs(10);
 pub const SANDBOX_EXEC: &str = "/usr/bin/sandbox-exec";
+/// Shown instead of a reading on Windows, where no sandbox exists for these commands yet
+/// (feature 012, research R11). The command never runs.
+pub const WINDOWS_UNAVAILABLE: &str =
+    "Custom usage providers are not available on Windows: there is no sandbox for them yet.";
 pub const DEFAULT_COLOR: &str = "#8b93a7";
 const MAX_ARGS: usize = 17;
 const MAX_ARG_BYTES: usize = 1024;
@@ -49,7 +52,7 @@ fn valid_id(id: &str) -> bool {
 }
 
 fn is_executable_file(path: &Path) -> bool {
-    std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+    crate::platform::is_executable(path)
 }
 
 pub fn validate(def: &Definition) -> Result<(), String> {
@@ -367,6 +370,11 @@ pub fn read_custom(
     let exec = Path::new(crate::platform::bwrap::BWRAP);
     #[cfg(target_os = "linux")]
     return read_custom_bwrap(exec, id, argv, env, home, sonata_root, now);
+    #[cfg(windows)]
+    {
+        let _ = (argv, env, home, sonata_root);
+        Reading::unavailable(id, now, WINDOWS_UNAVAILABLE)
+    }
 }
 
 /// Like [`read_custom`] with bubblewrap at `bwrap` (feature 011, research R9). A short probe
@@ -438,6 +446,9 @@ pub fn read_custom_with(
     sonata_root: &Path,
     now: DateTime<Utc>,
 ) -> Reading {
+    if cfg!(windows) {
+        return Reading::unavailable(id, now, WINDOWS_UNAVAILABLE);
+    }
     if !is_executable_file(sandbox_exec) {
         return Reading::unavailable(id, now, "Cannot run safely: sandbox-exec not found.");
     }

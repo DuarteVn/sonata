@@ -17,7 +17,7 @@ import { useKimi } from "./state/kimi";
 import { useUsage } from "./state/usage";
 import { UsageButton } from "./usage/UsageButton";
 import { resetText } from "./usage/meter";
-import { shortcut } from "./platform";
+import { isCloseItemKey, shortcut } from "./platform";
 
 const SIDEBAR_HIDDEN_KEY = "sonata.sidebarHidden";
 const SIDEBAR_WIDTH_KEY = "sonata.sidebarWidth";
@@ -152,6 +152,26 @@ export function App() {
   }, []);
 
   useEffect(() => useCanvas.getState().load(active), [active]);
+
+  // Windows: plain Ctrl+W closes the selected item unless a terminal or a field has focus; the
+  // menu's Ctrl+Shift+W works everywhere (feature 012, research R15).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = document.activeElement as HTMLElement | null;
+      const focus = {
+        terminal: !!el?.closest(".xterm"),
+        text: !!el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)),
+      };
+      if (!isCloseItemKey(e, focus)) return;
+      e.preventDefault();
+      useCanvas
+        .getState()
+        .deleteSelection()
+        .catch((err) => useWorkspaces.getState().addWarning(String(err?.message ?? err)));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // "Install and restart": download and verify first (nothing stops yet), then the same
   // running-programs check as quitting, then install and restart (FR-010, FR-012).

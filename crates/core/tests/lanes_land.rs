@@ -279,13 +279,15 @@ fn app_land_requires_confirmation_then_marks_landed() {
         .terminal_ready(id, Duration::from_millis(300))));
     s.app
         .terminals()
-        .write(id, format!("pwd -P > '{}'\n", out.display()).as_bytes())
+        .write(id, common::cwd_command(&out).as_bytes())
         .unwrap();
     assert!(wait_until(WAIT, || std::fs::read_to_string(&out)
         .is_ok_and(|t| t.ends_with('\n'))));
     assert_eq!(
-        std::fs::read_to_string(&out).unwrap().trim(),
-        s.repo.canonicalize().unwrap().display().to_string()
+        common::real(std::path::Path::new(
+            std::fs::read_to_string(&out).unwrap().trim()
+        )),
+        common::real(&s.repo)
     );
     s.app.quit();
 }

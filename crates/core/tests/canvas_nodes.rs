@@ -103,8 +103,10 @@ fn deleting_busy_terminal_needs_confirmation() {
     assert!(wait_until(WAIT, || app
         .terminals()
         .screen_text(t.id)
-        .is_some_and(|s| s.contains('$'))));
-    app.terminals().write(t.id, b"sleep 10\r").unwrap();
+        .is_some_and(|s| s.contains(common::PROMPT))));
+    app.terminals()
+        .write(t.id, common::sleep_command(10_000).as_bytes())
+        .unwrap();
     assert!(wait_until(WAIT, || app.terminals().is_busy(t.id)));
     let err = app.delete_node(ws, t.id, false).unwrap_err();
     assert_eq!(err.code, ErrorCode::TerminalBusy);
@@ -158,8 +160,10 @@ fn restart_of_busy_terminal_needs_confirmation() {
     assert!(wait_until(WAIT, || app
         .terminals()
         .screen_text(t.id)
-        .is_some_and(|s| s.contains('$'))));
-    app.terminals().write(t.id, b"sleep 10\r").unwrap();
+        .is_some_and(|s| s.contains(common::PROMPT))));
+    app.terminals()
+        .write(t.id, common::sleep_command(10_000).as_bytes())
+        .unwrap();
     assert!(wait_until(WAIT, || app.terminals().is_busy(t.id)));
     assert_eq!(
         app.restart_terminal(t.id, false).unwrap_err().code,

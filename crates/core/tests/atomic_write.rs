@@ -2,7 +2,7 @@ mod common;
 
 use std::io::Write;
 
-use common::{inode, mode};
+use common::inode;
 use sonata_core::persistence::atomic;
 
 #[test]
@@ -36,5 +36,5 @@ fn written_files_are_private() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("data.json");
     atomic::write(&path, b"x").unwrap();
-    assert_eq!(mode(&path), 0o600);
+    common::assert_private_file(&path);
 }

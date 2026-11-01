@@ -11,3 +11,10 @@ class ResizeObserverStub {
   disconnect() {}
 }
 globalThis.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver;
+
+// Tests run as on macOS unless they pass `mac: false` to the platform helpers (feature 012);
+// jsdom's own user agent names the host system, which differs between CI runners.
+Object.defineProperty(window.navigator, "userAgent", {
+  value: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+  configurable: true,
+});

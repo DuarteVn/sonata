@@ -1,5 +1,7 @@
 //! The one-time resume offer in the `_session` reply (feature 009, research R3). Agents are
 //! fake scripts found through `SONATA_AGENT_BIN_DIR`, set once before any test starts an app.
+// Unix shells, modes, or sockets; Windows counterparts live in *_windows.rs (feature 012).
+#![cfg(unix)]
 
 mod common;
 

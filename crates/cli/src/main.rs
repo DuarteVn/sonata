@@ -1,9 +1,12 @@
 //! `sonata`: lets agents in Sonata terminals see their links and talk to linked terminals.
-//! It forwards each command to the running app over the private socket in `SONATA_SOCKET`;
+//! It forwards each command to the running app over the private socket (a named pipe on
+//! Windows) in `SONATA_SOCKET`;
 //! the app does all the work and every permission check.
 
 mod client;
 mod hook;
+#[cfg(windows)]
+mod pipe;
 mod run;
 
 use std::io::Read;

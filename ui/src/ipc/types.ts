@@ -112,6 +112,8 @@ export type TerminalContent = {
   lane?: Lane;
   /** The agent conversation the terminal resumes when it starts again (feature 009). */
   conversation?: { agent: "claude" | "codex" | "kimi"; id: string; recordedAt: string };
+  /** Windows shell (feature 012); absent = the default shell. */
+  shell?: TerminalShell;
 };
 
 /** A terminal's own git checkout and branch (feature 008). */
@@ -188,7 +190,7 @@ export type ToolReport = {
     helpUrl: string;
     avdHelpUrl: string;
   };
-  /** null where iOS simulators cannot exist (Linux). */
+  /** null where iOS simulators cannot exist (Linux, Windows). */
   ios: { developerDir: string | null; simulators: Simulator[]; helpUrl: string } | null;
 };
 
@@ -227,10 +229,17 @@ export type TerminalSettings = {
   monitorActivity?: boolean;
   orchestrator?: boolean;
   sendInstructions?: boolean | null;
+  /** Windows shell (feature 012); `null` returns to the default shell. */
+  shell?: TerminalShell | null;
 };
 
 export type SettingsUpdate = { node: CanvasNode; appliesOnRestart: boolean };
 export type PresetStatus = { id: string; found: boolean | null };
+
+/** Windows shells (feature 012, data-model.md). */
+export type ShellKind = "pwsh" | "powershell" | "cmd" | "gitBash" | "wsl";
+export type TerminalShell = { kind: ShellKind; distro?: string };
+export type ShellChoice = { kind: ShellKind; distro?: string; label: string; path: string; default: boolean };
 export type Role = { id: string; name: string; text: string; createdAt: string };
 
 export type CanvasNode = {

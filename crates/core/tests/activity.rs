@@ -48,12 +48,14 @@ fn monitored_terminals_report_busy_changes() {
         assert!(wait_until(WAIT, || app
             .terminals()
             .screen_text(id)
-            .is_some_and(|s| s.contains('$'))));
+            .is_some_and(|s| s.contains(common::PROMPT))));
     }
     std::thread::sleep(Duration::from_millis(700));
     sink.take();
     for id in [watched, quiet] {
-        app.terminals().write(id, b"sleep 1.5\r").unwrap();
+        app.terminals()
+            .write(id, common::sleep_command(1500).as_bytes())
+            .unwrap();
     }
     let mut seen = Vec::new();
     let mut quiet_seen = Vec::new();

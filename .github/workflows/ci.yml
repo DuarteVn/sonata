@@ -78,3 +78,32 @@ jobs:
           name: linux-smoke
           path: screenshot.png
           if-no-files-found: ignore
+
+  windows:
+    # Core and CLI tests, the Tauri shell, and the per-user installer on Windows (feature 012).
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The shell crate embeds the built frontend and the bundled CLI.
+      - run: npm run build:tauri
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test -p sonata-core -p sonata-cli --no-fail-fast
+      - name: Build the installer
+        run: npm run tauri build -- --bundles nsis --config '{"bundle":{"createUpdaterArtifacts":false}}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error

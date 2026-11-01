@@ -1,3 +1,5 @@
+// Unix shells, modes, or sockets; Windows counterparts live in *_windows.rs (feature 012).
+#![cfg(unix)]
 mod common;
 
 use std::path::PathBuf;
@@ -26,6 +28,7 @@ fn spec(cwd: PathBuf) -> SpawnSpec {
         wrap_agents: false,
         shell_helpers: None,
         resume: None,
+        shell_choice: None,
     }
 }
 

@@ -2,6 +2,7 @@
 //! end-of-turn hooks. Nothing is written to the agent's own configuration (research R4). On the
 //! first run after a terminal starts, it resumes the terminal's stored conversation (feature 009).
 
+#[cfg(unix)]
 use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, ExitStatus};
@@ -12,9 +13,10 @@ use crate::client;
 /// Finds `name` in `SONATA_AGENT_BIN_DIR` (if set), then on PATH, skipping the folder that holds
 /// this `sonata` binary.
 fn find_real(name: &str) -> Option<PathBuf> {
+    let names = file_names(name, path_ext().as_deref());
     if let Some(dir) = std::env::var_os("SONATA_AGENT_BIN_DIR") {
-        let p = PathBuf::from(dir).join(name);
-        if p.is_file() {
+        let dir = PathBuf::from(dir);
+        if let Some(p) = names.iter().map(|n| dir.join(n)).find(|p| p.is_file()) {
             return Some(p);
         }
     }
@@ -24,7 +26,7 @@ fn find_real(name: &str) -> Option<PathBuf> {
     std::env::var_os("PATH").and_then(|paths| {
         std::env::split_paths(&paths)
             .filter(|d| Some(d) != own_dir.as_ref())
-            .map(|d| d.join(name))
+            .flat_map(|d| names.iter().map(move |n| d.join(n)))
             .find(|p| p.is_file())
     })
 }
@@ -117,6 +119,34 @@ fn kimi_chooses(args: &[String]) -> bool {
         })
 }
 
+/// `PATHEXT` on Windows (`.COM;.EXE;.BAT;.CMD` when unset); `None` elsewhere.
+fn path_ext() -> Option<String> {
+    cfg!(windows).then(|| {
+        std::env::var("PATHEXT")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .unwrap_or_else(|| ".COM;.EXE;.BAT;.CMD".into())
+    })
+}
+
+/// File names to look for: `name` itself, or on Windows `name` with each `PATHEXT` extension
+/// (agents install as `claude.exe` or `claude.cmd`).
+fn file_names(name: &str, path_ext: Option<&str>) -> Vec<String> {
+    let Some(exts) = path_ext else {
+        return vec![name.to_string()];
+    };
+    let exts: Vec<String> = exts
+        .split(';')
+        .map(|e| e.trim().to_ascii_lowercase())
+        .filter(|e| e.len() > 1 && e.starts_with('.'))
+        .collect();
+    let lower = name.to_ascii_lowercase();
+    if exts.iter().any(|e| lower.ends_with(e.as_str())) {
+        return vec![name.to_string()];
+    }
+    exts.iter().map(|e| format!("{name}{e}")).collect()
+}
+
 pub fn main(args: Vec<String>) -> ExitCode {
     let Some(agent) = args.first().cloned() else {
         eprintln!("sonata: usage: sonata run <claude|codex|kimi> [args…]");
@@ -193,7 +223,9 @@ pub fn main(args: Vec<String>) -> ExitCode {
     let resume_session: &[String] = if agent == "kimi" { &[] } else { &session };
     let command = |lead: &[String], session: &[String]| {
         let mut cmd = Command::new(&real);
-        cmd.arg0(&agent).args(lead).args(session).args(rest);
+        #[cfg(unix)]
+        cmd.arg0(&agent);
+        cmd.args(lead).args(session).args(rest);
         if print_mode {
             cmd.env("SONATA_CONVERSATION", "off");
         }
@@ -217,7 +249,13 @@ pub fn main(args: Vec<String>) -> ExitCode {
             }
         }
     }
-    let err = command(&[], &session).exec();
+    start(command(&[], &session), &agent)
+}
+
+/// Replaces this process with the agent.
+#[cfg(unix)]
+fn start(mut cmd: Command, agent: &str) -> ExitCode {
+    let err = cmd.exec();
     eprintln!("sonata: could not start {agent}: {err}");
     ExitCode::from(126)
 }
@@ -235,6 +273,7 @@ fn window() -> Duration {
 const RESUME_WINDOW: Duration = Duration::from_secs(10);
 
 /// The wrapper's exit code for the agent's status: its code, or 128 + signal when killed.
+#[cfg(unix)]
 fn exit_code(status: ExitStatus) -> u8 {
     match (status.code(), status.signal()) {
         (Some(code), _) => code as u8,
@@ -245,6 +284,7 @@ fn exit_code(status: ExitStatus) -> u8 {
 
 /// Runs the agent as a child and waits. Like `system(3)`, the wrapper ignores Ctrl+C and
 /// Ctrl+\ while it waits, so only the agent gets them (research R4).
+#[cfg(unix)]
 fn run_child(mut cmd: Command) -> std::io::Result<ExitStatus> {
     // SAFETY: only async-signal-safe `signal` calls between fork and exec.
     unsafe {
@@ -270,9 +310,42 @@ fn run_child(mut cmd: Command) -> std::io::Result<ExitStatus> {
     status
 }
 
+/// Windows has no `exec`: run the agent as a child and exit with its code (feature 012,
+/// research R9).
+#[cfg(windows)]
+fn start(cmd: Command, agent: &str) -> ExitCode {
+    match run_child(cmd) {
+        Ok(status) => ExitCode::from(exit_code(status)),
+        Err(err) => {
+            eprintln!("sonata: could not start {agent}: {err}");
+            ExitCode::from(126)
+        }
+    }
+}
+
+#[cfg(windows)]
+fn exit_code(status: ExitStatus) -> u8 {
+    status.code().unwrap_or(1).clamp(0, 255) as u8
+}
+
+/// Runs the agent and waits. The agent shares the console, so it gets Ctrl+C; the wrapper
+/// ignores it through a handler, which (unlike ignoring with a null handler) the child does not
+/// inherit. The handler is set after the start for the same reason.
+#[cfg(windows)]
+fn run_child(mut cmd: Command) -> std::io::Result<ExitStatus> {
+    use windows_sys::Win32::System::Console::SetConsoleCtrlHandler;
+    unsafe extern "system" fn ignore(_ctrl: u32) -> windows_sys::core::BOOL {
+        1
+    }
+    let mut child = cmd.spawn()?;
+    // SAFETY: `ignore` is a valid handler for the life of the process.
+    unsafe { SetConsoleCtrlHandler(Some(ignore), 1) };
+    child.wait()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{kimi_chooses, may_resume, valid_id};
+    use super::{file_names, kimi_chooses, may_resume, valid_id};
 
     fn args(a: &[&str]) -> Vec<String> {
         a.iter().map(|s| s.to_string()).collect()
@@ -305,5 +378,20 @@ mod tests {
         assert!(kimi_chooses(&args(&["doctor"])));
         // A subcommand name later in the arguments is an argument value, not a subcommand.
         assert!(!kimi_chooses(&args(&["-m", "doctor"])));
+    }
+
+    #[test]
+    fn unix_looks_for_the_name_only() {
+        assert_eq!(file_names("claude", None), ["claude"]);
+    }
+
+    #[test]
+    fn windows_tries_each_path_extension() {
+        assert_eq!(
+            file_names("claude", Some(".EXE;.CMD")),
+            ["claude.exe", "claude.cmd"]
+        );
+        assert_eq!(file_names("codex.cmd", Some(".EXE;.CMD")), ["codex.cmd"]);
+        assert_eq!(file_names("x", Some(" ;bad;.BAT")), ["x.bat"]);
     }
 }

@@ -1,5 +1,7 @@
 //! Custom usage providers on Linux run inside bubblewrap, which hides credential stores and
 //! Sonata's data but keeps the providers folder readable (feature 011, research R9).
+// Unix shells, modes, or sockets; Windows counterparts live in *_windows.rs (feature 012).
+#![cfg(unix)]
 
 mod common;
 
