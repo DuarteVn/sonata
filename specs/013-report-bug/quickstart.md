@@ -78,3 +78,21 @@ strings <installed app binary> | grep -c "<destination address>"   # expect 0
 
 Repeat Scenario A steps 2–6 on Linux (AppImage) and Windows (installer): paste with Ctrl+V,
 drag and drop, file chooser, Help menu present.
+
+## Results (implementation, 2026-11-01)
+
+- `sh scripts/check.sh` on macOS: green. Rust workspace tests pass (including the new
+  `report::*`, `platform::tests`, and `crates/core/tests/report_send.rs`), 237 UI tests,
+  release script tests including `no-resend-key.test.sh`.
+- Worker (`cd worker && npm run typecheck && npm test`): green, 38 tests (every row of the
+  response table, Resend body, log line, limits, and SC-005: 50 parallel requests from one
+  address give exactly 5 Resend calls).
+- CI run 41331174177 on `013-report-bug` (commit 290213e): `core-and-ui`, `linux-app`,
+  `windows`, and `worker` all green. The Linux and Windows jobs build and test
+  `platform::os_version()` on those systems.
+- Local end to end: core `report::send` → `wrangler dev` (real `workerd`, fake Resend key):
+  the Worker parsed the multipart request, passed validation and the limiter, and answered
+  502 `email_failed` when Resend refused the fake key; core mapped it to `unreachable`. A
+  bad `os` part gave 400 `invalid_field:os`.
+- Not yet done (maintainer, T042): deploy with real Cloudflare and Resend accounts, set the
+  GitHub variables, and run Scenarios A–D in a dev build on each platform.
