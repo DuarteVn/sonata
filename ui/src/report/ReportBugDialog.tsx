@@ -138,8 +138,10 @@ export function ReportBugDialog({ onClose }: Props) {
     const item = items.find((i) => i.kind === "file" && i.type.startsWith("image/"));
     if (!item) return;
     e.preventDefault();
+    // Read everything now: clipboard items stop working once the event ends.
+    const mime = item.type;
     const file = item.getAsFile();
-    if (!file || !IMAGE_TYPES.includes(item.type)) {
+    if (!file || !IMAGE_TYPES.includes(mime)) {
       setImageError(IMAGE_PROBLEM.unsupported_type);
       return;
     }
@@ -149,7 +151,7 @@ export function ReportBugDialog({ onClose }: Props) {
     }
     file
       .arrayBuffer()
-      .then((buf) => attach(new Uint8Array(buf), item.type as ReportImageMime))
+      .then((buf) => attach(new Uint8Array(buf), mime as ReportImageMime))
       .catch(() => setImageError(IMAGE_PROBLEM.unreadable));
   }
 
