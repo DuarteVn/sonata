@@ -3,6 +3,7 @@
 
 pub mod diagnostics;
 pub mod log_tail;
+pub mod mailto;
 
 use std::time::Duration;
 
