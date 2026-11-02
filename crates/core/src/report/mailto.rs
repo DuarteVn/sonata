@@ -51,6 +51,13 @@ pub fn plain_text(report: &BugReport, d: &Diagnostics, logs: LogsState) -> Strin
     )
 }
 
+/// How many characters the name and the description can share before a mail body is cut. Lets
+/// the UI know this inside the user's click, where it can still write to the clipboard.
+pub fn body_room(d: &Diagnostics) -> usize {
+    let frame = plain_text(&BugReport::default(), d, LogsState::NotRequested);
+    MAX_BODY.saturating_sub(frame.chars().count())
+}
+
 /// A `mailto:` link to `alias` with subject and (possibly cut) body.
 pub fn build(alias: &str, report: &BugReport, d: &Diagnostics, logs: LogsState) -> Mailto {
     let text = plain_text(report, d, logs);
@@ -225,6 +232,23 @@ mod tests {
         let summary = subject.strip_prefix("Sonata 0.3.0 bug: ").unwrap();
         assert!(summary.chars().count() <= SUBJECT_WORDS);
         assert!(summary.ends_with("word"), "cut between words: {summary:?}");
+    }
+
+    #[test]
+    fn body_room_is_where_the_cut_starts() {
+        let d = diagnostics();
+        let room = body_room(&d);
+        let fits = BugReport {
+            name: "Ana".into(),
+            description: "é".repeat(room - 3),
+            ..Default::default()
+        };
+        assert!(!build("a@b.c", &fits, &d, LogsState::NotRequested).truncated);
+        let over = BugReport {
+            description: "é".repeat(room - 2),
+            ..fits
+        };
+        assert!(build("a@b.c", &over, &d, LogsState::NotRequested).truncated);
     }
 
     #[test]

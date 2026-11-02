@@ -139,6 +139,28 @@ impl Launch {
         child_env().apply_std(&mut cmd);
         cmd.spawn().map(drop)
     }
+
+    /// Starts the program and watches it for up to `grace`. Openers such as `open` and
+    /// `xdg-open` start fine and then exit with an error when nothing handles the address, so
+    /// a successful start alone says little. Returns false on such an exit; a program still
+    /// running after `grace` counts as success and is left to finish on its own.
+    pub fn spawn_checked(&self, grace: std::time::Duration) -> io::Result<bool> {
+        let mut cmd = std::process::Command::new(&self.program);
+        cmd.args(&self.args);
+        child_env().apply_std(&mut cmd);
+        let mut child = cmd.spawn()?;
+        let deadline = std::time::Instant::now() + grace;
+        loop {
+            if let Some(status) = child.try_wait()? {
+                return Ok(status.success());
+            }
+            if std::time::Instant::now() >= deadline {
+                std::thread::spawn(move || child.wait());
+                return Ok(true);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    }
 }
 
 /// Opens a web address in the default browser.
