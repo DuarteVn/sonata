@@ -4,6 +4,31 @@
 
 **Input**: Feature specification from `/specs/013-report-bug/spec.md`
 
+## Update 2026-11-02: mail app by default
+
+The maintainer decided not to deploy Cloudflare or Resend for now (spec, session 2026-11-02).
+Without `SONATA_REPORT_URL`, which is now the default, the dialog's primary button reads
+"Open email": it opens `mailto:` to `REPORT_EMAIL` (`src-tauri/src/report.rs`, overridable with
+`SONATA_REPORT_FALLBACK_EMAIL`) and hides "Include logs". With the URL set, everything below
+still applies, and `worker/` is unchanged and optional.
+
+Decisions:
+
+- **Clipboard writes start inside the click.** WebKit (macOS, Linux) refuses a clipboard write
+  once the click's task has ended, so `ReportBugDialog` awaits nothing before calling
+  `navigator.clipboard.write`, and hands the content over as a promise in the `ClipboardItem`
+  (`ui/src/report/clipboard.ts`). A rejected promise leaves the clipboard unchanged, which is
+  how the no-copy-needed case writes nothing.
+- **The UI knows about the cut before the click.** Choosing between image and text must happen
+  inside the click too, so `report_config` returns `mailBodyRoom`, computed in core by
+  `mailto::body_room`. `report_fallback` still reports the real `truncated`.
+- **A real check that the mail app opened.** `open` and `xdg-open` start fine and exit with an
+  error when nothing handles `mailto:`, so `Launch::spawn_checked` watches the opener for up to
+  2 seconds. `rundll32` on Windows always exits with 0, so there a missing handler goes
+  undetected and Windows shows its own "choose an app" prompt.
+- **The image stays out of `report_fallback` in this mode.** The mail link cannot use it, and it
+  would cost a large IPC message.
+
 ## Summary
 
 A "Report Bug…" dialog (Help menu and sidebar footer) lets a user send a name, a description,

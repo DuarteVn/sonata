@@ -191,18 +191,26 @@ your name, what happened, and one optional PNG or JPEG image (up to 5 MB). Paste
 drag a file onto the dialog, or choose one with Attach image…. The text you type is kept until
 you quit Sonata, so closing the dialog loses nothing.
 
-Besides what you type, a report contains the Sonata version, the operating system and its
-version, the processor architecture, and the time it was sent. Logs are sent only when you
-tick Include logs (the end of today's log file, at most 1 MB); logs can contain folder paths
-and project names, never terminal output.
+Open email opens your own mail app with a message to `vini.d.science@gmail.com`, filled in with
+your report. You review it and send it yourself; Sonata sends nothing on its own. The report
+contains what you typed plus the Sonata version, the operating system and its version, the
+processor architecture, and the time.
 
-If the report service cannot be reached, the dialog offers Try again and Send by email
-instead, which opens your mail app with the report filled in (attach the image by hand), or
-copies the report to the clipboard when no mail app or address is available.
+A mail link cannot carry files, so Sonata copies your image to the clipboard first and tells you
+to paste it into the email (⌘V on macOS, Ctrl+V on Linux and Windows). If the image cannot be
+copied, attach it by hand. A report over about 1,500 characters does not fit in a mail link: the
+email gets a shortened text, and the full text goes to the clipboard instead of the image. If no
+mail app opens, the report is copied and the dialog shows the address.
 
-## Running the report service
+## Running the report service (optional)
 
-Reports go to a small Cloudflare Worker in `worker/`, which checks them, limits them (5 per
+Sonata does not use this service today: it is here for later, if reports outgrow the mail app.
+A build made with `SONATA_REPORT_URL` set sends reports directly: the button reads Send, the
+image and, when you tick Include logs, the end of today's log file (at most 1 MB; it can contain
+folder paths and project names, never terminal output) are attached, and if sending fails the
+dialog offers Try again and Send by email instead.
+
+Those reports go to a small Cloudflare Worker in `worker/`, which checks them, limits them (5 per
 address per hour, 100 per day in total), and emails them through Resend. Both services have
 free plans that cover this. The Resend API key and the destination address live only in the
 Worker's secrets: they are never in this repository, in the app, or in its release files.
@@ -231,13 +239,12 @@ Worker's secrets: they are never in this repository, in the app, or in its relea
 
    Expected: `{"ok":true}` and one email with `screenshot.png` attached within a minute.
 4. In the GitHub repository settings (Secrets and variables → Actions → Variables), set
-   `SONATA_REPORT_URL` to `https://sonata-report.<account>.workers.dev/report` and
-   `SONATA_REPORT_FALLBACK_EMAIL` to a public address for the email fallback (an alias, not
-   your private inbox). Release builds read both; a build without them still works and offers
-   only the fallback. For a local build, set the same two environment variables before
-   `npm run tauri build`.
+   `SONATA_REPORT_URL` to `https://sonata-report.<account>.workers.dev/report`. Optionally set
+   `SONATA_REPORT_FALLBACK_EMAIL` to replace the public address used for email. Release builds
+   read both; a build without them uses the mail app. For a local build, set the same
+   environment variables before `npm run tauri build`.
 
-Security: never put the Resend key or the destination address in a file in this repository;
+Security: never put the Resend key or the Worker's destination secret in a file in this repository;
 `scripts/release/tests/no-resend-key.test.sh` fails when something shaped like a Resend key is
 committed. Worker development checks: `cd worker && npm ci && npm run typecheck && npm test`.
 

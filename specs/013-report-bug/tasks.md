@@ -119,7 +119,21 @@ diagnostics.
 - [x] T039 [P] Add a test in ui/tests/windowsStrings.test.ts (or confirm the existing scan) so the dialog has no `Cmd`/`⌘` text on Windows and Linux (paste hint uses `keyLabel`)
 - [x] T040 [P] Update CLAUDE.md/AGENTS.md agent context if the repo keeps one, and record the Portuguese-string exception next to the language rule comment in ui/src/report/ReportBugDialog.tsx
 - [x] T041 Run `sh scripts/check.sh` and the worker checks; push the branch; confirm CI jobs `core-and-ui`, `linux-app`, `windows`, `worker` are green; record results in quickstart.md
-- [ ] T042 Ask the user to create the Cloudflare and Resend accounts and the public alias, deploy (quickstart section 2), set the GitHub variables, and run Scenarios A–D in a dev build; do not open a PR, merge, tag, or release without their OK
+- [ ] T042 (deferred 2026-11-02: the maintainer decided not to deploy for now, see Phase 9) Ask the user to create the Cloudflare and Resend accounts and the public alias, deploy (quickstart section 2), set the GitHub variables, and run Scenarios A–D in a dev build; do not open a PR, merge, tag, or release without their OK
+
+## Phase 9: Mail app by default (session 2026-11-02)
+
+**Goal**: With no report service configured, the default, Report Bug goes through the user's
+mail app. `worker/` and the service flow stay as they are.
+
+- [x] T043 [P] Test and add `mailto::body_room` in crates/core/src/report/mailto.rs: the characters the name and description can share before the body is cut
+- [x] T044 [P] Test (crates/core/tests/platform_open.rs) and add `Launch::spawn_checked` in crates/core/src/platform/mod.rs: an opener that exits with an error within the grace time counts as not opened
+- [x] T045 Test and add `REPORT_EMAIL` with the `SONATA_REPORT_FALLBACK_EMAIL` override in src-tauri/src/report.rs; `report_config` returns `reportEmail` and `mailBodyRoom`; `report_fallback` always opens the mail link and uses `spawn_checked`
+- [x] T046 Add ui/tests/reportBugDialog.test.tsx cases for `Open email`: button label, hidden logs, no error state, no clipboard change without an image, one email on a double click, draft kept
+- [x] T047 Add test cases for the clipboard: PNG unchanged and before the mail app, write started inside the click, JPEG through a canvas, copy refused, API missing, long report copies text, mail app cannot open
+- [x] T048 Implement the flow in ui/src/report/ReportBugDialog.tsx and ui/src/report/clipboard.ts
+- [x] T049 Update spec.md (Clarifications, FR-004, FR-009 to FR-011, FR-015, FR-019 to FR-022, Assumptions), plan.md, contracts/app-commands.md, quickstart.md (Scenario E), and README "Reporting bugs"; mark the Worker section optional
+- [x] T050 Run `sh scripts/check.sh` and the worker checks; push `013-report-email`; open the PR to main
 
 ## Dependencies & Execution Order
 

@@ -155,3 +155,23 @@
   C-built crypto crate. Core instead enables `rustls-no-provider` + `multipart` and installs
   the `ring` provider that the updater already builds (same pattern as
   `tauri-plugin-updater`). The only new crates are `mime_guess` and `unicase`.
+
+## Clipboard rules in WKWebView (2026-11-02)
+
+Probed with a real `WKWebView` on macOS, in a secure context, starting each write through
+`evaluateJavaScript`, which carries a user gesture as a click does. The probe could not use real
+mouse clicks, because a command-line process could not become the active app, so the dialog
+itself still needs a manual check (quickstart Scenario E).
+
+| Case | Result | Clipboard |
+|------|--------|-----------|
+| `write` inside the gesture, PNG promise resolves 300 ms later | ok | PNG |
+| `write` inside the gesture, text promise resolves 300 ms later | ok | text |
+| `write` inside the gesture, promise rejects | `NotAllowedError` | unchanged |
+| `write` 1.5 s after the gesture | `NotAllowedError` | unchanged |
+
+**Decision**: start every write inside the click and pass its content as a promise
+(`ui/src/report/clipboard.ts`). A rejected promise is a safe way to write nothing. A copy that
+starts after an IPC answer can be refused on macOS, so `writeTextNow` is only a best effort.
+Linux (WebKitGTK) and Windows (WebView2) were not probed; the dialog handles a refused write by
+saying to attach the image by hand.

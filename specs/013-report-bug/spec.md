@@ -14,6 +14,13 @@
 
 - Q: The email fallback needs an address built into the app, visible to every user. Which one? → A: A separate public alias created by the maintainer; the address the service delivers to stays secret. Like the service address, the alias is set at build time for releases; a build without it offers only "copy the report text".
 
+### Session 2026-11-02
+
+- Q: The maintainer decided not to deploy Cloudflare or Resend for now. How do reports reach them? → A: By default, through the user's own mail app. The primary button reads "Open email" and opens a message to the public address `vini.d.science@gmail.com`, which the maintainer approved for publication. The Worker stays in the repository, unchanged and optional: a build with a service URL behaves as before.
+- Q: A mail link cannot carry files. What happens to the image and the logs? → A: The image is copied to the clipboard as PNG before the mail app opens, and the dialog tells the user to paste it into the email. The "Include logs" option is hidden in this mode.
+- Q: What if the body is too long for a mail link? → A: Past 1,500 characters the link carries a cut body. The full text goes to the clipboard instead of the image, and the dialog tells the user to paste it and attach the image by hand.
+- Q: What if the mail app cannot open, or the clipboard refuses? → A: If the mail app cannot open, the report text is copied and the dialog shows the address. If the image cannot be copied, the dialog says to attach it by hand. None of these is an error state: there is no "This build cannot send reports directly." message in this mode.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Friend sends a bug report with a screenshot (Priority: P1)
@@ -171,8 +178,8 @@ repository and a built app for the key and the address and find neither.
   requested but unavailable.
 - Sending takes long: after 30 seconds the attempt counts as failed and the failure flow
   starts.
-- The app has no report service address configured (for example a build from source without
-  one): Send goes straight to the email fallback, and the dialog says why.
+- The app has no report service address configured, which is the default: the primary button
+  reads "Open email" and the report goes through the mail app (FR-020 to FR-022).
 - Someone calls the service directly, not from the app: the same validation and rate limit
   apply; the service accepts only the documented report format.
 
@@ -187,8 +194,9 @@ repository and a built app for the key and the address and find neither.
   MELHORIA" exactly as written, as its most prominent text. This message stays in Portuguese
   in every build; all other dialog text is English.
 - **FR-004**: The dialog MUST have a required name field (up to 100 characters), a required
-  description field (up to 10,000 characters), an optional single image attachment, and an
-  "Include logs" option that starts unticked.
+  description field (up to 10,000 characters), and an optional single image attachment. When a
+  report service is configured, it MUST also have an "Include logs" option that starts
+  unticked; otherwise that option MUST be hidden, because a mail link cannot carry logs.
 - **FR-005**: Users MUST be able to attach the image by paste, by drag and drop onto the
   dialog, and by a file chooser. Only PNG and JPEG images up to 5 MB are accepted; others are
   rejected with a message naming the limit.
@@ -197,15 +205,14 @@ repository and a built app for the key and the address and find neither.
   name and version, CPU architecture, and the date and time of sending.
 - **FR-008**: When "Include logs" is ticked, the report MUST include the most recent part of
   Sonata's own log, at most 1 MB; when unticked, no log content is sent.
-- **FR-009**: On Send, the app MUST deliver the report to the project's report service and
+- **FR-009**: When a report service is configured, on Send the app MUST deliver the report to the project's report service and
   show sending, success, and failure states. Send MUST be disabled while sending and while
   required fields are empty.
-- **FR-010**: On failure (no network, timeout after 30 seconds, refusal, or no service address
-  configured), the app MUST keep the form content and offer "Try again" and "Send by email
+- **FR-010**: On failure of a configured report service (no network, timeout after 30 seconds,
+  or refusal), the app MUST keep the form content and offer "Try again" and "Send by email
   instead".
 - **FR-011**: "Send by email instead" MUST open the user's mail app with a message to the
-  maintainer's public fallback address (a separate alias, never the address the service
-  delivers to), a subject with "Sonata", the version, and the first words of
+  public report address (FR-020), a subject with "Sonata", the version, and the first words of
   the description, and a body with name, description, and diagnostics. When no mail app opens,
   the app MUST offer to copy the same text to the clipboard.
 - **FR-012**: The report service MUST email each accepted report to the maintainer's address,
@@ -217,8 +224,9 @@ repository and a built app for the key and the address and find neither.
 - **FR-014**: The report service MUST limit each network address to 5 accepted reports per
   hour and the whole service to 100 per day; requests over the limit are refused with a
   "try later" answer.
-- **FR-015**: The email provider key and the destination address MUST exist only as report
-  service secrets. They MUST NOT be committed to the repository or built into the app.
+- **FR-015**: The email provider key and the service's destination address MUST exist only as
+  report service secrets. They MUST NOT be committed to the repository or built into the app.
+  The public report address of FR-020 is not a secret and is exempt.
 - **FR-016**: The report service MUST NOT store reports after the email is handed to the email
   provider.
 - **FR-017**: The service source code and its deployment steps MUST live in this repository;
@@ -226,14 +234,34 @@ repository and a built app for the key and the address and find neither.
 - **FR-018**: The app MUST send a report only when the user presses Send. Nothing is sent in
   the background.
 - **FR-019**: The draft MUST survive closing and reopening the dialog until the app quits, and
-  MUST be cleared after a successful send.
+  MUST be cleared after a successful send. Opening the mail app does not clear it: the app
+  cannot know whether the email was sent.
+- **FR-020**: The report address MUST default to `vini.d.science@gmail.com`, which a build MAY
+  override with `SONATA_REPORT_FALLBACK_EMAIL`. A build with `SONATA_REPORT_URL` MUST keep the
+  service flow of FR-009 and FR-010.
+- **FR-021**: Without a report service, the primary button MUST read "Open email". Pressing it
+  MUST validate the required fields and open the mail app with the message of FR-011. The
+  dialog MUST NOT show an error state or a "cannot send" message in this mode.
+- **FR-022**: Without a report service, the dialog MUST use the clipboard as follows and say
+  which case applied:
+  - With an image, it MUST copy the image as PNG (a JPEG is converted) before the mail app
+    opens: "Your mail app opened with the report. The image is in the clipboard: paste it into
+    the email (⌘V or Ctrl+V)."
+  - With no image: "Your mail app opened with the report."
+  - When the image cannot be copied: "Your mail app opened with the report. Attach the image by
+    hand."
+  - When the body is cut at 1,500 characters, it MUST copy the full text instead of the image:
+    "The report was long, so the full text is in the clipboard. Paste it into the email and
+    attach the image by hand." The last clause is left out when there is no image.
+  - When the mail app cannot open, it MUST copy the text and show "Report copied to the
+    clipboard. Paste it in a message to the maintainer." with the address.
 
 ### Key Entities
 
 - **Bug Report**: what the user sends. Reporter name, description, optional image, optional
   log excerpt, diagnostics, time of sending.
 - **Diagnostics**: app version, operating system and version, CPU architecture.
-- **Report Service**: the small web service run by the maintainer that checks a report,
+- **Report Service** (optional): the small web service run by the maintainer that checks a report,
   applies the limits, and emails it. Holds the email provider key and destination address as
   secrets.
 
@@ -247,7 +275,8 @@ repository and a built app for the key and the address and find neither.
 - **SC-003**: Every delivered report carries version, operating system, and architecture
   (100%), so the maintainer never has to ask for them.
 - **SC-004**: A search of the repository and of every release file finds neither the email
-  provider key nor the destination address.
+  provider key nor a destination address kept in the service's secrets (the public report
+  address of FR-020 is exempt).
 - **SC-005**: A flood of 50 requests from one network address in one hour produces at most 5
   emails.
 - **SC-006**: When sending fails, the user loses none of the typed text or the attachment
@@ -257,8 +286,11 @@ repository and a built app for the key and the address and find neither.
 
 ## Assumptions
 
-- The maintainer creates a free Cloudflare account and a free Resend account and deploys the
-  service once; until then, the dialog uses the email fallback.
+- The maintainer does not deploy the report service for now (decision of 2026-11-02), so
+  reports go through the mail app. A free Cloudflare and Resend deployment remains an option
+  for later scale. SC-002, SC-005, and SC-007 apply only once a service is deployed.
+- The user has a mail app or webmail set as the system handler for `mailto:` links; otherwise
+  the text is copied and the address is shown.
 - The report service address is set at build time for releases. It is public by nature (the
   app calls it), so the rate limit and validation, not secrecy, protect it.
 - Resend's free plan sends from its shared test sender or a domain the maintainer verifies;
@@ -270,4 +302,5 @@ repository and a built app for the key and the address and find neither.
   maintainer; the plan records it as a constitution deviation.
 - The log excerpt is the tail of today's Sonata log (or the latest one when today's is empty);
   agent terminal output is not part of Sonata's log.
-- Reports are sent over HTTPS to the service; no network listener is added to the app.
+- With a service configured, reports are sent over HTTPS; no network listener is added to the
+  app. By default the app sends nothing itself: the user sends the email.

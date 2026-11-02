@@ -41,7 +41,30 @@ curl -sS -F name=Test -F description='Hello from curl' -F appVersion=0.3.0 -F os
 
 Expected: `{"ok":true}` and one email with `screenshot.png` attached within 1 minute.
 
+## 2b. Scenario E — mail app, the default (no service, FR-020 to FR-022)
+
+Build with no `SONATA_REPORT_*` variables. Help → Report Bug…:
+
+1. The primary button reads `Open email`, stays disabled until name and description are filled,
+   and `Include logs` is not shown.
+2. No image: press it. The mail app opens to `vini.d.science@gmail.com`, with a subject that
+   starts `Sonata <version> bug:` and a body with the name, description, and diagnostics. The
+   dialog says `Your mail app opened with the report.` The clipboard is unchanged.
+3. Paste a PNG screenshot and press it. The dialog says the image is in the clipboard. Paste
+   into the email: the image appears.
+4. Attach a JPEG and press it. Pasting into the email gives the image (now a PNG).
+5. Type more than 1,500 characters with an image attached and press it. The body ends with
+   `(cut, full text copied to clipboard)`. Pasting gives the whole text, not the image.
+6. Double click the button: one email opens.
+7. With no `mailto:` handler (Linux: `xdg-settings`), the dialog says the report was copied and
+   shows the address.
+
+Repeat steps 3 to 5 on Linux and Windows: clipboard support differs by web view, so `Attach the
+image by hand.` is an accepted result where the image cannot be copied.
+
 ## 3. Scenario A — report with screenshot (US1, US2)
+
+Scenarios A to D apply only to a build with a deployed service, which is optional for now.
 
 1. Build with `SONATA_REPORT_URL=https://…/report SONATA_REPORT_FALLBACK_EMAIL=<alias>` set.
 2. Help → Report Bug…: the headline reads `Nosso sistema não tem bugs, tem PONTOS DE MELHORIA`.
@@ -63,9 +86,7 @@ Tick `Include logs`, send. Email has `sonata-log.txt` (≤ 1 MB, starts at a lin
 1. Turn off the network and send: unreachable message; text and image kept.
 2. `Send by email instead`: mail app opens to the alias with subject and body; note about
    attaching the image by hand.
-3. Build without `SONATA_REPORT_URL`: Send shows `This build cannot send reports directly.`
-4. Build without the alias: the fallback copies the text and says so.
-5. Send 6 reports within an hour: the 6th shows the rate limit message.
+3. Send 6 reports within an hour: the 6th shows the rate limit message.
 
 ## 6. Scenario D — secrets stay out (US5, SC-004)
 
@@ -96,3 +117,10 @@ drag and drop, file chooser, Help menu present.
   bad `os` part gave 400 `invalid_field:os`.
 - Not yet done (maintainer, T042): deploy with real Cloudflare and Resend accounts, set the
   GitHub variables, and run Scenarios A–D in a dev build on each platform.
+
+## Results (mail app by default, 2026-11-02)
+
+- `sh scripts/check.sh` on macOS: green. 475 Rust tests, 249 UI tests, release script tests.
+- Worker (`cd worker && npm run typecheck && npm test`): green, 38 tests; `worker/` is unchanged.
+- Clipboard rules probed in a real `WKWebView` (research.md).
+- Not yet done: Scenario E by hand in a dev build on each platform.
