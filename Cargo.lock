@@ -3935,7 +3935,7 @@ dependencies = [
 
 [[package]]
 name = "sonata-app"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "block2",
  "cairo-rs",
@@ -3963,7 +3963,7 @@ dependencies = [
 
 [[package]]
 name = "sonata-cli"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "libc",
  "serde",
@@ -3973,7 +3973,7 @@ dependencies = [
 
 [[package]]
 name = "sonata-core"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chrono",
  "libc",
