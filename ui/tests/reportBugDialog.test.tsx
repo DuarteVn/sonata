@@ -1,14 +1,17 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Bootstrap, ReportConfigView, UpdateState } from "../src/ipc/types";
+
+const SERVICE = { serviceConfigured: true, reportEmail: "bugs@example.test", mailBodyRoom: 1_400 };
+const NO_SERVICE = { ...SERVICE, serviceConfigured: false };
 
 const ipc = vi.hoisted(() => ({
   appBootstrap: vi.fn(),
   updateState: vi.fn(async (): Promise<UpdateState> => ({ kind: "idle" })),
   terminalPreviewSubscribe: vi.fn(async () => {}),
   browserLayout: vi.fn(async () => {}),
-  reportConfig: vi.fn(async (): Promise<ReportConfigView> => ({ serviceConfigured: true, fallbackEmail: "bugs@example.test" })),
+  reportConfig: vi.fn<() => Promise<ReportConfigView>>(),
   reportSend: vi.fn(async () => {}),
   reportReadImage: vi.fn(),
   reportFallback: vi.fn(),
@@ -37,6 +40,7 @@ vi.mock("@tauri-apps/api/webview", () => ({
 import { App } from "../src/App";
 import { IMPROVEMENT_POINTS, ReportBugDialog } from "../src/report/ReportBugDialog";
 import { clearDraft } from "../src/report/draft";
+import { shortcut } from "../src/platform";
 import { resetInitForTests, useWorkspaces } from "../src/state/workspaces";
 import { useUpdate } from "../src/state/update";
 
@@ -63,7 +67,7 @@ beforeEach(() => {
   dialog.open.mockResolvedValue(null);
   clearDraft();
   localStorage.clear();
-  ipc.reportConfig.mockResolvedValue({ serviceConfigured: true, fallbackEmail: "bugs@example.test" });
+  ipc.reportConfig.mockResolvedValue(SERVICE);
   ipc.reportSend.mockResolvedValue(undefined);
 });
 
@@ -89,7 +93,7 @@ describe("Report Bug dialog", () => {
 
   it("keeps Send disabled until name and description are filled", async () => {
     openDialog();
-    const send = screen.getByRole("button", { name: "Send" });
+    const send = await screen.findByRole("button", { name: "Send" });
     expect(send).toBeDisabled();
     await fill("Ana", "");
     expect(send).toBeDisabled();
@@ -354,17 +358,234 @@ describe("when sending fails", () => {
       "Report copied to the clipboard. Paste it in a message to the maintainer.",
     );
   });
+});
 
-  it("goes straight to the fallback when this build has no report service", async () => {
-    ipc.reportConfig.mockResolvedValue({ serviceConfigured: false, fallbackEmail: null });
-    ipc.reportFallback.mockResolvedValueOnce({ opened: false, text: "full text", truncated: false });
+describe("when no report service is configured", () => {
+  type Written = { type: string; blob: Blob };
+  const order: string[] = [];
+  const written: Written[] = [];
+  const write = vi.fn();
+  const writeText = vi.fn();
+
+  class FakeClipboardItem {
+    constructor(readonly parts: Record<string, Promise<Blob>>) {}
+  }
+
+  const OPENED = { opened: true, text: "full text", truncated: false };
+  const MAIL_ONLY = "Your mail app opened with the report.";
+
+  beforeEach(() => {
+    order.length = 0;
+    written.length = 0;
+    ipc.reportConfig.mockResolvedValue(NO_SERVICE);
+    ipc.reportFallback.mockReset();
+    ipc.reportFallback.mockImplementation(async () => {
+      order.push("mail");
+      return OPENED;
+    });
+    write.mockReset();
+    write.mockImplementation(async ([item]: FakeClipboardItem[]) => {
+      order.push("clipboard write");
+      for (const [type, part] of Object.entries(item.parts)) written.push({ type, blob: await part });
+    });
+    writeText.mockReset();
+    writeText.mockResolvedValue(undefined);
+    vi.stubGlobal("ClipboardItem", FakeClipboardItem);
+    Object.defineProperty(navigator, "clipboard", { value: { write, writeText }, configurable: true });
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  const openEmail = () => screen.findByRole("button", { name: "Open email" });
+
+  async function press() {
+    await userEvent.click(await openEmail());
+  }
+
+  async function attach(file = new File([new Uint8Array(PNG)], "a.png", { type: "image/png" })) {
+    pasteFile(screen.getByLabelText("What happened?"), file);
+    await screen.findByRole("img", { name: "Attached image" });
+  }
+
+  const longDescription = "x".repeat(NO_SERVICE.mailBodyRoom);
+
+  async function fillLong() {
+    await userEvent.type(screen.getByLabelText("Your name"), "Ana");
+    await userEvent.click(screen.getByLabelText("What happened?"));
+    await userEvent.paste(longDescription);
+  }
+
+  it("offers Open email, hides the logs option, and needs the required fields", async () => {
+    openDialog();
+    const button = await openEmail();
+    expect(button).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Send" })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: /Include logs/ })).toBeNull();
+    await fill();
+    expect(button).toBeEnabled();
+  });
+
+  it("opens the mail app with the report, without an error or a clipboard change", async () => {
     openDialog();
     await fill();
-    await userEvent.click(screen.getByRole("button", { name: "Send" }));
-    expect(await screen.findByRole("status")).toHaveTextContent("This build cannot send reports directly.");
+    await press();
+    expect(await screen.findByRole("status")).toHaveTextContent(MAIL_ONLY);
+    expect(ipc.reportFallback).toHaveBeenCalledTimes(1);
+    expect(ipc.reportFallback).toHaveBeenCalledWith({
+      name: "Ana",
+      description: "The note vanished.",
+      image: null,
+      includeLogs: false,
+    });
     expect(ipc.reportSend).not.toHaveBeenCalled();
+    expect(screen.getByRole("status")).not.toHaveTextContent("cannot send");
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Send by email instead" }));
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith("full text"));
+    expect(screen.queryByRole("button", { name: "Send by email instead" })).toBeNull();
+    await waitFor(() => expect(write).toHaveBeenCalled());
+    expect(written).toEqual([]);
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it("opens the mail app once on a double click and keeps the draft", async () => {
+    openDialog();
+    await fill();
+    await userEvent.dblClick(await openEmail());
+    await screen.findByText(MAIL_ONLY);
+    expect(ipc.reportFallback).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("What happened?")).toHaveValue("The note vanished.");
+  });
+
+  it("copies a PNG unchanged before the mail app opens", async () => {
+    openDialog();
+    await fill();
+    await attach();
+    await press();
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      `Your mail app opened with the report. The image is in the clipboard: paste it into the email (${shortcut("paste")}).`,
+    );
+    expect(order).toEqual(["clipboard write", "mail"]);
+    expect(written.map((w) => w.type)).toEqual(["image/png"]);
+    expect([...new Uint8Array(await written[0].blob.arrayBuffer())]).toEqual(PNG);
+    expect(ipc.reportFallback).toHaveBeenCalledWith(expect.objectContaining({ image: null }));
+  });
+
+  it("starts the clipboard write inside the click, before anything is awaited", async () => {
+    // WebKit refuses clipboard writes made after the click's task ends.
+    openDialog();
+    await fill();
+    await attach();
+    const button = await openEmail();
+    fireEvent.submit(button.closest("form")!);
+    expect(write).toHaveBeenCalledTimes(1);
+    await screen.findByText(/paste it into the email/);
+  });
+
+  it("converts a JPEG to PNG through a canvas", async () => {
+    const close = vi.fn();
+    vi.stubGlobal("createImageBitmap", vi.fn(async () => ({ width: 3, height: 2, close })));
+    const drawImage = vi.fn();
+    const png = new Blob([new Uint8Array(PNG)], { type: "image/png" });
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, "getContext")
+      .mockReturnValue({ drawImage } as unknown as ReturnType<HTMLCanvasElement["getContext"]>);
+    const toBlob = vi
+      .spyOn(HTMLCanvasElement.prototype, "toBlob")
+      .mockImplementation((done: BlobCallback) => done(png));
+    openDialog();
+    await fill();
+    await attach(new File([new Uint8Array(JPEG)], "a.jpg", { type: "image/jpeg" }));
+    await press();
+    await screen.findByText(/paste it into the email/);
+    expect(written.map((w) => w.type)).toEqual(["image/png"]);
+    expect(written[0].blob).toBe(png);
+    expect(drawImage).toHaveBeenCalledTimes(1);
+    expect(toBlob).toHaveBeenCalledWith(expect.any(Function), "image/png");
+    expect(close).toHaveBeenCalled();
+    getContext.mockRestore();
+    toBlob.mockRestore();
+  });
+
+  it("says to attach by hand when the image cannot be copied", async () => {
+    write.mockRejectedValue(new Error("not allowed"));
+    openDialog();
+    await fill();
+    await attach();
+    await press();
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Your mail app opened with the report. Attach the image by hand.",
+    );
+    expect(ipc.reportFallback).toHaveBeenCalledTimes(1);
+  });
+
+  it("says to attach by hand when the clipboard API is missing", async () => {
+    vi.stubGlobal("ClipboardItem", undefined);
+    openDialog();
+    await fill();
+    await attach();
+    await press();
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Your mail app opened with the report. Attach the image by hand.",
+    );
+  });
+
+  it("copies the full text instead of the image when the body is cut", async () => {
+    ipc.reportFallback.mockResolvedValue({ opened: true, text: "the whole report", truncated: true });
+    openDialog();
+    await fillLong();
+    await attach();
+    await press();
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "The report was long, so the full text is in the clipboard. Paste it into the email and attach the image by hand.",
+    );
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(written.map((w) => w.type)).toEqual(["text/plain"]);
+    expect(await written[0].blob.text()).toBe("the whole report");
+  });
+
+  it("does not mention an image in a long report that has none", async () => {
+    ipc.reportFallback.mockResolvedValue({ opened: true, text: "the whole report", truncated: true });
+    openDialog();
+    await fillLong();
+    await press();
+    const status = await screen.findByRole("status");
+    await waitFor(() =>
+      expect(status).toHaveTextContent("The report was long, so the full text is in the clipboard. Paste it into the email."),
+    );
+    expect(status).not.toHaveTextContent("image");
+  });
+
+  it("copies the text and shows the address when the mail app cannot open", async () => {
+    ipc.reportFallback.mockResolvedValue({ opened: false, text: "the whole report", truncated: false });
+    openDialog();
+    await fill();
+    await press();
+    const status = await screen.findByRole("status");
+    await waitFor(() =>
+      expect(status).toHaveTextContent(
+        "Report copied to the clipboard. Paste it in a message to the maintainer. The address is bugs@example.test.",
+      ),
+    );
+    expect(written.map((w) => w.type)).toEqual(["text/plain"]);
+    expect(await written[0].blob.text()).toBe("the whole report");
+  });
+
+  it("replaces the copied image with the text when the mail app cannot open", async () => {
+    ipc.reportFallback.mockResolvedValue({ opened: false, text: "the whole report", truncated: false });
+    openDialog();
+    await fill();
+    await attach();
+    await press();
+    await screen.findByText(/The address is bugs@example.test/);
+    expect(writeText).toHaveBeenCalledWith("the whole report");
+  });
+
+  it("still shows the address when the text cannot be copied either", async () => {
+    ipc.reportFallback.mockResolvedValue({ opened: false, text: "the whole report", truncated: false });
+    write.mockRejectedValue(new Error("not allowed"));
+    writeText.mockRejectedValue(new Error("not allowed"));
+    openDialog();
+    await fill();
+    await press();
+    expect(await screen.findByText(/The address is bugs@example.test/)).toHaveTextContent("Could not copy the report.");
   });
 });

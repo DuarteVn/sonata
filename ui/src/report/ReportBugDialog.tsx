@@ -6,6 +6,7 @@ import { Modal } from "../dialogs/Modal";
 import { ipc } from "../ipc/commands";
 import type { ReportConfigView, ReportError, ReportImageMime, ReportInput } from "../ipc/types";
 import { shortcut } from "../platform";
+import { pngBlob, writeLater, writeTextNow } from "./clipboard";
 import { clearDraft, getDraft, setDraft, useDraft, type DraftImage } from "./draft";
 
 // UI text is English (constitution), except this one sentence, which the maintainer chose on
@@ -32,6 +33,7 @@ function imageProblem(err: unknown): string {
 type Phase =
   | { kind: "editing" }
   | { kind: "sending" }
+  | { kind: "opening" }
   | { kind: "sent" }
   | { kind: "failed"; error: ReportError["kind"] }
   | { kind: "fallback"; message: string };
@@ -46,6 +48,28 @@ const FAILURE: Record<ReportError["kind"], string> = {
 
 const MAIL_OPENED = "Your mail app opened. Attach the image by hand if you have one.";
 const COPIED = "Report copied to the clipboard. Paste it in a message to the maintainer.";
+const NOT_COPIED = "Could not copy the report. Select the text above and copy it by hand.";
+const NOT_PREPARED = "Could not prepare the email. Please try again later.";
+
+const EMAIL_OPENED = "Your mail app opened with the report.";
+// The opener can finish between the two clicks of a double click; one press, one email.
+const REOPEN_AFTER_MS = 1_000;
+
+type EmailOutcome = { opened: boolean; truncated: boolean; hasImage: boolean; imageCopied: boolean; textCopied: boolean };
+
+/** What to tell the user after pressing Open email (spec, session 2026-11-02). */
+function emailMessage(o: EmailOutcome, address: string): string {
+  if (!o.opened) return `${o.textCopied ? COPIED : NOT_COPIED} The address is ${address}.`;
+  if (o.truncated) {
+    if (!o.textCopied) return `${EMAIL_OPENED} It was cut because it is long. ${NOT_COPIED}`;
+    const copied = "The report was long, so the full text is in the clipboard. Paste it into the email";
+    return o.hasImage ? `${copied} and attach the image by hand.` : `${copied}.`;
+  }
+  if (!o.hasImage) return EMAIL_OPENED;
+  return o.imageCopied
+    ? `${EMAIL_OPENED} The image is in the clipboard: paste it into the email (${shortcut("paste")}).`
+    : `${EMAIL_OPENED} Attach the image by hand.`;
+}
 
 function errorKind(err: unknown): ReportError["kind"] {
   const kind = (err as { kind?: unknown } | null)?.kind;
@@ -82,12 +106,23 @@ export function ReportBugDialog({ onClose }: Props) {
   const { name, description, image, includeLogs } = useDraft();
   const [phase, setPhase] = useState<Phase>({ kind: "editing" });
   const [imageError, setImageError] = useState<string | null>(null);
-  const config = useRef<Promise<ReportConfigView> | null>(null);
+  const [config, setConfig] = useState<ReportConfigView | null>(null);
   const busy = useRef(false);
+  const lastOpened = useRef(0);
   const previewUrl = usePreview(image);
 
   useEffect(() => {
-    config.current = ipc.reportConfig().catch(() => ({ serviceConfigured: false, fallbackEmail: null }));
+    let closed = false;
+    ipc
+      .reportConfig()
+      // Without an answer the email flow still works; only the address in a message is missing.
+      .catch((): ReportConfigView => ({ serviceConfigured: false, reportEmail: "", mailBodyRoom: 0 }))
+      .then((view) => {
+        if (!closed) setConfig(view);
+      });
+    return () => {
+      closed = true;
+    };
   }, []);
 
   const attach = (bytes: Uint8Array<ArrayBuffer>, mime: ReportImageMime) => {
@@ -156,18 +191,14 @@ export function ReportBugDialog({ onClose }: Props) {
   }
 
   const ready = name.trim() !== "" && description.trim() !== "";
-  const sending = phase.kind === "sending";
+  const sending = phase.kind === "sending" || phase.kind === "opening";
+  const useService = config?.serviceConfigured === true;
 
   async function send() {
     if (busy.current || !ready) return;
     busy.current = true;
     setPhase({ kind: "sending" });
     try {
-      const cfg = await (config.current ?? ipc.reportConfig());
-      if (!cfg.serviceConfigured) {
-        setPhase({ kind: "failed", error: "not_configured" });
-        return;
-      }
       await ipc.reportSend(toInput());
       clearDraft();
       setPhase({ kind: "sent" });
@@ -176,6 +207,57 @@ export function ReportBugDialog({ onClose }: Props) {
     } finally {
       busy.current = false;
     }
+  }
+
+  // The default flow, with no report service (FR-020 to FR-022). Nothing may be awaited before
+  // the clipboard writes start, or WebKit refuses them; see writeLater.
+  async function openEmail(cfg: ReportConfigView) {
+    if (busy.current || !ready || Date.now() - lastOpened.current < REOPEN_AFTER_MS) return;
+    busy.current = true;
+    setPhase({ kind: "opening" });
+    const d = getDraft();
+    const input: ReportInput = { name: d.name, description: d.description, image: null, includeLogs: false };
+    const long = count(d.name.trim()) + count(d.description.trim()) > cfg.mailBodyRoom;
+    const imageCopy = d.image && !long ? writeLater("image/png", pngBlob(d.image)) : null;
+    const opening = imageCopy ? imageCopy.then(() => ipc.reportFallback(input)) : ipc.reportFallback(input);
+    // The text comes from core and is wanted only sometimes; a rejected promise writes nothing.
+    const textCopy = imageCopy
+      ? null
+      : writeLater(
+          "text/plain",
+          opening.then((r) => {
+            if (r.opened && !r.truncated) throw new Error("no copy needed");
+            return new Blob([r.text], { type: "text/plain" });
+          }),
+        );
+    try {
+      const result = await opening;
+      const textWanted = !result.opened || result.truncated;
+      const textCopied = textWanted && ((await textCopy) || (await writeTextNow(result.text)));
+      setPhase({
+        kind: "fallback",
+        message: emailMessage(
+          {
+            opened: result.opened,
+            truncated: result.truncated,
+            hasImage: d.image !== null,
+            imageCopied: (await imageCopy) === true,
+            textCopied,
+          },
+          cfg.reportEmail,
+        ),
+      });
+    } catch {
+      setPhase({ kind: "fallback", message: NOT_PREPARED });
+    } finally {
+      lastOpened.current = Date.now();
+      busy.current = false;
+    }
+  }
+
+  function submit() {
+    if (!config) return;
+    void (config.serviceConfigured ? send() : openEmail(config));
   }
 
   // Mail app with the report filled in, or the clipboard when that is not possible (FR-011).
@@ -191,12 +273,12 @@ export function ReportBugDialog({ onClose }: Props) {
           await navigator.clipboard.writeText(result.text);
           messages.push(COPIED);
         } catch {
-          messages.push("Could not copy the report. Select the text above and copy it by hand.");
+          messages.push(NOT_COPIED);
         }
       }
       setPhase({ kind: "fallback", message: messages.join(" ") });
     } catch {
-      setPhase({ kind: "fallback", message: "Could not prepare the email. Please try again later." });
+      setPhase({ kind: "fallback", message: NOT_PREPARED });
     } finally {
       busy.current = false;
     }
@@ -210,13 +292,15 @@ export function ReportBugDialog({ onClose }: Props) {
   const status =
     phase.kind === "sending"
       ? "Sending…"
-      : phase.kind === "sent"
-        ? "Thanks! Your report was sent."
-        : phase.kind === "failed"
-          ? FAILURE[phase.error]
-          : phase.kind === "fallback"
-            ? phase.message
-            : "";
+      : phase.kind === "opening"
+        ? "Opening your mail app…"
+        : phase.kind === "sent"
+          ? "Thanks! Your report was sent."
+          : phase.kind === "failed"
+            ? FAILURE[phase.error]
+            : phase.kind === "fallback"
+              ? phase.message
+              : "";
   const failed = phase.kind === "failed" ? phase.error : null;
 
   const chars = count(description);
@@ -229,7 +313,7 @@ export function ReportBugDialog({ onClose }: Props) {
           className="form"
           onSubmit={(e) => {
             e.preventDefault();
-            void send();
+            submit();
           }}
         >
           <label>
@@ -285,17 +369,19 @@ export function ReportBugDialog({ onClose }: Props) {
               </p>
             )}
           </div>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={includeLogs}
-              onChange={(e) => edit({ includeLogs: e.target.checked })}
-            />
-            <span>
-              Include logs
-              <small>Logs can contain folder paths and project names.</small>
-            </span>
-          </label>
+          {useService && (
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={includeLogs}
+                onChange={(e) => edit({ includeLogs: e.target.checked })}
+              />
+              <span>
+                Include logs
+                <small>Logs can contain folder paths and project names.</small>
+              </span>
+            </label>
+          )}
           <p role="status" className="report-status" data-phase={phase.kind}>
             {status}
           </p>
@@ -315,8 +401,8 @@ export function ReportBugDialog({ onClose }: Props) {
             <button type="button" onClick={onClose}>
               Close
             </button>
-            <button type="submit" className="primary" disabled={sending || !ready}>
-              Send
+            <button type="submit" className="primary" disabled={sending || !ready || !config}>
+              {useService ? "Send" : "Open email"}
             </button>
           </div>
         </form>
