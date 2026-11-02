@@ -55,7 +55,8 @@ pub async fn kimi_watch(app: State<'_, Arc<App>>, on: bool) -> Result<(), AppErr
 }
 
 /// Opens the Settings window at Agents › Kimi Code (the notice's Set up action).
+/// Async: creating the window from a synchronous command deadlocks on Windows.
 #[tauri::command]
-pub fn kimi_open_settings(handle: AppHandle) -> Result<(), AppError> {
+pub async fn kimi_open_settings(handle: AppHandle) -> Result<(), AppError> {
     crate::settings::open_section(&handle, "agents").map_err(|e| AppError::internal(e.to_string()))
 }

@@ -234,9 +234,13 @@ pub fn on_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
             let _ = app.emit(crate::QUIT_REQUESTED, ());
         }
         SETTINGS_ID => {
-            if let Err(err) = crate::settings::open(app) {
-                tracing::warn!(error = %err, "could not open the settings window");
-            }
+            // Off the main thread: creating the window from this handler deadlocks on Windows.
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(err) = crate::settings::open(&app) {
+                    tracing::warn!(error = %err, "could not open the settings window");
+                }
+            });
         }
         AUTO_CHECK_ID => {
             // The menu toggles the check mark itself; save what it now shows.
