@@ -62,8 +62,9 @@ pub fn usage_answer_consent(
     app.usage_answer_consent(&provider_id, allow, command)
 }
 
+/// Async: creating the window from a synchronous command deadlocks on Windows.
 #[tauri::command]
-pub fn usage_open_settings(handle: AppHandle) -> Result<(), AppError> {
+pub async fn usage_open_settings(handle: AppHandle) -> Result<(), AppError> {
     crate::settings::open(&handle).map_err(|e| AppError::internal(e.to_string()))
 }
 
