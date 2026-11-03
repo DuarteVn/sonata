@@ -412,7 +412,9 @@ export type ReportImageMime = "image/png" | "image/jpeg";
 
 export type ReportConfigView = {
   serviceConfigured: boolean;
-  fallbackEmail: string | null;
+  reportEmail: string;
+  /** Characters the name and description can share before the mail body is cut. */
+  mailBodyRoom: number;
 };
 
 export type ImageView = {

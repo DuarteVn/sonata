@@ -57,3 +57,55 @@ fn windows_uses_the_url_handler_and_explorer() {
         args(&[r"/select,C:\Users\me\.sonata\ws\a.json"])
     );
 }
+
+#[cfg(unix)]
+mod spawn_checked {
+    use std::time::{Duration, Instant};
+
+    use sonata_core::platform::Launch;
+
+    fn shell(script: &str) -> Launch {
+        Launch {
+            program: "/bin/sh".into(),
+            args: vec!["-c".into(), script.into()],
+        }
+    }
+
+    #[test]
+    fn a_clean_exit_is_success() {
+        assert!(
+            shell("exit 0")
+                .spawn_checked(Duration::from_secs(5))
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn an_error_exit_is_failure() {
+        assert!(
+            !shell("exit 3")
+                .spawn_checked(Duration::from_secs(5))
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn a_program_still_running_counts_as_success() {
+        let started = Instant::now();
+        assert!(
+            shell("sleep 5")
+                .spawn_checked(Duration::from_millis(100))
+                .unwrap()
+        );
+        assert!(started.elapsed() < Duration::from_secs(4));
+    }
+
+    #[test]
+    fn a_missing_program_is_an_error() {
+        let launch = Launch {
+            program: "/nonexistent/opener".into(),
+            args: vec![],
+        };
+        assert!(launch.spawn_checked(Duration::from_secs(1)).is_err());
+    }
+}
